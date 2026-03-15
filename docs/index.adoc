@@ -1,0 +1,16 @@
+= Itur Android client: Technical reference
+:doctype: book
+:toc: left
+:toclevels: 2
+:icons: font
+:source-highlighter: rouge
+:imagesdir: images
+
+include::architecture-overview.adoc[leveloffset=+1]
+
+include::ui-map.adoc[leveloffset=+1]
+
+include::features.adoc[leveloffset=+1]
+
+include::technical-constraints.adoc[leveloffset=+1]
+

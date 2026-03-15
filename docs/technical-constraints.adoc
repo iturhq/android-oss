@@ -1,0 +1,151 @@
+= Technical constraints
+:toc: left
+:toclevels: 2
+:sectnums:
+:sectnumlevels: 2
+:icons: font
+
+== Authentication
+
+[cols="1,4"]
+|===
+| Type | Details
+
+| Anonymous
+| Device UUID stored in `EncryptedSharedPreferences` (AES256-GCM master key, prefix `itur_secure_prefs`).
+  All users start as anonymous. UUID is generated once and persists across sessions.
+
+| Registered (Google)
+| AndroidX Credentials API → `GoogleIdTokenCredential` → Firebase Auth.
+  Required to *start* activities. Optional for joining.
+  `GOOGLE_WEB_CLIENT_ID` must be present in `local.properties`.
+|===
+
+=== Auth flow
+
+[mermaid, auth-flow, png]
+....
+sequenceDiagram
+    actor User
+    participant UR as UserRepository
+    participant CM as "Credential Manager (OS)"
+    participant FA as "Firebase Auth"
+
+    User->>UR: signIn(context)
+    UR->>CM: getCredential(GoogleIdTokenRequest)
+    CM->>User: Show account picker
+    User->>CM: Select Google account
+    CM->>UR: GoogleIdTokenCredential
+    UR->>FA: signInWithCredential(GoogleAuthProvider)
+    FA->>UR: FirebaseUser
+    UR->>User: RegisteredUser(id, name, email)
+....
+
+== Required permissions
+
+[cols="2,2,3"]
+|===
+| Permission | When Requested | Required For
+
+| `ACCESS_FINE_LOCATION`
+| On `MapScreen` entry (via `LaunchedEffect`)
+| Location tracking, map centering, writing to Firestore
+
+| `CAMERA`
+| When "Join an activity" is tapped (via `LaunchedEffect` inside `QRScanSheet`)
+| QR barcode scanning via ML Kit
+
+| `INTERNET`
+| Declared in manifest; granted at install
+| Firebase Firestore reads/writes, MapLibre tile downloads
+|===
+
+NOTE: Camera hardware is declared `required="false"` in the manifest.
+If the camera permission is denied, a toast informs the user that QR scanning requires camera access and the scan sheet is not opened.
+Tapping *Join an activity* again repeats the toast until the permission is granted.
+
+== External services and APIs
+
+[cols="2,2,3"]
+|===
+| Service | Role | Test Dependency
+
+| Firebase Firestore
+| Activity, location, and user data storage (real-time snapshot reads)
+| Use `demo` flavor with fake repositories OR Firebase Emulator Suite
+
+| Firebase Auth
+| Google Sign-In session management
+| Use `demo` flavor's `FakeUserRepository` OR Firebase Auth Emulator
+
+| MapLibre / MapTiler
+| Map tile rendering (style: `streets`)
+| `MAPTILER_API_KEY` in `local.properties`; tile loading may be skipped in tests
+
+| Google Play Services (Auth)
+| Credential Manager / Google Sign-In bottom sheet
+| Required on test device; Emulator must have Google Play
+
+| Google Play Services (Location)
+| `FusedLocationProviderClient` — 2-second location polling
+| Requires GPS/Location enabled on emulator, or a fake client (see TODO MD13)
+
+| ML Kit Barcode Scanning
+| QR code decoding (bundled with APK)
+| No network required; bundled at build time
+|===
+
+== BuildConfig fields (required in `local.properties`)
+
+[cols="1,2,1"]
+|===
+| Field | Module | Flavor
+
+| `MAPTILER_API_KEY`
+| `feature:map`
+| all
+
+| `MAPLIBRE_API_KEY`
+| `app`
+| all
+
+| `GOOGLE_WEB_CLIENT_ID`
+| `core:auth`
+| `prod` only
+|===
+
+== Known asynchronous and background operations
+
+[cols="2,2,3"]
+|===
+| Operation | Mechanism | Notes for Testing
+
+| Current user fetch on startup
+| `viewModelScope.launch` in `MapViewModel.init`
+| Race condition possible before first composition; use `ComposeTestRule.waitForIdle()`
+
+| Location polling
+| `FusedLocationProviderClient` callback on `Looper.getMainLooper()`, 2-second interval
+| Stopped on `leaveActivity()`; a fake client is needed for deterministic tests (TODO MD13)
+
+| Location write to Firestore
+| `CoroutineScope(Dispatchers.IO).launch` (not `viewModelScope`)
+| Lifecycle leak possible; not cancellable via ViewModel scope (TODO HI07)
+
+| Firestore reads
+| Suspend functions; snapshot reads (no real-time listener)
+| Participant list is not auto-updated; requires manual refresh or re-query
+
+| Google Sign-In
+| Credential Manager coroutine; result on main thread
+| Requires an `Activity` context; cannot be triggered from a `ViewModel` in isolation
+
+| QR decoding
+| ML Kit `ImageAnalysis` on a background executor (CameraX)
+| Result posted back to main thread via `onScanSuccess` callback
+
+| Attention request
+| `viewModelScope.launch` → Firestore write
+| Silent; no UI feedback on success or failure
+|===
+

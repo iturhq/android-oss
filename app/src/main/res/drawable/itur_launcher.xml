@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Itur © 2025 by Max Noé <code@itur.cat>
+  ~ SPDX-License-Identifier: GPL-3.0-or-later
+  -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:height="512dp" android:viewportHeight="206.43" android:viewportWidth="206.59" android:width="512.39685dp">
+      
+    <path android:fillColor="#ffffff" android:pathData="M103.22,103.22m-103.22,0a103.22,103.22 0,1 1,206.43 0a103.22,103.22 0,1 1,-206.43 0" android:strokeColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round" android:strokeWidth="3.16"/>
+      
+    <path android:fillColor="#214478" android:pathData="M103.22,103.22m-82.86,0a82.86,82.86 0,1 1,165.71 0a82.86,82.86 0,1 1,-165.71 0" android:strokeColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round" android:strokeWidth="2.54"/>
+      
+    <path android:fillColor="#ffffff" android:pathData="m123.29,83.14 l-40.16,40.16 0.14,75.53l40.3,0l0,-54.39z" android:strokeWidth="5.31"/>
+      
+    <path android:fillColor="#ff5555" android:pathData="m83.41,94.61 l40.16,-40.16l0,-31.56l-40.16,40.16z" android:strokeWidth="5.31"/>
+    
+</vector>

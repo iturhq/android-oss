@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Create local.properties
+        run: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" >> local.properties
+          echo "MAPLIBRE_API_KEY=stub" >> local.properties
+          echo "MAPTILER_API_KEY=stub" >> local.properties
+
+      - name: Create google-services.json stub
+        run: |
+          cat > app/google-services.json << 'EOF'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "stub",
+              "storage_bucket": "stub.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+                  "android_client_info": { "package_name": "com.nohex.itur" }
+                },
+                "oauth_client": [],
+                "api_key": [{ "current_key": "stub" }],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              },
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000001",
+                  "android_client_info": { "package_name": "com.nohex.itur.debug" }
+                },
+                "oauth_client": [],
+                "api_key": [{ "current_key": "stub" }],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
+
+      - name: Check formatting
+        run: ./gradlew -I spotless/spotless.gradle.kts spotlessCheck
+
+      - name: Run unit tests with coverage
+        run: ./gradlew :core:auth:createDemoDebugUnitTestCoverageReport :core:data:createDemoDebugUnitTestCoverageReport :feature:map:createDemoDebugUnitTestCoverageReport
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: |
+            core/auth/build/reports/coverage/test/demo/debug/report.xml
+            core/data/build/reports/coverage/test/demo/debug/report.xml
+            feature/map/build/reports/coverage/test/demo/debug/report.xml
+          fail_ci_if_error: true
+
+      - name: Assemble demo build
+        run: ./gradlew assembleDemoDebug

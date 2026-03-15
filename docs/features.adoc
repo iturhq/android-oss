@@ -1,0 +1,155 @@
+= User-visible features
+:toc: left
+:toclevels: 2
+:icons: font
+
+== Feature 1: Participate in an activity
+
+Joining, being part of, and leaving a group activity.
+This is the primary user journey; all other features support or extend it.
+
+=== Join
+
+. From the Idle state, tap *Join an activity*.
+. System requests `CAMERA` permission if not yet granted.
+. Grant the permission.
++
+NOTE: If camera permission is denied, a toast informs the user that QR scanning requires camera access and the scan sheet is not opened.
+Tapping *Join an activity* again repeats the toast until permission is granted.
+. QR scan bottom sheet appears with live camera preview.
+. Point camera at a valid Itur QR code.
+. ML Kit decodes the QR; `IturActivityId` is extracted from the URL.
+. Loading indicator appears.
+. User is added as a participant in Firestore.
+. Ongoing overlay appears with *Hail organiser*, *Exit activity*, *Follow self*, and *Follow group* FABs.
+
+Location updates begin automatically; the device's position is published to the activity and participant markers appear on the map in real time.
+
+=== Exit
+
+. From the Ongoing state (participant), tap *Exit activity*.
+. Location updates stop.
+. User is removed from the participant list (the activity continues for others).
+. Location data for this user is cleared.
+. Idle overlay appears.
+
+=== Auto-resume
+
+If the app is closed or crashes while the user is a participant in an ongoing activity:
+
+. Re-launch the app.
+. `MapViewModel.init` queries for activities where the current user is listed as a participant with `ONGOING` status.
+. If found: Ongoing overlay appears automatically without user interaction.
+. If the activity has since ended: Idle overlay appears silently, with no message.
+. If an error prevents rejoining: a dialog appears with *Retry* and *Exit activity* choices.
+
+== Feature 2: Account
+
+Authenticating with a Google account to unlock organiser capabilities, and returning to an anonymous session.
+
+=== Sign in
+
+. From the Idle state, tap *Sign in*.
+. Google OAuth sheet appears (OS-managed Credential Manager).
+. Select a Google account.
+. App receives the ID token; Firebase Auth session is established.
+. Sign-in FAB is replaced by a user info FAB and a sign-out FAB (light orange background).
+
+=== Sign out
+
+. From the Idle state (signed in), tap the *Sign out* FAB (light orange background).
++
+NOTE: The sign-out FAB is hidden while an activity is ongoing; it reappears once the user returns to the Idle state.
+. Firebase Auth session is cleared.
+. App reverts to an anonymous device-UUID identity.
+. Sign-out and user info FABs disappear; the Sign-in FAB reappears.
+
+== Feature 3: Organise an activity
+
+Creating, running, and stopping a group activity as the organiser.
+
+=== Start
+
+Any user in the Idle state can tap *Start an activity*.
+
+==== Anonymous user
+
+. Tap *Start an activity*.
+. A dialog appears: "Starting an activity requires signing in."
+. The dialog offers *Cancel* and *Sign in* choices.
+. Tapping *Sign in* proceeds to the Google OAuth flow (Feature 2), then creates the activity.
+. Tapping *Cancel* dismisses the dialog; app remains in the Idle state.
+
+==== Registered user
+
+. Tap *Start an activity*.
+. Loading indicator appears (`Preparing activity…`).
+. A new activity document is created in Firestore.
+. Ongoing overlay appears; user is the organiser.
+. *Show QR*, *Stop activity*, *Follow self*, *Follow group*, and *Get help* FABs are visible.
++
+NOTE: The sign-out FAB is hidden in the Ongoing state.
+
+Location updates begin automatically; the device's position is published to the activity and all participant markers are shown on the map in real time.
+
+=== Share join QR
+
+. From the Ongoing state (organiser), tap *Show QR*.
+. QR display bottom sheet appears.
+. QR code encodes `https://itur.cat/activity/{activityId}`.
+. Other devices can scan this code to join.
+. Tap outside the sheet or drag down to dismiss.
+
+=== Stop
+
+. From the Ongoing state (organiser), tap *Stop activity* (light orange background).
+. Location updates stop.
+. Activity status is updated to `FINISHED` in Firestore.
+. User is removed from the participant list.
+. Location data for the activity is cleared.
+. Idle overlay appears.
+
+=== Auto-resume
+
+If the app is closed or crashes while the user has an activity they organised still ongoing:
+
+. Re-launch the app.
+. `MapViewModel.init` queries for activities where `organizerId == currentUser`.
+. If found: Ongoing overlay appears automatically without user interaction.
+. If the activity has since ended: Idle overlay appears silently, with no message.
+. If an error prevents rejoining: a dialog appears with *Retry* and *Exit activity* choices.
+
+== Feature 4: Follow self
+
+A user in the Ongoing state can centre the map on their own location.
+
+. Tap *Follow self* (Recenter) FAB.
+. Map camera animates to the device's last known location.
+
+== Feature 5: Follow group
+
+A user in the Ongoing state can fit all participants in the map viewport.
+
+. Tap *Follow group* (Track group) FAB.
+. Map camera animates to a bounding box that contains all participant locations.
+. As subsequent location updates arrive, the bounding box automatically expands, shrinks, or repositions to keep all participants in view.
+
+== Feature 6: Hail organiser
+
+An optional additional feature available to participants during an ongoing activity.
+The app remains fully functional without it.
+
+=== Participant side
+
+. From the Ongoing state (participant), tap *Hail organiser*.
+. The FAB changes colour to indicate the active hailing state.
+. An attention request is sent to Firestore.
+. To cancel the hail, tap *Hail organiser* again — the FAB returns to its default colour.
+. If the organiser acknowledges the hail, the participant's FAB is automatically restored to its default colour.
+
+=== Organiser side
+
+. An in-app notification appears identifying the hailing participant(s).
+. The notification can be expanded to list all currently hailing participants.
+. Each entry has an *Acknowledge* button; tapping it removes that participant from the list and restores their hail button.
+. An *Acknowledge all* option clears the entire list at once.

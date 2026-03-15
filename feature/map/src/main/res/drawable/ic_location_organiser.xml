@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Itur © 2025 by Max Noé <code@itur.cat>
+  ~ SPDX-License-Identifier: GPL-3.0-or-later
+  -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="10dp"
+    android:height="10dp"
+    android:viewportWidth="10"
+    android:viewportHeight="10">
+    <path
+        android:fillColor="#ff5555"
+        android:fillAlpha=".7"
+        android:pathData="m 5,0 -5,5 v 4 l 5,-5 5,5 v -4 z" />
+</vector>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Itur © 2025 by Max Noé <code@itur.cat>
+  ~ SPDX-License-Identifier: GPL-3.0-or-later
+  -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:height="255.80173dp" android:viewportHeight="206.43" android:viewportWidth="206.59" android:width="256dp">
+      
+    <path android:fillColor="#162d50" android:pathData="m34.4,80.28 l-22.94,22.94 0.16,68.82c0,12.67 10.27,22.94 22.94,22.94v-22.94l0,-56.74z" android:strokeWidth="3.03449"/>
+      
+    <path android:fillColor="#162d50" android:pathData="m103.38,80.28 l-22.94,22.94 0.01,68.82c0,12.67 10.27,22.94 22.94,22.94l11.47,0c12.67,-0 22.94,-10.27 22.94,-22.94L137.78,80.28l-22.94,22.94v68.82l-11.47,-0z" android:strokeWidth="3.03449"/>
+      
+    <path android:fillColor="#162d50" android:pathData="m172.18,80.28c-12.66,0 -22.93,10.27 -22.93,22.94l-0.01,91.75 22.94,-22.94L172.19,103.21l11.47,0 22.94,-22.94z" android:strokeWidth="3.03449"/>
+      
+    <path android:fillColor="#162d50" android:pathData="M68.97,11.46 L46.04,34.4l0,0l0,34.24l-0.01,0l-0,75.79 0,-0.01 -0,27.24c0,12.67 10.27,22.94 22.94,22.94l-0,-125.96l-0,0L68.96,34.4l0.01,0z" android:strokeWidth="3.03"/>
+      
+    <path android:fillColor="#162d50" android:pathData="M57.33,57.34 L34.4,80.28 80.43,80.28 103.37,57.34Z" android:strokeWidth="3.03449"/>
+      
+    <path android:fillColor="#ff5555" android:pathData="M11.62,86.83 L34.56,63.89L34.56,45.87L11.62,68.81Z" android:strokeWidth="3.03449"/>
+    
+</vector>

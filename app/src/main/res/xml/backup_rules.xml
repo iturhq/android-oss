@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Itur © 2025 by Max Noé <code@itur.cat>
+  ~ SPDX-License-Identifier: GPL-3.0-or-later
+  -->
+<full-backup-content>
+    <!--
+        Allowlist approach: only the paths listed below are backed up.
+        Firebase auth shared preferences (device-specific tokens) are
+        excluded implicitly.
+    -->
+    <!-- User email preference (DataStore proto file). -->
+    <include domain="file" path="datastore/user_settings.pb"/>
+</full-backup-content>

@@ -1,0 +1,17 @@
+coverage:
+  status:
+    project:
+      default:
+        # Fail if overall coverage drops more than 2% below the baseline.
+        target: auto
+        threshold: 2%
+    patch:
+      default:
+        # New code introduced in a PR must be at least 60% covered.
+        target: 60%
+        threshold: 5%
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: false

@@ -1,0 +1,226 @@
+= UI map
+:toc: left
+:toclevels: 2
+:icons: font
+
+The app has one physical screen (`MapScreen`).
+All UI variation is expressed through overlay composables driven by `MapUiState`.
+
+== Screen: map screen
+
+*File:* `feature/map/ui/MapScreen.kt`
+
+The map view is always present in the background.
+The overlay composable rendered on top changes with `MapUiState`.
+
+[cols="2,3,2"]
+|===
+| UI Element | Identifier / Content Description | Always Present
+
+| MapLibre map view (`AndroidView`)
+| —
+| ✓
+
+| Organizer marker layer
+| MapLibre layer ID: `organizer-layer` / source: `organizer-source`
+| ✓ (invisible when idle)
+
+| Participant marker layers
+| MapLibre layer ID: `participants-layer` / source: `participants-source`
+| ✓ (invisible when idle)
+
+| Loading progress indicator
+| Text: `Preparing activity…`
+| Only during `Loading` state
+|===
+
+=== State: idle
+
+*File:* `feature/map/ui/components/map/IdleState.kt`
+
+Shown for `MapUiState.Idle` and `MapUiState.Error` (error message displayed via Toast).
+
+[cols="2,2,2"]
+|===
+| UI Element | Content Description / Text | Visible When
+
+| Itur logo overlay
+| `contentDescription = "Itur logo"`
+| Always in Idle
+
+| "Sign in" FAB
+| `Sign in` / text `Sign in`
+| Anonymous user
+
+| "Sign out" FAB
+| `Sign out` / text `Sign out`
+| Registered user
+
+| "Join an activity" FAB
+| `Join activity` / text `Join an activity`
+| Always
+
+| "Start an activity" FAB
+| `Start activity` / text `Start an activity`
+| Registered user only
+|===
+
+=== State: ongoing
+
+*File:* `feature/map/ui/components/map/OngoingState.kt`, `FABs.kt`
+
+[cols="2,2,2"]
+|===
+| UI Element | Content Description | Visible When
+
+| "Show QR" FAB (right column)
+| `Show QR`
+| Organizer only
+
+| "Hail organiser" FAB (right column)
+| `Hail organiser`
+| Participant only
+
+| "Stop activity" FAB (right column)
+| `Stop activity`
+| Always
+
+| "Track group" FAB (left column, top)
+| `Track group`
+| Always
+
+| "Recenter" FAB (left column, below Track group)
+| `Recenter`
+| Always
+
+| "Get help" FAB (left column, top — above Track group)
+| `Get help`
+| Always (no action implemented yet)
+|===
+
+== Sheet: QR display
+
+*File:* `feature/map/ui/components/qrdisplay/QRDisplaySheet.kt`
+
+Opened by the organizer to show the activity join QR code.
+
+[cols="2,3"]
+|===
+| UI Element | Identifier / Text
+
+| Modal bottom sheet container
+| `ModalBottomSheet`
+
+| Title text
+| `Scan this QR to join the activity`
+
+| QR image
+| `QRImage` composable; encodes `https://itur.cat/activity/{activityId}`
+|===
+
+== Sheet: QR scanner
+
+*File:* `feature/map/ui/components/qrscan/QRScanSheet.kt`
+
+Opened by any user to scan and join an activity.
+
+[cols="2,3"]
+|===
+| UI Element | Identifier / Text
+
+| Modal bottom sheet container
+| `ModalBottomSheet`
+
+| Instructions text
+| `Scan an activity QR to join`
+
+| Camera preview
+| CameraX `PreviewView` inside `QRScanner` composable
+|===
+
+== Navigation paths
+
+[plantuml, navigation-paths, svg]
+....
+@startuml
+skinparam ActivityBackgroundColor #f0f4ff
+skinparam ActivityBorderColor #3a5fc8
+skinparam ArrowColor #3a5fc8
+
+start
+
+:App Launch;
+:Request ACCESS_FINE_LOCATION;
+
+if (Permission granted?) then (yes)
+  :Location updates enabled;
+else (no)
+  :Map loads without location;
+endif
+
+:MapScreen — Idle state;
+
+fork
+  :Tap "Sign in";
+  :Google OAuth sheet (OS);
+  if (Sign-in succeeds?) then (yes)
+    :Idle state — registered user;
+  else (no)
+    :Idle state — Error toast;
+  endif
+
+fork again
+  :Tap "Sign out";
+  :Idle state — anonymous user;
+
+fork again
+  :Tap "Join an activity";
+  :Request CAMERA permission;
+  if (Permission granted?) then (yes)
+    :QR Scan bottom sheet;
+    if (Valid QR scanned?) then (yes)
+      :MapScreen — Loading;
+      if (addParticipant succeeds?) then (yes)
+        :MapScreen — Ongoing\n(participant role);
+      else (no)
+        :Idle — Error state;
+      endif
+    else (no / invalid)
+      :QR sheet stays open;
+    endif
+  else (no)
+    :QR sheet opens, no preview;
+  endif
+
+fork again
+  :Tap "Start an activity"\n(registered user only);
+  :MapScreen — Loading;
+  if (createActivity succeeds?) then (yes)
+    :MapScreen — Ongoing\n(organizer role);
+  else (no)
+    :Idle — Error state;
+  endif
+end fork
+
+partition "Ongoing — Organizer" {
+  :Tap "Show QR";
+  :QR Display bottom sheet;
+  :Dismiss;
+  :Return to Ongoing;
+}
+
+partition "Ongoing — Participant" {
+  :Tap "Hail organiser";
+  :requestAttention() — silent;
+}
+
+partition "Ongoing — All" {
+  :Tap "Stop activity";
+  :Location updates stop;
+  :Firestore cleanup;
+  :Idle state + Toast;
+}
+
+stop
+@enduml
+....

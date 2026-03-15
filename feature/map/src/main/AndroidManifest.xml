@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Itur © 2025 by Max Noé <code@itur.cat>
+  ~ SPDX-License-Identifier: GPL-3.0-or-later
+  -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Also in :app:AndroidManifest.xml, here only for the IDE's benefit -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+</manifest>

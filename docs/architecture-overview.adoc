@@ -1,0 +1,221 @@
+= Architecture overview
+:toc: left
+:toclevels: 2
+:icons: font
+:source-highlighter: rouge
+
+The app follows MVVM{zwsp}footnote:[https://en.wikipedia.org/wiki/Model%E2%80%93view%E2%80%93viewmodel] with a clean-architecture repository layer.
+
+[cols="1,3"]
+|===
+| Layer | Implementation
+
+| View
+| Jetpack Compose composables (`MapScreen`, `IdleState`, `OngoingState`, QR sheets)
+
+| ViewModel
+| `MapViewModel` — Hilt-injected; exposes `StateFlow` / `LiveData` for reactive state
+
+| Model
+| Repository interfaces backed by Firebase Firestore (`prod`) or in-memory fakes (`demo`)
+|===
+
+The `MapScreen` is a **state machine**: all UI changes are driven by `MapUiState`.
+
+[mermaid, map-ui-state, png]
+....
+stateDiagram-v2
+    [*] --> Idle : app launch
+    [*] --> Loading : app launch / action triggered
+    Loading --> Idle : init complete
+    Loading --> Ongoing : activity created or joined
+    Loading --> Error : operation failed
+    Idle --> Loading : startActivity() / joinActivity()
+    Idle --> Idle : signIn() / signOut()
+    Ongoing --> Idle : leaveActivity()
+    Error --> Idle : acknowledged
+
+    note right of Idle
+        Optional message shown as Toast
+        (e.g. "You are no longer participating…")
+    end note
+....
+
+== Module structure
+
+[d2, module-structure, svg]
+....
+direction: right
+
+app: {
+  MainActivity; IturApplication; IturNavHost
+}
+feature_map: "feature:map" {
+  MapScreen; MapViewModel; MapLibreView
+  IdleState; OngoingState; QRScanSheet; QRDisplaySheet
+}
+core_data: "core:data" {
+  ActivityRepository; UserRepository; LocationRepository
+  prod: { FirebaseActivityRepository; FirebaseLocationRepository; FirebaseUserRepository }
+  demo: { FakeActivityRepository; FakeLocationRepository; FakeUserRepository }
+}
+core_auth: "core:auth" {
+  prod: { FirebaseAuthUserRepository }
+}
+core_model: "core:model" { IturActivity; User; Location; ParticipantLocation }
+core_domain: "core:domain" { UserId; IturActivityId }
+core_datastore: "core:datastore" { IturPreferencesDataStore }
+core_location: "core:location" { FusedLocationProviderClient }
+core_ui: "core:ui" { IturTheme; IturIcons; IturButton }
+
+app.MainActivity -> app.IturNavHost
+app.IturNavHost -> feature_map.MapScreen
+feature_map.MapScreen -> feature_map.MapViewModel
+feature_map.MapScreen -> feature_map.MapLibreView
+feature_map.MapScreen -> feature_map.IdleState
+feature_map.MapScreen -> feature_map.OngoingState
+feature_map.MapScreen -> feature_map.QRScanSheet
+feature_map.MapScreen -> feature_map.QRDisplaySheet
+
+feature_map.MapViewModel -> core_data.ActivityRepository
+feature_map.MapViewModel -> core_data.UserRepository
+feature_map.MapViewModel -> core_data.LocationRepository
+feature_map.MapViewModel -> core_location.FusedLocationProviderClient
+
+core_data.prod.FirebaseActivityRepository -> core_data.ActivityRepository: {style.stroke-dash: 4}
+core_data.demo.FakeActivityRepository -> core_data.ActivityRepository: {style.stroke-dash: 4}
+core_auth.prod.FirebaseAuthUserRepository -> core_data.UserRepository: {style.stroke-dash: 4}
+core_data.demo.FakeUserRepository -> core_data.UserRepository: {style.stroke-dash: 4}
+core_data.prod.FirebaseLocationRepository -> core_data.LocationRepository: {style.stroke-dash: 4}
+core_data.demo.FakeLocationRepository -> core_data.LocationRepository: {style.stroke-dash: 4}
+....
+
+=== Module responsibilities
+
+[cols="1,4"]
+|===
+| Module | Responsibility
+
+| `app`
+| Application entry point, Hilt `@HiltAndroidApp`, `MainActivity`, splash screen, `IturNavHost`
+
+| `feature:map`
+| Sole feature module; map display, activity lifecycle (start/join/leave), QR scan/display, location FABs
+
+| `core:model`
+| Domain models: `IturActivity`, `User`, `Location`, `ParticipantLocation`, `IturActivityStatus`
+
+| `core:domain`
+| Kotlin value-class IDs: `UserId`, `IturActivityId` (20-char alphanumeric); URL generation
+
+| `core:data`
+| Repository interfaces + `DataResult` sealed class; `prod` (Firebase) and `demo` (fake) source sets
+
+| `core:auth`
+| `UserRepository` implementation; `prod`: Firebase Auth + AndroidX Credentials (Google Sign-In)
+
+| `core:datastore`
+| Proto-based `DataStore` for `UserSettings` (Wire / Protocol Buffers)
+
+| `core:datastore-proto-jvm`
+| Wire protobuf schema (`itur_preferences.proto`)
+
+| `core:location`
+| Hilt module providing `FusedLocationProviderClient`
+
+| `core:ui`
+| Shared Compose theme (Material3), icon set, reusable components (`IturButton`, `IturProgressIndicator`)
+|===
+
+== Navigation structure
+
+* **Single-Activity app**: `MainActivity` hosts a Compose `NavHost`.
+* **Current nav graph**: one destination — `MapRoute` (type-safe `@Serializable` object).
+* `IturNavHost` is wired up but `MapScreen()` is currently called directly in `IturApp.kt` (see TODO LO01).
+* All UI transitions happen within `MapScreen` via `MapUiState`; there is no back-stack navigation.
+
+[source,kotlin]
+----
+// feature/map/navigation/MapNavigation.kt
+@Serializable
+data object MapRoute
+
+fun NavGraphBuilder.mapScreen() {
+    composable<MapRoute> { MapScreen() }
+}
+----
+
+== Dependency injection
+
+**Framework:** Hilt 2.59.1
+
+[cols="2,3"]
+|===
+| Annotation / Class | Location
+
+| `@HiltAndroidApp`
+| `IturApplication`
+
+| `@AndroidEntryPoint`
+| `MainActivity`
+
+| `@HiltViewModel` + `@Inject constructor`
+| `MapViewModel`
+
+| `DataModule`
+| `core/data/src/prod/di/` — provides Firebase repository implementations
+
+| `FakeDataModule`
+| `core/data/src/demo/di/` — provides fake repository implementations
+
+| `FirebaseAuthModule`
+| `core/auth/src/prod/di/` — provides `FirebaseAuth`
+
+| `LocationModule`
+| `core/location/di/` — provides `FusedLocationProviderClient`
+
+| `DataStoreModule`
+| `core/datastore/di/` — provides the proto `DataStore` singleton
+|===
+
+Flavor-based binding: the `demo` source set replaces all Firebase modules with `FakeDataModule`, enabling fully isolated in-process testing.
+
+
+=== Firestore schema
+
+[mermaid, firestore-schema, png]
+....
+erDiagram
+    activities {
+        string id PK
+        string organizerId
+        list participantIds
+        string status "DRAFT | ONGOING | FINISHED"
+        timestamp createdOn
+        list attentionRequests
+    }
+    locations {
+        string activityId PK
+        string userId PK
+        geopoint location
+        timestamp updatedOn
+    }
+    users {
+        string userId PK
+        string name
+        string email
+    }
+....
+
+== Build flavors
+
+[cols="1,3"]
+|===
+| Flavor | Backend
+
+| `demo`
+| In-memory fake repositories (no Firebase, no network).
+
+| `prod`
+| Firebase Firestore, Firebase Auth, Google Sign-In. Requires `local.properties` secrets.
+|===

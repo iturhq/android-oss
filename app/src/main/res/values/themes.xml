@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Itur © 2025 by Max Noé <code@itur.cat>
+  ~ SPDX-License-Identifier: GPL-3.0-or-later
+  -->
+<resources>
+
+    <style name="Theme.Itur" parent="android:Theme.Material.Light.NoActionBar"/>
+
+    <style name="Theme.Itur.Launch" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/white</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/itur_splash</item>
+        <item name="postSplashScreenTheme">@style/Theme.Itur</item>
+    </style>
+</resources>
