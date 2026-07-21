@@ -6,6 +6,7 @@
 package com.nohex.itur.feature.map.ui
 
 import android.Manifest
+import android.app.Activity
 import android.content.pm.PackageManager
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -91,6 +92,16 @@ fun MapScreen(
         is MapUiState.Idle -> state.message
         is MapUiState.Error -> state.message
         else -> null
+    }
+
+    // Show a blocking dialog when the backend cannot be reached on start-up.
+    if (uiState is MapUiState.BackendUnavailable) {
+        val activity = LocalContext.current as Activity
+        BackendUnavailableDialog(
+            countdown = (uiState as MapUiState.BackendUnavailable).countdown,
+            onRetryNow = viewModel::retryNow,
+            onExit = { activity.finish() },
+        )
     }
 
     // Show a dialog when an activity cannot be resumed.
@@ -210,6 +221,7 @@ fun MapScreen(
 
             when (uiState) {
                 is MapUiState.Loading -> IturProgressIndicator(label = "Preparing activity...")
+                is MapUiState.BackendUnavailable -> IturProgressIndicator(label = "Connecting…")
                 is MapUiState.Error,
                 is MapUiState.Idle,
                 is MapUiState.RecoverableError,
@@ -258,6 +270,49 @@ fun MapScreen(
                         onAttentionRequest = viewModel::requestAttention,
                         isOrganizer = ongoingUiState.organizer.id == currentUser?.id,
                     )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A non-dismissible dialog shown when the backend cannot be reached on start-up.
+ * It counts down to an automatic retry and lets the user retry immediately or exit.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BackendUnavailableDialog(
+    countdown: Int,
+    onRetryNow: () -> Unit,
+    onExit: () -> Unit,
+) {
+    // Empty lambda: tapping outside or pressing back does nothing.
+    BasicAlertDialog(onDismissRequest = {}) {
+        Surface(
+            modifier = Modifier
+                .wrapContentWidth()
+                .wrapContentHeight(),
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = AlertDialogDefaults.TonalElevation,
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(
+                    text = "Server unavailable",
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(text = "The server could not be reached. Check that the network is available and the backend is running.")
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Retrying in ${countdown}s\u2026",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(modifier = Modifier.align(Alignment.End)) {
+                    TextButton(onClick = onExit) { Text("Exit") }
+                    TextButton(onClick = onRetryNow) { Text("Retry now") }
                 }
             }
         }

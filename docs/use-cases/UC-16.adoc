@@ -1,0 +1,51 @@
+= UC-16: Leave activity — failure
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-16
+| Path type | Negative
+| Feature | xref:../features.adoc#_feature_1_participate_in_an_activity[Feature 1] / xref:../features.adoc#_feature_3_organise_an_activity[Feature 3]
+|===
+
+== Preconditions
+
+* App is in the Ongoing state (organiser or participant — either role).
+* The stop/exit operation fails (e.g., back-end error).
+
+== Steps
+
+=== As organiser
+
+. Tap *Stop activity* FAB.
+. Observe the UI response.
+
+=== As participant
+
+. Tap *Exit activity* FAB.
+. Observe the UI response.
+
+== Expected result
+
+* App does not crash.
+* An error message containing the activity ID or a generic failure string appears (e.g., `not found` or `Failed`).
+* The screen state reflects the error (Idle with error message OR `MapUiState.Error` displayed over map).
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| "Stop activity" FAB (organiser)
+| `contentDescription = "Stop activity"`
+| Espresso / Compose
+
+| "Exit activity" FAB (participant)
+| `contentDescription = "Exit activity"`
+| Espresso / Compose
+
+| Error message
+| snackbar or toast text indicating the failure
+| Espresso / Compose
+|===

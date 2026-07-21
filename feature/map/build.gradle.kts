@@ -53,6 +53,9 @@ android {
         create("prod") {
             dimension = "environment"
         }
+        create("local") {
+            dimension = "environment"
+        }
         create("demo") {
             dimension = "environment"
         }

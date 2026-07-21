@@ -1,0 +1,8 @@
+= Feature 5: Follow group
+:icons: font
+
+A user in the Ongoing state can fit all participants in the map viewport.
+
+. Tap *Follow group* (Track group) FAB.
+. Map camera animates to a bounding box that contains all participant locations.
+. As subsequent location updates arrive, the bounding box automatically expands, shrinks, or repositions to keep all participants in view.

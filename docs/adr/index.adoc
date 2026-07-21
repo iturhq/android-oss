@@ -1,0 +1,6 @@
+= Architecture Decision Records
+:toc: left
+:toclevels: 2
+:icons: font
+
+include::ADR-001-e2e-framework.adoc[leveloffset=+1]

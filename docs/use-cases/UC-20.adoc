@@ -1,0 +1,83 @@
+= UC-20: Auto-resume ongoing activity on app restart
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-20
+| Path type | Positive
+| Feature | xref:../features.adoc#_feature_1_participate_in_an_activity[Feature 1] / xref:../features.adoc#_feature_3_organise_an_activity[Feature 3]
+|===
+
+== Preconditions
+
+* The signed-in user is either an organiser or a participant of an activity that is still `ONGOING`.
+* Location permission is granted.
+* This scenario simulates a cold app start or process recreation.
+
+== Steps — organiser
+
+. Launch the application.
+. Wait for `MapViewModel.init` to complete (`ComposeTestRule.waitForIdle()`).
+. Observe the UI state.
+
+== Expected result — organiser
+
+* Without any user interaction, the Ongoing overlay is displayed.
+* *Show QR* FAB is visible.
+* *Stop activity* FAB is visible.
+* *Hail organiser* FAB is *not* visible.
+* Location updates begin automatically.
+
+== Steps — participant
+
+. Launch the application.
+. Wait for `MapViewModel.init` to complete (`ComposeTestRule.waitForIdle()`).
+. Observe the UI state.
+
+== Expected result — participant
+
+* Without any user interaction, the Ongoing overlay is displayed.
+* *Hail organiser* FAB is visible.
+* *Exit activity* FAB is visible.
+* *Show QR* FAB is *not* visible.
+* Location updates begin automatically.
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| "Show QR" FAB (organiser)
+| `contentDescription = "Show QR"`
+| Espresso / Compose
+
+| "Stop activity" FAB (organiser)
+| `contentDescription = "Stop activity"`
+| Espresso / Compose
+
+| "Hail organiser" FAB (participant)
+| `contentDescription = "Hail organiser"`
+| Espresso / Compose
+
+| "Exit activity" FAB (participant)
+| `contentDescription = "Exit activity"`
+| Espresso / Compose
+
+| Loading indicator (transient)
+| text = `Preparing activity…` — may appear briefly
+| Espresso / Compose
+|===
+
+== Data requirements
+
+* An ongoing activity must exist in the back-end before the app is launched.
+* For the organiser path: the current user is the `organizerId`.
+* For the participant path: the current user appears in `participantIds` and is not the `organizerId`.
+
+== Notes
+
+`MapViewModel.init` runs its query asynchronously; call `composeTestRule.waitForIdle()` after launch before asserting state.
+
+For the failure path (error when rejoining), see xref:UC-23.adoc[UC-23].
+For the path where the activity has already ended, see xref:UC-24.adoc[UC-24].

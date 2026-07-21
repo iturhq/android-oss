@@ -1,0 +1,59 @@
+= UC-12: Join activity — activity not found
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-12
+| Path type | Negative
+| Feature | xref:../features.adoc#_feature_1_participate_in_an_activity[Feature 1 — Participate in an activity]
+|===
+
+== Preconditions
+
+* App is in the Idle state.
+* Camera permission is already granted.
+* A QR code encoding `https://itur.cat/activity/ZZZZZZZZZZZZZZZZZZZZ` is available for scanning.
+* No activity with ID `ZZZZZZZZZZZZZZZZZZZZ` exists.
+
+== Steps
+
+. Tap *Join an activity* FAB.
+. QR Scan bottom sheet appears.
+. Inject the QR code for the non-existent activity.
+. Bottom sheet dismisses; observe the UI response.
+
+== Expected result
+
+* Loading indicator appears briefly.
+* Loading indicator disappears.
+* Error message containing `Activity ZZZZZZZZZZZZZZZZZZZZ not found` is displayed.
+* App is in the Idle state (Ongoing overlay does not appear).
+* No crash occurs.
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| "Join an activity" FAB
+| text = `Join an activity`
+| Espresso / Compose
+
+| QR Scan sheet
+| text = `Scan an activity QR to join`
+| Espresso / Compose
+
+| Loading indicator
+| text = `Preparing activity…`
+| Espresso / Compose
+
+| Error message
+| text contains `ZZZZZZZZZZZZZZZZZZZZ not found`
+| Espresso / Compose (or Toast matcher)
+
+| "Hail organiser" FAB (absent)
+| `contentDescription = "Hail organiser"` — assert `doesNotExist()`
+| Espresso / Compose
+|===
+

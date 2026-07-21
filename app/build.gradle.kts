@@ -70,6 +70,10 @@ android {
         create("prod") {
             dimension = "environment"
         }
+        create("local") {
+            dimension = "environment"
+            applicationIdSuffix = ".local"
+        }
         create("demo") {
             dimension = "environment"
         }

@@ -1,0 +1,21 @@
+= Feature 2: Account
+:icons: font
+
+Authenticating with a Google account to unlock organiser capabilities, and returning to an anonymous session.
+
+== Sign in
+
+. From the Idle state, tap *Sign in*.
+. Google OAuth sheet appears (OS-managed Credential Manager).
+. Select a Google account.
+. App receives the ID token; Firebase Auth session is established.
+. Sign-in FAB is replaced by a user info FAB and a sign-out FAB (light orange background).
+
+== Sign out
+
+. From the Idle state (signed in), tap the *Sign out* FAB (light orange background).
++
+NOTE: The sign-out FAB is hidden while an activity is ongoing; it reappears once the user returns to the Idle state.
+. Firebase Auth session is cleared.
+. App reverts to an anonymous device-UUID identity.
+. Sign-out and user info FABs disappear; the Sign-in FAB reappears.

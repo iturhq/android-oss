@@ -1,0 +1,43 @@
+= UC-17: Zoom on self (recenter)
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-17
+| Path type | Positive
+| Feature | xref:../features.adoc#_feature_4_follow_self[Feature 4 — Follow self]
+|===
+
+== Preconditions
+
+* App is in the Ongoing state.
+* At least one location update has been received (the device's last known location is available).
+
+== Steps
+
+. Pan the map away from the current location (tap-drag gesture on the map).
+. Tap *Recenter* FAB.
+. Observe the map camera animation.
+
+== Expected result
+
+* Map camera animates to the coordinates emitted by the fake location client.
+* No crash occurs.
+* The Ongoing overlay remains visible throughout.
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| "Recenter" FAB
+| `contentDescription = "Recenter"`
+| Espresso / Compose
+|===
+
+== Notes
+
+The map camera target cannot be directly asserted via Compose semantics (MapLibre is an `AndroidView`).
+Verifying no crash and that the overlay remains is sufficient for initial test coverage.
+Full camera position verification requires accessing `MapLibreMap.cameraPosition` via the `onMapReady` callback.

@@ -1,0 +1,48 @@
+= UC-04: Sign in failure
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-04
+| Path type | Negative
+| Feature | xref:../features.adoc#_feature_2_account[Feature 2 — Account]
+|===
+
+== Preconditions
+
+* App is in the Idle state with an anonymous user.
+* The sign-in service is unavailable or returns an error.
+
+== Steps
+
+. Observe the Idle overlay: *Sign in* FAB is visible.
+. Tap the *Sign in* FAB.
+. Wait for the UI response.
+
+== Expected result
+
+* An error Toast or error message containing `Sign-in failed` is shown.
+* The app remains in the Idle state.
+* *Sign in* FAB is still visible (user is still anonymous).
+* *Start an activity* FAB is still absent.
+* No crash occurs.
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| "Sign in" FAB
+| `contentDescription = "Sign in"`, text = `Sign in`
+| Espresso / Compose
+
+| Error message
+| text contains `Sign-in failed`
+| Espresso / Compose (or Toast matcher)
+
+| "Start an activity" FAB (absent)
+| text = `Start an activity` — assert `doesNotExist()`
+| Espresso / Compose
+|===
+

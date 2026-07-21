@@ -1,0 +1,56 @@
+= UC-15: Exit activity — participant
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-15
+| Path type | Positive
+| Feature | xref:../features.adoc#_feature_1_participate_in_an_activity[Feature 1 — Participate in an activity]
+|===
+
+== Preconditions
+
+* App is in the Ongoing state with the *participant* role (current user is NOT the organiser).
+
+== Steps
+
+. Verify *Hail organiser* FAB is visible (confirms participant role).
+. Verify *Show QR* FAB is *not* visible.
+. Tap *Exit activity* FAB.
+. Observe the transition.
+
+== Expected result
+
+* Ongoing overlay disappears.
+* Idle overlay appears.
+* Toast message `You are no longer participating in an activity` is shown.
+* *Join an activity* FAB is visible.
+* Activity status in `FakeActivityRepository` remains `ONGOING` (not changed to `FINISHED` — only the organiser stops the activity).
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| "Hail organiser" FAB (confirms participant role)
+| `contentDescription = "Hail organiser"`
+| Espresso / Compose
+
+| "Show QR" FAB (confirms not organiser)
+| `contentDescription = "Show QR"` — assert `doesNotExist()`
+| Espresso / Compose
+
+| "Exit activity" FAB
+| `contentDescription = "Exit activity"`
+| Espresso / Compose
+
+| Toast message
+| text = `You are no longer participating in an activity`
+| Espresso Toast matcher
+
+| "Join an activity" FAB (appears after)
+| text = `Join an activity`
+| Espresso / Compose
+|===
+

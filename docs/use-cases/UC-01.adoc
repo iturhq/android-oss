@@ -1,0 +1,53 @@
+= UC-01: App launch — location permission granted
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-01
+| Path type | Positive
+| Feature | xref:../features.adoc#_feature_1_participate_in_an_activity[Feature 1 — Participate in an activity]
+|===
+
+== Preconditions
+
+* Fresh install *or* location permission not yet granted on the test device.
+* Device has GPS capability (or emulator with location simulation enabled).
+
+== Steps
+
+. Launch the application.
+. Observe the system permission dialog for `ACCESS_FINE_LOCATION`.
+. Tap *Allow* (or equivalent on the API level under test).
+. Wait for the map screen to finish loading.
+
+== Expected result
+
+* Map tiles load and the `MapLibreView` is visible.
+* Idle overlay is displayed.
+* *Join an activity* FAB is visible.
+* *Start an activity* FAB is visible (always shown in the Idle state).
+* *Sign in* FAB is visible (anonymous user).
+* No error message appears.
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| Permission dialog — allow button
+| UIAutomator text: `While using the app` or `Allow`
+| UIAutomator
+
+| "Join an activity" FAB
+| `contentDescription = "Join activity"`, text = `Join an activity`
+| Espresso / Compose
+
+| "Start an activity" FAB
+| text = `Start an activity`
+| Espresso / Compose
+
+| "Sign in" FAB
+| `contentDescription = "Sign in"`, text = `Sign in`
+| Espresso / Compose
+|===

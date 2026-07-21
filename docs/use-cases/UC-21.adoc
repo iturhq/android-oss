@@ -1,0 +1,56 @@
+= UC-21: Ongoing state with zero participants
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-21
+| Path type | Edge case
+| Feature | xref:../features.adoc#_feature_3_organise_an_activity[Feature 3 — Organise an activity]
+|===
+
+== Preconditions
+
+* App is in the Ongoing state (organizer just started a new activity).
+* No participants have joined yet.
+
+== Steps
+
+. Start an activity as the organizer (see UC-06).
+. Immediately observe the Ongoing overlay (before any participant joins).
+. Tap *Track group* FAB.
+. Observe the map and the overlay.
+
+== Expected result
+
+* Ongoing overlay renders without errors.
+* No participant markers appear on the map.
+* Tapping *Track group* does not crash the app.
+* Map camera may stay in place (bounding box of an empty list is a no-op in `zoomOnGroup`).
+* *Show QR* FAB remains visible.
+* *Stop activity* FAB remains visible.
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| "Track group" FAB
+| `contentDescription = "Track group"`
+| Espresso / Compose
+
+| "Show QR" FAB (remains visible)
+| `contentDescription = "Show QR"`
+| Espresso / Compose
+
+| "Stop activity" FAB (remains visible)
+| `contentDescription = "Stop activity"`
+| Espresso / Compose
+|===
+
+== Notes
+
+The `zoomOnGroup` function in `MapUtils.kt` / `MapScreen.kt` receives an empty `participantLocations` list.
+The test verifies that this edge case is handled gracefully without an uncaught exception or state regression.
+
+If `zoomOnGroup` currently crashes on an empty list, this test will expose the bug before it reaches users.

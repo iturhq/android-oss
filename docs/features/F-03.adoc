@@ -1,0 +1,55 @@
+= Feature 3: Organise an activity
+:icons: font
+
+Creating, running, and stopping a group activity as the organiser.
+
+== Start
+
+Any user in the Idle state can tap *Start an activity*.
+
+=== Anonymous user
+
+. Tap *Start an activity*.
+. A dialog appears: "Starting an activity requires signing in."
+. The dialog offers *Cancel* and *Sign in* choices.
+. Tapping *Sign in* proceeds to the Google OAuth flow (Feature 2), then creates the activity.
+. Tapping *Cancel* dismisses the dialog; app remains in the Idle state.
+
+=== Registered user
+
+. Tap *Start an activity*.
+. Loading indicator appears (`Preparing activity...`).
+. A new activity document is created in Firestore.
+. Ongoing overlay appears; user is the organiser.
+. *Show QR*, *Stop activity*, *Follow self*, *Follow group*, and *Get help* FABs are visible.
++
+NOTE: The sign-out FAB is hidden in the Ongoing state.
+
+Location updates begin automatically; the device's position is published to the activity and all participant markers are shown on the map in real time.
+
+== Share join QR
+
+. From the Ongoing state (organiser), tap *Show QR*.
+. QR display bottom sheet appears.
+. QR code encodes `https://itur.cat/activity/{activityId}`.
+. Other devices can scan this code to join.
+. Tap outside the sheet or drag down to dismiss.
+
+== Stop
+
+. From the Ongoing state (organiser), tap *Stop activity* (light orange background).
+. Location updates stop.
+. Activity status is updated to `FINISHED` in Firestore.
+. User is removed from the participant list.
+. Location data for the activity is cleared.
+. Idle overlay appears.
+
+== Auto-resume
+
+If the app is closed or crashes while the user has an activity they organised still ongoing:
+
+. Re-launch the app.
+. `MapViewModel.init` queries for activities where `organizerId == currentUser`.
+. If found: Ongoing overlay appears automatically without user interaction.
+. If the activity has since ended: Idle overlay appears silently, with no message.
+. If an error prevents rejoining: a dialog appears with *Retry* and *Exit activity* choices.

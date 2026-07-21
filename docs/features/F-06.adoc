@@ -1,0 +1,20 @@
+= Feature 6: Hail organiser
+:icons: font
+
+An optional additional feature available to participants during an ongoing activity.
+The app remains fully functional without it.
+
+== Participant side
+
+. From the Ongoing state (participant), tap *Hail organiser*.
+. The FAB changes colour to indicate the active hailing state.
+. An attention request is sent to Firestore.
+. To cancel the hail, tap *Hail organiser* again — the FAB returns to its default colour.
+. If the organiser acknowledges the hail, the participant's FAB is automatically restored to its default colour.
+
+== Organiser side
+
+. An in-app notification appears identifying the hailing participant(s).
+. The notification can be expanded to list all currently hailing participants.
+. Each entry has an *Acknowledge* button; tapping it removes that participant from the list and restores their hail button.
+. An *Acknowledge all* option clears the entire list at once.

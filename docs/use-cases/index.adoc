@@ -1,0 +1,40 @@
+= Use cases
+:toc: left
+:toclevels: 2
+:sectnums:
+:sectnumlevels: 2
+:icons: font
+
+All E2E use cases are listed below.
+Each use case covers a single user scenario and specifies preconditions, steps, expected results, and the UI identifiers required for test implementation.
+
+== Conventions
+
+* *Test account:* any registered Google account.
+* *Test activity ID:* `AAAABBBBCCCCDDDDEEEE` (20-char alphanumeric, satisfies `IturActivityId` validation).
+* *Invalid activity ID:* `ZZZZZZZZZZZZZZZZZZZZ` (does not correspond to an existing activity).
+
+include::UC-01.adoc[leveloffset=+1]
+include::UC-02.adoc[leveloffset=+1]
+include::UC-03.adoc[leveloffset=+1]
+include::UC-04.adoc[leveloffset=+1]
+include::UC-05.adoc[leveloffset=+1]
+include::UC-06.adoc[leveloffset=+1]
+include::UC-07.adoc[leveloffset=+1]
+include::UC-08.adoc[leveloffset=+1]
+include::UC-09.adoc[leveloffset=+1]
+include::UC-10.adoc[leveloffset=+1]
+include::UC-11.adoc[leveloffset=+1]
+include::UC-12.adoc[leveloffset=+1]
+include::UC-13.adoc[leveloffset=+1]
+include::UC-14.adoc[leveloffset=+1]
+include::UC-15.adoc[leveloffset=+1]
+include::UC-16.adoc[leveloffset=+1]
+include::UC-17.adoc[leveloffset=+1]
+include::UC-18.adoc[leveloffset=+1]
+include::UC-19.adoc[leveloffset=+1]
+include::UC-20.adoc[leveloffset=+1]
+include::UC-21.adoc[leveloffset=+1]
+include::UC-22.adoc[leveloffset=+1]
+include::UC-23.adoc[leveloffset=+1]
+include::UC-24.adoc[leveloffset=+1]

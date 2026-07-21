@@ -1,0 +1,189 @@
+= ADR-001: E2E test framework selection
+:toc: left
+:toclevels: 2
+:sectnums:
+:sectnumlevels: 2
+:icons: font
+
+
+[cols="1,3"]
+|===
+| Status      | Accepted
+| Date        | 2026-03-12
+| Deciders    | Max Noé
+|===
+
+== Context
+
+The project requires an automated E2E test suite for the Itur Android client.
+The app is 100% Jetpack Compose, uses Hilt for dependency injection, and has two
+build flavors:
+
+* `demo` — fully in-memory fake repositories; no Firebase, no network
+* `prod` — Firebase Firestore + Firebase Auth + Google Sign-In
+
+Key constraints that influence framework selection:
+
+* All interactive UI elements have `contentDescription` or `testTag` identifiers.
+* `testTagsAsResourceId = true` is enabled globally, so `testTag` values surface as
+  resource IDs in the accessibility tree.
+* System permission dialogs (camera, location) and the Google OAuth sheet are
+  rendered outside the app process and require a cross-process interaction mechanism.
+* The `demo` flavor eliminates all Firebase dependencies, making fully deterministic in-process test execution possible without a Firebase emulator.
+
+== Decision
+
+Use **Espresso** (with `ComposeTestRule`) as the primary E2E test framework,
+supplemented by **UIAutomator** for interactions with OS-level system dialogs.
+
+[mermaid, framework-decision, png]
+....
+graph LR
+  subgraph ts["Test Suite"]
+    E["Espresso (Compose)"]
+    U[UIAutomator]
+  end
+
+  subgraph aut["App Under Test"]
+    MS["MapScreen (Compose)"]
+    VM["MapViewModel (Hilt)"]
+    FR["FakeRepositories (demo flavor)"]
+  end
+
+  subgraph os["OS Layer"]
+    PD[Permission Dialogs]
+    GO[Google OAuth Sheet]
+  end
+
+  E -->|"Compose semantics (testTag, contentDescription, text)"| MS
+  E -->|"via @HiltAndroidTest / @UninstallModules"| VM
+  E -->|"injected by Hilt in demo flavor"| FR
+  U -->|"Grant / Deny"| PD
+  U -->|"Dismiss (prod tests only)"| GO
+
+  FR -.- note["demo flavor replaces all Firebase modules —\nno network, no emulator required for the test suite."]
+  style note fill:#ffffcc,stroke:#aaa,stroke-dasharray:4
+....
+
+== Rationale
+
+. **`demo` flavor eliminates network flakiness.**
+  `FakeActivityRepository`, `FakeLocationRepository`, and `FakeUserRepository` provide fully deterministic, in-process data. No Firebase emulator is required. This is the single most important enabler for stable E2E tests.
+
+. **Compose test APIs match the existing UI.**
+  `createAndroidComposeRule<MainActivity>()` natively drives the Compose semantic tree. Content descriptions and text labels are already present on all interactive elements.
+
+. **Hilt test support is first-party.**
+  `@HiltAndroidTest`, `@UninstallModules`, custom test modules allow swapping any repository with a failure-injecting fake without modifying production code.
+
+. **`testTagsAsResourceId = true` is already enabled.**
+  Once `testTag` modifiers are added to all FABs, selectors become stable even if display text changes.
+
+. **UIAutomator covers the one gap: system permission dialogs.**
+  Camera and location permission grants occur outside the app process. A single UIAutomator helper method (`grantPermission(text)`) is sufficient for all use cases.
+
+. **Low additional infrastructure.**
+  Espresso tests run as standard `androidTest` instrumented tests. No external server, proxy, or additional tooling is needed beyond the existing Gradle setup.
+
+== Consequences
+
+* Positive: stable, deterministic tests with no network dependency.
+* Positive: first-party toolchain — maintained alongside AGP and Compose BOM.
+* Positive: `@HiltAndroidTest` enables fine-grained fake injection without touching production modules.
+* Negative: tests require a connected device or emulator (no pure JVM execution).
+* Negative: UI refactors that change `testTag` or `contentDescription` values require corresponding test updates.
+* Negative: UIAutomator selectors for permission dialogs may break across Android versions or locales; the helper should be kept small and text-agnostic where possible.
+
+== Alternatives considered
+
+=== UIAutomator (standalone)
+
+[cols="1,4"]
+|===
+| Criterion | Assessment
+
+| Strengths
+a|
+* Cross-process: can interact with system permission dialogs, Google Sign-In sheets, notifications
+* Useful as an Espresso companion for the one-time permission grant
+
+| Weaknesses
+a|
+* No Compose-native API; relies on resource IDs or brittle text matching
+* Significantly slower than Espresso
+* Cannot access app-internal state
+
+| Verdict
+| Rejected as primary framework; retained as a thin companion for OS dialogs only.
+|===
+
+=== Appium
+
+[cols="1,4"]
+|===
+| Criterion | Assessment
+
+| Strengths
+a|
+* Cross-platform (useful if an iOS version is ever built)
+* External test runner — language-agnostic
+
+| Weaknesses
+a|
+* Poor Jetpack Compose support — requires AccessibilityIDs; Compose semantics are not first-class
+* High infrastructure overhead (Appium server, drivers)
+* No Hilt or coroutine integration
+* Network round-trips to the Appium server add latency and flakiness
+
+| Verdict
+| **Rejected.** Compose semantics are not a first-class concept; every Compose release can break selectors.
+|===
+
+=== Maestro
+
+[cols="1,4"]
+|===
+| Criterion | Assessment
+
+| Strengths
+a|
+* Zero-code YAML flows — low barrier to entry
+* Auto-detects elements by visible text and accessibility labels
+* Handles system dialogs natively
+* Minimal CI setup
+
+| Weaknesses
+a|
+* No programmatic state assertions — cannot verify ViewModel state or repository writes
+* Cannot mock or stub dependencies — must use real (or demo-flavor) data without fine-grained control
+* Some FABs had duplicate content descriptions (resolved by MD09), which caused selector ambiguity
+
+| Verdict
+| Rejected. Inability to assert on internal state is a hard blocker for behavioural E2E tests.
+|===
+
+=== DroidFleet
+
+[cols="1,4"]
+|===
+| Criterion | Assessment
+
+| Strengths
+a|
+* Kotlin-first DSL — tests read naturally alongside production code
+* Supports Jetpack Compose selectors via accessibility tree
+* Handles system dialogs without a companion framework
+
+| Weaknesses
+a|
+* Immature ecosystem — limited community resources and Hilt integration is not first-party
+* No equivalent of `@UninstallModules` for swapping fakes; dependency injection into tests requires manual wiring
+* Smaller adoption base means fewer examples and slower bug fixes
+
+| Verdict
+| Rejected. Lack of first-party Hilt integration and an immature ecosystem make it a higher-risk choice than Espresso for this project's DI-heavy architecture.
+|===
+
+=== Playwright for Android WebViews
+
+Not applicable — the app contains no WebViews.

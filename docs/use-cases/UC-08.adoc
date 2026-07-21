@@ -1,0 +1,52 @@
+= UC-08: Start an activity — creation failure
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-08
+| Path type | Negative
+| Feature | xref:../features.adoc#_feature_3_organise_an_activity[Feature 3 — Organise an activity]
+|===
+
+== Preconditions
+
+* App is in the Idle state with a registered user.
+* The activity creation service returns an error (e.g., back-end unavailable).
+
+== Steps
+
+. Tap *Start an activity* FAB.
+. Observe the loading indicator.
+. Wait for the state after loading.
+
+== Expected result
+
+* Loading indicator disappears.
+* Error message indicating the failure is displayed (as a snackbar or in the Idle error overlay).
+* Idle overlay remains (app does not transition to Ongoing).
+* *Start an activity* FAB is still visible.
+* No crash occurs.
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| "Start an activity" FAB
+| text = `Start an activity`
+| Espresso / Compose
+
+| Loading indicator
+| text = `Preparing activity…`
+| Espresso / Compose
+
+| Error message
+| text contains the error description
+| Espresso / Compose (snackbar or Toast matcher)
+
+| "Show QR" FAB (absent)
+| `contentDescription = "Show QR"` — assert `doesNotExist()`
+| Espresso / Compose
+|===
+

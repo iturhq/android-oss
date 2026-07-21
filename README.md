@@ -45,8 +45,10 @@ feature/
 ```
 
 ## Build flavours
+
 * `demo`: In-memory fake repositories, no credentials needed.
-* `prod`: live Firebase backend, requires `local.properties` and `google-services.json`.
+* `local`: Connects to Firebase Emulator Suite running in [itur-dashboard](https://github.com/mnohe/itur-dashboard), requires `local.properties`.
+* `prod`: Live Firebase backend, requires `local.properties` and `google-services.json`.
 
 ## Prerequisites
 
@@ -78,6 +80,25 @@ Install the resulting APK, or run directly on a device/emulator:
 ./gradlew assembleProdDebug
 ```
 
+### Emulated Firestore (development)
+
+To test against an emulated Firestore without requiring live Firebase credentials:
+
+1. Set up and run the Firebase Emulator Suite using the [itur-dashboard](https://github.com/mnohe/itur-dashboard) project:
+   ```bash
+   cd itur-dashboard
+   firebase emulators:start --only firestore,auth,functions
+   ```
+
+2. Copy `local.properties.example` to `local.properties` and fill in your MapLibre credentials (Google OAuth is not required for the emulator).
+
+3. Build and run the `local` flavour:
+   ```bash
+   ./gradlew installLocalDebug
+   ```
+
+The `local` flavour connects to the Firebase Emulator Suite and works alongside the [itur-dashboard](https://github.com/mnohe/itur-dashboard) web dashboard for full system testing.
+
 ## Running the tests
 
 ```bash
@@ -103,5 +124,4 @@ Kotlin file.  Run before committing:
 
 ---
 
-This project was developed as the practical component of a final degree project at
-Universitat Oberta de Catalunya (UOC). The [accompanying academic paper](https://openaccess.uoc.edu/server/api/core/bitstreams/0ac923ef-e562-4ea5-a111-d57ac7154640/content) is available at the UOC's open access repository.
+This project was developed as the practical component of a final degree project at Universitat Oberta de Catalunya (UOC). The [associated academic paper](https://openaccess.uoc.edu/server/api/core/bitstreams/0ac923ef-e562-4ea5-a111-d57ac7154640/content) is available at the UOC's open access repository.

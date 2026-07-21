@@ -1,0 +1,51 @@
+= UC-02: App launch — location permission denied
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-02
+| Path type | Negative
+| Feature | xref:../features.adoc#_feature_1_participate_in_an_activity[Feature 1 — Participate in an activity]
+|===
+
+== Preconditions
+
+* Location permission is not yet granted on the test device (will be denied during the test).
+
+== Steps
+
+. Launch the application.
+. Observe the system permission dialog for `ACCESS_FINE_LOCATION`.
+. Tap *Don't allow* / *Deny*.
+. Observe the screen after denial.
+
+== Expected result
+
+* The map is *not* shown.
+* A guidance screen (or in-overlay message) is displayed, instructing the user to grant the location permission before the app can proceed.
+* No Idle overlay with FABs appears.
+* No crash occurs.
+* No location data is written to Firestore.
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| Permission dialog — deny button
+| UIAutomator text: `Don't allow` or `Deny`
+| UIAutomator
+
+| Location-required guidance message
+| text contains `location` (exact copy TBD once implemented)
+| Espresso / Compose
+
+| Map / Idle overlay (absent)
+| `Join an activity` — assert `doesNotExist()`
+| Espresso / Compose
+|===
+
+== Notes
+
+If the system does not re-show the dialog (permission permanently denied), the test setup must reset app permissions via `adb shell pm revoke` or `UiAutomation.grantRuntimePermission()` before the test run.

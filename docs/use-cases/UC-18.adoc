@@ -1,0 +1,59 @@
+= UC-18: Zoom on group
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-18
+| Path type | Positive
+| Feature | xref:../features.adoc#_feature_5_follow_group[Feature 5 — Follow group]
+|===
+
+== Preconditions
+
+* App is in the Ongoing state.
+* At least two participants have distinct known locations.
+
+== Steps
+
+. Verify the Ongoing overlay is shown.
+. Pan the map away from the participant cluster.
+. Tap *Track group* FAB.
+. Observe the map camera animation.
+. Wait for a subsequent location update to arrive.
+
+== Expected result
+
+* Map camera animates to a bounding box that contains all participant locations.
+* As subsequent location updates arrive, the bounding box automatically expands, shrinks, or repositions to keep all participants in view — no additional tap is needed.
+* No crash occurs.
+* The Ongoing overlay remains visible throughout.
+
+== Additional edge case: empty participant list
+
+[cols="1,3"]
+|===
+| Precondition
+| `FakeLocationRepository.getForActivity()` returns an empty list.
+
+| Steps
+| Tap *Track group* FAB.
+
+| Expected result
+| No crash. Map camera may stay in place (no-op) or use a default zoom. No error state is triggered.
+|===
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| "Track group" FAB
+| `contentDescription = "Track group"`
+| Espresso / Compose
+|===
+
+== Notes
+
+As with UC-17, the map camera bounding box cannot be directly asserted via Compose semantics.
+Initial coverage verifies no crash and no state regression.

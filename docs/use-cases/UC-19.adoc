@@ -1,0 +1,58 @@
+= UC-19: Hail organiser — participant
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-19
+| Path type | Positive
+| Feature | xref:../features.adoc#_feature_6_hail_organiser[Feature 6 — Hail organiser]
+|===
+
+== Preconditions
+
+* App is in the Ongoing state with the *participant* role.
+
+== Steps — hail and cancel
+
+. Verify *Hail organiser* FAB is visible and in its default (inactive) colour.
+. Tap *Hail organiser* FAB.
+. Observe the FAB colour change.
+. Tap *Hail organiser* FAB again.
+. Observe the FAB colour return to its default state.
+
+== Expected result — hail and cancel
+
+* After step 2: the FAB changes colour to indicate the active hailing state; `requestAttention()` is called exactly once.
+* After step 4: the FAB returns to its default colour; `cancelAttention()` (or equivalent) is called exactly once.
+* App remains in the Ongoing state throughout.
+* No error Toast appears.
+
+== Steps — organiser clears the hail
+
+. Tap *Hail organiser* FAB (FAB turns active colour).
+. Simulate the organiser acknowledging the hail from their end (via `FakeActivityRepository`).
+. Observe the FAB state without any further user interaction.
+
+== Expected result — organiser clears the hail
+
+* The FAB automatically returns to its default colour when the organiser's acknowledgement is received.
+* No user action is required on the participant's side.
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| "Hail organiser" FAB (inactive)
+| `contentDescription = "Hail organiser"`, default background colour
+| Espresso / Compose
+
+| "Hail organiser" FAB (active)
+| `contentDescription = "Hail organiser"`, active/highlighted colour
+| Espresso / Compose
+|===
+
+== Notes
+
+The exact colour tokens for inactive and active states are TBD; the test should assert on `SemanticsProperties` or a `testTag` state modifier rather than on raw colour values.

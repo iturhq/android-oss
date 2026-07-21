@@ -55,6 +55,24 @@ jobs:
                 "oauth_client": [],
                 "api_key": [{ "current_key": "stub" }],
                 "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              },
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000002",
+                  "android_client_info": { "package_name": "com.nohex.itur.local" }
+                },
+                "oauth_client": [],
+                "api_key": [{ "current_key": "stub" }],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              },
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000003",
+                  "android_client_info": { "package_name": "com.nohex.itur.local.debug" }
+                },
+                "oauth_client": [],
+                "api_key": [{ "current_key": "stub" }],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
               }
             ],
             "configuration_version": "1"
@@ -79,3 +97,6 @@ jobs:
 
       - name: Assemble demo build
         run: ./gradlew assembleDemoDebug
+
+      - name: Assemble local build
+        run: ./gradlew assembleLocalDebug

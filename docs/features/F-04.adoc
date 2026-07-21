@@ -1,0 +1,7 @@
+= Feature 4: Follow self
+:icons: font
+
+A user in the Ongoing state can centre the map on their own location.
+
+. Tap *Follow self* (Recenter) FAB.
+. Map camera animates to the device's last known location.

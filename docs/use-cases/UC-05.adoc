@@ -1,0 +1,52 @@
+= UC-05: Sign out
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-05
+| Path type | Positive
+| Feature | xref:../features.adoc#_feature_2_account[Feature 2 — Account]
+|===
+
+== Preconditions
+
+* App is in the Idle state with a registered (signed-in) user.
+* Sign-out FAB (light orange background) and user info FAB are visible.
+* *Start an activity* FAB is visible.
+
+== Steps
+
+. Tap the *Sign out* FAB (light orange background).
+. Wait for the state transition to complete.
+
+== Expected result
+
+* Sign-out FAB and user info FAB disappear.
+* *Sign in* FAB reappears.
+* *Start an activity* FAB remains visible (always shown in the Idle state).
+* *Join an activity* FAB remains visible.
+* No activity is ongoing.
+* No error appears.
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| Sign-out FAB
+| `contentDescription = "Sign out"`, text = `Sign out`
+| Espresso / Compose
+
+| "Sign in" FAB (appears after)
+| `contentDescription = "Sign in"`, text = `Sign in`
+| Espresso / Compose
+
+| User info FAB (absent after)
+| `contentDescription = "User info"` (TBC) — assert `doesNotExist()`
+| Espresso / Compose
+
+| "Start an activity" FAB (still visible)
+| text = `Start an activity`
+| Espresso / Compose
+|===

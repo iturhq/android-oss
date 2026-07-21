@@ -37,6 +37,8 @@ import com.nohex.itur.feature.map.ui.MapUiState.Ongoing
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -77,21 +79,71 @@ constructor(
     private val _lastLocation = MutableLiveData<Location?>()
     val lastLocation: LiveData<Location?> = _lastLocation
 
-    init {
-        viewModelScope.launch {
-            _currentUser.value = userRepository.getCurrentUser()
+    // Tracks how many consecutive backend failures have occurred, for backoff calculation.
+    private var retryAttempt = 0
+    private var retryJob: Job? = null
 
-            // If there is an ongoing activity organised by the current user, join it.
-            _currentUser.value?.let {
-                val result =
-                    activityRepository.getActivities(ActivityFilter.OngoingByOrganizer(it.id))
-                if (result is DataResult.Success) {
-                    result.data.firstOrNull()?.let { ongoingActivity ->
-                        _ongoingActivityId.value = ongoingActivity.id
+    init {
+        initialize()
+    }
+
+    /**
+     * Attempts to reach the backend and restore any in-progress state.
+     * Called on start-up and automatically on each retry.
+     */
+    private fun initialize() {
+        viewModelScope.launch {
+            try {
+                _currentUser.value = userRepository.getCurrentUser()
+
+                // If there is an ongoing activity organised by the current user, join it.
+                _currentUser.value?.let {
+                    when (val result =
+                        activityRepository.getActivities(ActivityFilter.OngoingByOrganizer(it.id))) {
+                        is DataResult.Success -> result.data.firstOrNull()?.let { ongoingActivity ->
+                            _ongoingActivityId.value = ongoingActivity.id
+                        }
+                        // Any error during start-up is treated as the backend being unavailable.
+                        is DataResult.Error -> throw Exception(result.message)
+                        is DataResult.NotFound -> Unit
                     }
                 }
+
+                // Reached the backend successfully — reset state and backoff counter.
+                retryAttempt = 0
+                _uiState.value = MapUiState.Idle()
+            } catch (e: Exception) {
+                Log.e("MapViewModel", "Backend unavailable: ${e.message}", e)
+                scheduleRetry()
             }
         }
+    }
+
+    /**
+     * Starts a countdown and then retries [initialize], applying exponential backoff.
+     */
+    private fun scheduleRetry() {
+        retryJob?.cancel()
+        val delaySeconds = RETRY_DELAYS_SECONDS.getOrElse(retryAttempt) { RETRY_DELAYS_SECONDS.last() }
+        retryJob = viewModelScope.launch {
+            for (remaining in delaySeconds downTo 1) {
+                _uiState.value = MapUiState.BackendUnavailable(countdown = remaining)
+                delay(1_000L)
+            }
+            _uiState.value = MapUiState.Loading
+            retryAttempt++
+            initialize()
+        }
+    }
+
+    /**
+     * Cancels the pending retry countdown and retries immediately, resetting the backoff.
+     */
+    fun retryNow() {
+        retryAttempt = 0
+        retryJob?.cancel()
+        _uiState.value = MapUiState.Loading
+        initialize()
     }
 
     /**
@@ -360,6 +412,10 @@ constructor(
 
 sealed interface MapUiState {
     data object Loading : MapUiState
+
+    /** The backend could not be reached. Auto-retry fires when [countdown] reaches zero. */
+    data class BackendUnavailable(val countdown: Int) : MapUiState
+
     data class Idle(
         val message: String? = null,
     ) : MapUiState
@@ -381,3 +437,5 @@ sealed interface MapUiState {
         val onCancel: () -> Unit,
     ) : MapUiState
 }
+
+private val RETRY_DELAYS_SECONDS = listOf(5, 10, 20, 40, 60)

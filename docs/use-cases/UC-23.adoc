@@ -1,0 +1,73 @@
+= UC-23: Auto-resume ongoing activity — error
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-23
+| Path type | Negative
+| Feature | xref:../features.adoc#_feature_1_participate_in_an_activity[Feature 1] / xref:../features.adoc#_feature_3_organise_an_activity[Feature 3]
+|===
+
+== Preconditions
+
+* The signed-in user is either an organiser or a participant of an activity that is still `ONGOING`.
+* Location permission is granted.
+* The back-end returns an error when `MapViewModel.init` attempts to rejoin the activity.
+
+== Steps — retry path
+
+. Launch the application (or recreate `MainActivity` to force a fresh `init` block).
+. Wait for `MapViewModel.init` to fail.
+. Observe the error dialog.
+. Tap *Retry*.
+. Observe the outcome.
+
+== Expected result — retry path
+
+* A dialog appears explaining that the activity could not be resumed, and offering *Retry* and *Exit activity* choices.
+* After tapping *Retry*: another attempt is made to rejoin. If the back-end now succeeds, the Ongoing overlay appears.
+
+== Steps — exit path
+
+. Launch the application (back-end consistently returns an error).
+. Observe the error dialog.
+. Tap *Exit activity*.
+
+== Expected result — exit path
+
+* The ongoing activity state is cleared.
+* The Idle overlay appears.
+* No Ongoing overlay is shown.
+* No crash occurs.
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| Resume-failure dialog
+| text contains `could not be resumed` (exact copy TBD)
+| Espresso / Compose
+
+| Dialog — "Retry" button
+| text = `Retry`
+| Espresso / Compose
+
+| Dialog — "Exit activity" button
+| text = `Exit activity`
+| Espresso / Compose
+
+| Idle overlay — "Join an activity" FAB (after exit)
+| text = `Join an activity`
+| Espresso / Compose
+
+| Ongoing overlay — "Show QR" FAB (after successful retry, organiser)
+| `contentDescription = "Show QR"`
+| Espresso / Compose
+|===
+
+== Notes
+
+See xref:UC-20.adoc[UC-20] for the happy path (activity resumes without error).
+See xref:UC-24.adoc[UC-24] for the path where the activity has already ended.

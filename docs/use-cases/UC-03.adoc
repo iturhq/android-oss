@@ -1,0 +1,55 @@
+= UC-03: Sign in with Google — happy path
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-03
+| Path type | Positive
+| Feature | xref:../features.adoc#_feature_2_account[Feature 2 — Account]
+|===
+
+== Preconditions
+
+* App is in the Idle state with an anonymous user.
+* Location permission is granted.
+
+== Steps
+
+. Observe the Idle overlay: *Sign in* FAB is visible; *Start an activity* FAB is visible.
+. Tap the *Sign in* FAB.
+. Wait for the state transition to complete.
+
+== Expected result
+
+* *Sign in* FAB is replaced by a user info FAB and a sign-out FAB (light orange background).
+* *Start an activity* FAB remains visible (it was already present before sign-in).
+* *Join an activity* FAB remains visible.
+* No error Toast or error state appears.
+* `currentUser` resolves to a `RegisteredUser`.
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| "Sign in" FAB
+| `contentDescription = "Sign in"`, text = `Sign in`
+| Espresso / Compose
+
+| User info FAB (appears after)
+| `contentDescription = "User info"` (TBC)
+| Espresso / Compose
+
+| Sign-out FAB (appears after)
+| `contentDescription = "Sign out"`, text = `Sign out`
+| Espresso / Compose
+
+| "Start an activity" FAB (still visible)
+| text = `Start an activity`
+| Espresso / Compose
+|===
+
+== Data requirements
+
+* A valid Google account must be available for sign-in.

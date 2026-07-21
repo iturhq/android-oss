@@ -1,0 +1,52 @@
+= UC-24: Auto-resume — activity has ended
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-24
+| Path type | Edge case
+| Feature | xref:../features.adoc#_feature_1_participate_in_an_activity[Feature 1] / xref:../features.adoc#_feature_3_organise_an_activity[Feature 3]
+|===
+
+== Preconditions
+
+* The signed-in user was either an organiser or a participant of an activity.
+* The activity has since ended (`FINISHED`) or no longer exists before the app is relaunched.
+* Location permission is granted.
+
+== Steps
+
+. Launch the application.
+. Wait for `MapViewModel.init` to complete (`ComposeTestRule.waitForIdle()`).
+. Observe the UI state.
+
+== Expected result
+
+* The Idle overlay appears silently.
+* No dialog, no error message, and no snackbar is shown.
+* No Ongoing overlay is displayed.
+* No crash occurs.
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| "Join an activity" FAB (present)
+| text = `Join an activity`
+| Espresso / Compose
+
+| "Show QR" FAB (absent)
+| `contentDescription = "Show QR"` — assert `doesNotExist()`
+| Espresso / Compose
+
+| Any error message (absent)
+| text contains `error` or `resume` — assert `doesNotExist()`
+| Espresso / Compose
+|===
+
+== Notes
+
+This distinguishes from xref:UC-23.adoc[UC-23] (back-end error — shows a dialog) and xref:UC-20.adoc[UC-20] (activity still ongoing — shows Ongoing overlay).
+The silent transition is intentional: the activity ending is not an error condition.

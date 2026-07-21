@@ -1,0 +1,58 @@
+= UC-10: Join activity — camera permission denied
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-10
+| Path type | Negative
+| Feature | xref:../features.adoc#_feature_1_participate_in_an_activity[Feature 1 — Participate in an activity]
+|===
+
+== Preconditions
+
+* App is in the Idle state.
+* Camera permission will be denied during the test.
+
+== Steps
+
+. Tap *Join an activity* FAB.
+. Observe the system camera permission dialog.
+. Tap *Don't allow* / *Deny*.
+. Observe the UI response.
+
+== Expected result
+
+* The QR scan sheet does *not* open.
+* A toast informs the user that QR scanning requires camera access.
+* App remains in the Idle state.
+* Tapping *Join an activity* again shows the same toast again.
+* No Ongoing state is entered.
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| "Join an activity" FAB
+| text = `Join an activity`
+| Espresso / Compose
+
+| Camera permission dialog — deny
+| UIAutomator text: `Don't allow` or `Deny`
+| UIAutomator
+
+| Camera-required toast
+| text contains `camera` (exact copy TBD)
+| Espresso Toast matcher
+
+| QR Scan sheet (absent)
+| text = `Scan an activity QR to join` — assert `doesNotExist()`
+| Espresso / Compose
+|===
+
+== Notes
+
+If the system does not re-show the permission dialog (permanently denied), the test must revoke the permission before running via `adb shell pm revoke <package> android.permission.CAMERA`.
+
+Because the toast reappears on every tap of *Join an activity* until permission is granted, this use case covers repeated-denial behaviour as well as the initial denial.

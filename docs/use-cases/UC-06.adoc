@@ -1,0 +1,69 @@
+= UC-06: Start an activity — happy path
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-06
+| Path type | Positive
+| Feature | xref:../features.adoc#_feature_3_organise_an_activity[Feature 3 — Organise an activity]
+|===
+
+== Preconditions
+
+* App is in the Idle state with a registered user.
+* Location permission is granted.
+
+== Steps
+
+. Verify *Start an activity* FAB is visible and *Show QR* is absent.
+. Tap *Start an activity* FAB.
+. Observe the loading indicator.
+. Wait for the Ongoing overlay to appear.
+
+== Expected result
+
+* Loading indicator with label `Preparing activity…` is shown briefly.
+* Ongoing overlay appears.
+* *Show QR* FAB is visible (organizer role).
+* *Stop activity* FAB is visible.
+* *Track group* FAB is visible.
+* *Recenter* FAB is visible.
+* *Get help* FAB is visible.
+* *Hail organiser* FAB is *not* visible.
+* Map location component is active.
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| "Start an activity" FAB
+| text = `Start an activity`
+| Espresso / Compose
+
+| Loading indicator
+| text = `Preparing activity…`
+| Espresso / Compose
+
+| "Show QR" FAB
+| `contentDescription = "Show QR"`
+| Espresso / Compose
+
+| "Stop activity" FAB
+| `contentDescription = "Stop activity"`
+| Espresso / Compose
+
+| "Track group" FAB
+| `contentDescription = "Track group"`
+| Espresso / Compose
+
+| "Recenter" FAB
+| `contentDescription = "Recenter"`
+| Espresso / Compose
+
+| "Hail organiser" FAB (absent)
+| `contentDescription = "Hail organiser"` — assert `doesNotExist()`
+| Espresso / Compose
+|===
+

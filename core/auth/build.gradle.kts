@@ -38,6 +38,14 @@ android {
                 "\"${localProperties.getProperty("GOOGLE_WEB_CLIENT_ID", "")}\"",
             )
         }
+        create("local") {
+            dimension = "environment"
+            buildConfigField(
+                "String",
+                "GOOGLE_WEB_CLIENT_ID",
+                "\"${localProperties.getProperty("GOOGLE_WEB_CLIENT_ID", "")}\"",
+            )
+        }
         create("demo") {
             dimension = "environment"
             buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"\"")
@@ -62,10 +70,13 @@ dependencies {
     implementation(libs.firebase.firestore.ktx)
     // Security
     implementation(libs.androidx.security.crypto)
-    // Google Sign-In via Credential Manager (prod only; not needed in demo)
+    // Google Sign-In via Credential Manager (prod and local; not needed in demo)
     "prodImplementation"(libs.androidx.credentials)
     "prodImplementation"(libs.androidx.credentials.play.services.auth)
     "prodImplementation"(libs.google.googleid)
+    "localImplementation"(libs.androidx.credentials)
+    "localImplementation"(libs.androidx.credentials.play.services.auth)
+    "localImplementation"(libs.google.googleid)
     // Test
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlin.test.junit)

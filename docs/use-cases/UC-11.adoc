@@ -1,0 +1,69 @@
+= UC-11: Join activity — invalid QR code
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-11
+| Path type | Edge case
+| Feature | xref:../features.adoc#_feature_1_participate_in_an_activity[Feature 1 — Participate in an activity]
+|===
+
+== Preconditions
+
+* App is in the Idle state.
+* Camera permission is already granted.
+* A QR code encoding a URL that is not a valid Itur activity link is available for scanning.
+
+== Steps
+
+. Tap *Join an activity* FAB.
+. QR Scan bottom sheet appears immediately (no permission dialog, as it is pre-granted).
+. Present / inject the invalid QR code.
+. Observe the UI response.
+. Dismiss the sheet by swiping down.
+
+== Expected result
+
+* No navigation to the Ongoing state occurs.
+* No loading indicator appears.
+* The QR Scan bottom sheet remains open (the invalid scan is silently ignored).
+* After dismissal, the app is in the Idle state.
+* No error Toast appears.
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| "Join an activity" FAB
+| text = `Join an activity`
+| Espresso / Compose
+
+| QR Scan sheet instructions (stays visible)
+| text = `Scan an activity QR to join`
+| Espresso / Compose
+
+| Loading indicator (absent)
+| text = `Preparing activity…` — assert `doesNotExist()`
+| Espresso / Compose
+
+| "Stop activity" FAB (absent after dismiss)
+| `contentDescription = "Stop activity"` — assert `doesNotExist()`
+| Espresso / Compose
+|===
+
+== Traceability
+
+The silent-ignore behavior is implemented in `MapScreen.kt` line 151:
+
+[source,kotlin]
+----
+onScanSuccess = { code ->
+    IturActivityId.from(code)?.let {      // returns null for invalid URLs
+        viewModel.joinActivity(...)
+        showQRScanSheet = false
+    }
+    // no else branch — invalid codes are silently dropped
+}
+----

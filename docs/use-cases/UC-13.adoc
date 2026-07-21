@@ -1,0 +1,61 @@
+= UC-13: Organizer displays QR code
+:icons: font
+
+[cols="1,3"]
+|===
+| ID | UC-13
+| Path type | Positive
+| Feature | xref:../features.adoc#_feature_3_organise_an_activity[Feature 3 — Organise an activity]
+|===
+
+== Preconditions
+
+* App is in the Ongoing state with the *organizer* role.
+* The ongoing activity has a valid ID.
+
+== Steps
+
+. Verify *Show QR* FAB is visible and *Hail organiser* FAB is absent.
+. Tap *Show QR* FAB.
+. Observe the QR Display bottom sheet.
+. Verify the QR image is rendered (non-blank).
+. Dismiss the sheet by tapping outside it or swiping down.
+
+== Expected result
+
+* Bottom sheet appears with title `Scan this QR to join the activity`.
+* QR image is rendered and visible (non-null bitmap).
+* After dismissal, the Ongoing overlay is restored.
+* *Show QR* FAB is still visible.
+* No error occurs.
+
+== UI identifiers
+
+[cols="2,2,1"]
+|===
+| Element | Selector | Tool
+
+| "Show QR" FAB
+| `contentDescription = "Show QR"`
+| Espresso / Compose
+
+| QR Display sheet title
+| text = `Scan this QR to join the activity`
+| Espresso / Compose
+
+| QR image
+| `QRImage` composable (no testTag currently — see TODO MD10)
+| Espresso / Compose (after MD10 resolved)
+
+| Sheet dismissed — title gone
+| text = `Scan this QR to join the activity` — assert `doesNotExist()`
+| Espresso / Compose
+
+| "Show QR" FAB (after dismiss)
+| `contentDescription = "Show QR"`
+| Espresso / Compose
+|===
+
+== Notes
+
+Visual verification of QR content correctness requires screenshot comparison or a separate QR decode step in addition to the selector assertions.
