@@ -98,8 +98,10 @@ constructor(
 
                 // If there is an ongoing activity organised by the current user, join it.
                 _currentUser.value?.let {
-                    when (val result =
-                        activityRepository.getActivities(ActivityFilter.OngoingByOrganizer(it.id))) {
+                    when (
+                        val result =
+                            activityRepository.getActivities(ActivityFilter.OngoingByOrganizer(it.id))
+                    ) {
                         is DataResult.Success -> result.data.firstOrNull()?.let { ongoingActivity ->
                             _ongoingActivityId.value = ongoingActivity.id
                         }

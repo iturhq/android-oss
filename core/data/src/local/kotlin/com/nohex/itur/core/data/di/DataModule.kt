@@ -31,10 +31,8 @@ object DataModule {
     }
 
     @Provides
-    fun provideActivityRepository(firestore: FirebaseFirestore): ActivityRepository =
-        FirebaseActivityRepository(firestore)
+    fun provideActivityRepository(firestore: FirebaseFirestore): ActivityRepository = FirebaseActivityRepository(firestore)
 
     @Provides
-    fun provideLocationRepository(firestore: FirebaseFirestore): LocationRepository =
-        FirebaseLocationRepository(firestore)
+    fun provideLocationRepository(firestore: FirebaseFirestore): LocationRepository = FirebaseLocationRepository(firestore)
 }
