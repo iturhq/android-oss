@@ -42,15 +42,7 @@ constructor(
                 }
 
                 // Convert to domain object.
-                val activity = snapshot.toObject(IturActivityDTO::class.java)
-                    ?.let { dto ->
-                        IturActivity(
-                            id = IturActivityId(dto.id),
-                            organizerId = UserId(dto.organizerId),
-                            createdOn = dto.createdOn,
-                            participantIds = dto.participantIds.map { UserId(it) },
-                        )
-                    }
+                val activity = snapshot.toObject(IturActivityDTO::class.java)?.toDomain()
 
                 // Convert to result.
                 activity?.let { DataResult.Success(it) }
@@ -84,12 +76,7 @@ constructor(
                     .filter { !it.id.isEmpty() }
                     .map { dto ->
                         Log.d(TAG, "Found activity ${dto.id}")
-                        IturActivity(
-                            id = IturActivityId(dto.id),
-                            organizerId = UserId(dto.organizerId),
-                            createdOn = dto.createdOn,
-                            participantIds = dto.participantIds.map { UserId(it) },
-                        )
+                        dto.toDomain()
                     }
 
                 DataResult.Success(activities)
@@ -109,7 +96,11 @@ constructor(
         return try {
             withContext(Dispatchers.IO) {
                 // Update the activity status.
-                reference.update("status", newStatus.name).await()
+                val updates = mutableMapOf<String, Any>("status" to newStatus.name)
+                if (newStatus == IturActivityStatus.FINISHED || newStatus == IturActivityStatus.CANCELLED) {
+                    updates["finishedOn"] = FieldValue.serverTimestamp()
+                }
+                reference.update(updates).await()
 
                 // Return the updated activity.
                 getActivity(id)
@@ -145,7 +136,11 @@ constructor(
                             id = newActivity.id.value,
                             organizerId = newActivity.organizerId.value,
                             createdOn = newActivity.createdOn,
+                            startTime = newActivity.startTime,
                             participantIds = newActivity.participantIds.map { it.value },
+                            status = newActivity.status.name,
+                            listed = newActivity.listed,
+                            attentionRequests = newActivity.attentionRequests.map { it.value },
                         ),
                     )
                     .await()
@@ -265,6 +260,10 @@ data class IturActivityDTO(
     var participantIds: List<String> = emptyList(),
     var status: String = IturActivityStatus.DRAFT.name,
     var createdOn: Date = Calendar.getInstance().time,
+    var startTime: Date = createdOn,
+    var finishedOn: Date? = null,
+    var listed: Boolean = false,
+    var attentionRequests: List<String> = emptyList(),
 )
 
 private fun IturActivityDTO.toDomain(): IturActivity = IturActivity(
@@ -273,4 +272,8 @@ private fun IturActivityDTO.toDomain(): IturActivity = IturActivity(
     organizerId = UserId(organizerId),
     participantIds = participantIds.map { UserId(it) },
     createdOn = createdOn,
+    startTime = startTime,
+    finishedOn = finishedOn,
+    listed = listed,
+    attentionRequests = attentionRequests.map { UserId(it) },
 )

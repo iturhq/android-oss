@@ -11,6 +11,7 @@ import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.model.IturActivity
 import com.nohex.itur.core.model.IturActivityStatus
+import java.util.Calendar
 
 class FakeActivityRepository(
     initialActivities: List<IturActivity> = emptyList(),
@@ -39,7 +40,11 @@ class FakeActivityRepository(
             return DataResult.NotFound(id.value)
         }
 
-        activities[index] = activities[index].copy(status = newStatus)
+        val isTerminal = newStatus == IturActivityStatus.FINISHED || newStatus == IturActivityStatus.CANCELLED
+        activities[index] = activities[index].copy(
+            status = newStatus,
+            finishedOn = if (isTerminal) Calendar.getInstance().time else activities[index].finishedOn,
+        )
 
         return DataResult.Success(activities[index])
     }
