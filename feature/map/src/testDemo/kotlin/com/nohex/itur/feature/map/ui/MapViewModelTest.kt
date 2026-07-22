@@ -16,12 +16,15 @@ import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.domain.model.User
 import com.nohex.itur.core.location.LocationClient
+import com.nohex.itur.core.model.Broadcast
 import com.nohex.itur.core.model.IturActivity
 import com.nohex.itur.core.model.IturActivityStatus
+import com.nohex.itur.feature.map.notifications.BroadcastNotifier
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
@@ -29,6 +32,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
+import java.util.Date
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -53,6 +57,7 @@ class MapViewModelTest {
 
     private val context = mockk<Context>(relaxed = true)
     private val locationClient = mockk<LocationClient>(relaxed = true)
+    private val broadcastNotifier = mockk<BroadcastNotifier>(relaxed = true)
 
     @Before
     fun setup() {
@@ -79,6 +84,7 @@ class MapViewModelTest {
         userRepository = userRepo,
         locationsRepository = locationRepo(activityRepo),
         locationClient = locationClient,
+        broadcastNotifier = broadcastNotifier,
     )
 
     /** Asserts the state is [MapUiState.Ongoing], showing the error message on failure. */
@@ -304,6 +310,68 @@ class MapViewModelTest {
             val vm = viewModel()
             vm.startActivity(context)
             vm.requestAttention()
+        }
+    }
+
+    // --- pollBroadcastsOnce (UC-ACTIVITY-007) ---
+
+    @Test
+    fun `GIVEN a broadcast already sent WHEN polling THEN latestBroadcast reflects it and the notifier is called`() {
+        runTest {
+            val userRepo = userRepo()
+            userRepo.signIn(context)
+            val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
+            val broadcast = Broadcast(id = "b1", message = "Return to the meeting point", sentOn = Date())
+            activityRepo.addBroadcast(PARTICIPANT_ACTIVITY.id, broadcast)
+
+            val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
+            vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+            vm.pollBroadcastsOnce()
+
+            assertEquals(broadcast, vm.latestBroadcast.value)
+            verify { broadcastNotifier.notify(broadcast) }
+        }
+    }
+
+    @Test
+    fun `GIVEN no broadcasts WHEN polling THEN latestBroadcast stays null`() {
+        runTest {
+            val userRepo = userRepo()
+            userRepo.signIn(context)
+            val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
+
+            val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
+            vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+            vm.pollBroadcastsOnce()
+
+            assertNull(vm.latestBroadcast.value)
+        }
+    }
+
+    @Test
+    fun `GIVEN no ongoing activity WHEN polling THEN no exception is thrown`() {
+        runTest {
+            viewModel().pollBroadcastsOnce()
+        }
+    }
+
+    @Test
+    fun `WHEN triggerIdleState is called THEN latestBroadcast is cleared`() {
+        runTest {
+            val userRepo = userRepo()
+            userRepo.signIn(context)
+            val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
+            val broadcast = Broadcast(id = "b1", message = "hello", sentOn = Date())
+            activityRepo.addBroadcast(PARTICIPANT_ACTIVITY.id, broadcast)
+
+            val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
+            vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+            vm.pollBroadcastsOnce()
+            assertEquals(broadcast, vm.latestBroadcast.value)
+
+            vm.triggerIdleState()
+
+            assertNull(vm.latestBroadcast.value)
         }
     }
 }

@@ -6,11 +6,14 @@
 package com.nohex.itur.core.data.repository
 
 import android.util.Log
+import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
+import com.nohex.itur.core.model.Broadcast
 import com.nohex.itur.core.model.IturActivity
 import com.nohex.itur.core.model.IturActivityStatus
 import kotlinx.coroutines.Dispatchers
@@ -250,6 +253,28 @@ constructor(
         } catch (e: Exception) {
             Log.e("FirestoreActivityRepo", "Could not update participant", e)
             DataResult.Error(e.message ?: "")
+        }
+    }
+
+    override suspend fun getBroadcastsSince(activityId: IturActivityId, since: Date?): List<Broadcast> {
+        var query: Query = activitiesCollection.document(activityId.value)
+            .collection("broadcasts")
+            .orderBy("sentOn")
+        if (since != null) {
+            query = query.whereGreaterThan("sentOn", Timestamp(since))
+        }
+
+        return try {
+            withContext(Dispatchers.IO) {
+                query.get().await().documents.mapNotNull { doc ->
+                    val message = doc.getString("message") ?: return@mapNotNull null
+                    val sentOn = doc.getTimestamp("sentOn") ?: return@mapNotNull null
+                    Broadcast(id = doc.id, message = message, sentOn = sentOn.toDate())
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to fetch broadcasts for activity ${activityId.value}", e)
+            emptyList()
         }
     }
 }

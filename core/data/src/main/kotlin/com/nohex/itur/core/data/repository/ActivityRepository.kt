@@ -7,8 +7,10 @@ package com.nohex.itur.core.data.repository
 
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
+import com.nohex.itur.core.model.Broadcast
 import com.nohex.itur.core.model.IturActivity
 import com.nohex.itur.core.model.IturActivityStatus
+import java.util.Date
 
 interface ActivityRepository {
     /**
@@ -58,6 +60,12 @@ interface ActivityRepository {
      * Signals that a participant needs the organiser's attention.
      */
     suspend fun requestAttention(activityId: IturActivityId, userId: UserId)
+
+    /**
+     * Operator broadcasts sent to the activity after [since] (or all of them, if `null`),
+     * oldest first. Read-only from Android -- only `itur-admin` can send one (UC-ACTIVITY-007).
+     */
+    suspend fun getBroadcastsSince(activityId: IturActivityId, since: Date?): List<Broadcast>
 }
 
 sealed class ActivityFilter {

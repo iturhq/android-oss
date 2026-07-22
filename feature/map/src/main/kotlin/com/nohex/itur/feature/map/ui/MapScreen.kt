@@ -8,6 +8,7 @@ package com.nohex.itur.feature.map.ui
 import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
+import android.os.Build
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -56,6 +57,8 @@ import com.nohex.itur.feature.map.ui.components.map.NoMapView
 import com.nohex.itur.feature.map.ui.components.map.OngoingState
 import com.nohex.itur.feature.map.ui.components.qrdisplay.QRDisplaySheet
 import com.nohex.itur.feature.map.ui.components.qrscan.QRScanSheet
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import org.maplibre.android.maps.MapLibreMap
 
 /**
@@ -82,6 +85,8 @@ fun MapScreen(
     val participantLocations by viewModel.participantLocations.collectAsState()
     // The last location of the device.
     val lastLocation by viewModel.lastLocation.observeAsState()
+    // The most recent operator broadcast, shown as a snackbar alongside the system notification.
+    val latestBroadcast by viewModel.latestBroadcast.collectAsState()
     // Whether the QR sheet is showing.
     var showQRDisplaySheet by remember { mutableStateOf(false) }
     var showQRScanSheet by remember { mutableStateOf(false) }
@@ -116,6 +121,9 @@ fun MapScreen(
     LaunchedEffect(displayMessage) {
         displayMessage?.let { snackbarHostState.showSnackbar(it) }
     }
+    LaunchedEffect(latestBroadcast) {
+        latestBroadcast?.let { snackbarHostState.showSnackbar("Alert: ${it.message}") }
+    }
 
     // Permissions.
 
@@ -148,6 +156,20 @@ fun MapScreen(
         }
     }
 
+    // Request notification permission (Android 13+) so operator broadcasts (UC-ACTIVITY-007)
+    // can be delivered as system notifications, not just the in-app banner above.
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {}
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     // Change the view when the ongoing activity changes.
     LaunchedEffect(ongoingActivityId) {
         ongoingActivityId?.let {
@@ -155,6 +177,18 @@ fun MapScreen(
         } ?: run {
             if (uiState !is MapUiState.Idle) {
                 viewModel.triggerIdleState()
+            }
+        }
+    }
+
+    // Poll for operator broadcasts (UC-ACTIVITY-007) while an activity is ongoing. Tied to
+    // composition rather than the ViewModel so it naturally stops when the screen leaves or
+    // ongoingActivityId changes.
+    LaunchedEffect(ongoingActivityId) {
+        if (ongoingActivityId != null) {
+            while (isActive) {
+                viewModel.pollBroadcastsOnce()
+                delay(BROADCAST_POLL_INTERVAL_MS)
             }
         }
     }
@@ -376,3 +410,5 @@ fun RecoverableErrorDialog(message: String, onRetry: () -> Unit, onCancel: () ->
 fun PreviewModalAlert() {
     ModalAlert("This is a modal alert.") {}
 }
+
+private const val BROADCAST_POLL_INTERVAL_MS = 15_000L

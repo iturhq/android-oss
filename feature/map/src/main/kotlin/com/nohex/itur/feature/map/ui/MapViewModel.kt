@@ -30,9 +30,11 @@ import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.domain.model.User
 import com.nohex.itur.core.domain.model.User.AnonymousUser
 import com.nohex.itur.core.location.LocationClient
+import com.nohex.itur.core.model.Broadcast
 import com.nohex.itur.core.model.IturActivity
 import com.nohex.itur.core.model.IturActivityStatus
 import com.nohex.itur.core.model.ParticipantLocation
+import com.nohex.itur.feature.map.notifications.BroadcastNotifier
 import com.nohex.itur.feature.map.ui.MapUiState.Ongoing
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -43,6 +45,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.Date
 import javax.inject.Inject
 import com.nohex.itur.core.model.Location as IturLocation
 
@@ -53,6 +56,7 @@ constructor(
     private val userRepository: UserRepository,
     private val locationsRepository: LocationRepository,
     private val locationClient: LocationClient,
+    private val broadcastNotifier: BroadcastNotifier,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<MapUiState>(MapUiState.Idle())
     val uiState = _uiState.asStateFlow()
@@ -82,6 +86,15 @@ constructor(
     // Tracks how many consecutive backend failures have occurred, for backoff calculation.
     private var retryAttempt = 0
     private var retryJob: Job? = null
+
+    // The most recent operator broadcast (UC-ACTIVITY-007), for an in-app banner alongside
+    // the system notification posted by [broadcastNotifier]. Polling itself is driven by the UI
+    // (a Compose LaunchedEffect tied to the ongoing activity, see MapScreen), not by the
+    // ViewModel, so it naturally stops when the screen isn't showing an ongoing activity and
+    // doesn't require an unbounded viewModelScope loop that's awkward to unit test.
+    private val _latestBroadcast = MutableStateFlow<Broadcast?>(null)
+    val latestBroadcast: StateFlow<Broadcast?> = _latestBroadcast.asStateFlow()
+    private var lastBroadcastSeen: Date? = null
 
     init {
         initialize()
@@ -270,6 +283,8 @@ constructor(
         _ongoingActivityId.value = null
         _uiState.value = MapUiState.Idle(message)
         stopLocationUpdates()
+        lastBroadcastSeen = null
+        _latestBroadcast.value = null
     }
 
     suspend fun triggerOngoingState(activityId: IturActivityId, context: Context) {
@@ -317,11 +332,32 @@ constructor(
 
         // Start updating the location.
         startLocationUpdates(context)
+        // Reset broadcast tracking for the new activity; the UI drives the actual polling
+        // (see pollBroadcastsOnce and MapScreen's LaunchedEffect).
+        lastBroadcastSeen = null
+        _latestBroadcast.value = null
 
         Log.d(
             "MapViewModel",
             "User ${currentUser.value} joined activity ${activity.id}",
         )
+    }
+
+    /**
+     * One polling tick for operator broadcasts on the current ongoing activity (UC-ACTIVITY-007):
+     * notifies (system notification plus in-app banner via [latestBroadcast]) for each broadcast
+     * not yet seen. No-ops if there is no ongoing activity. Call this repeatedly at an interval
+     * from the UI while an activity is ongoing -- polling, not a real-time listener, to match this
+     * app's existing backend-access pattern (see e.g. [initialize], which also polls rather than
+     * subscribing).
+     */
+    suspend fun pollBroadcastsOnce() {
+        val activityId = _ongoingActivityId.value ?: return
+        activityRepository.getBroadcastsSince(activityId, lastBroadcastSeen).forEach { broadcast ->
+            broadcastNotifier.notify(broadcast)
+            _latestBroadcast.value = broadcast
+            lastBroadcastSeen = broadcast.sentOn
+        }
     }
 
     /**

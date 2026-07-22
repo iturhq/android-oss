@@ -7,9 +7,11 @@ package com.nohex.itur.core.data.repository
 
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
+import com.nohex.itur.core.model.Broadcast
 import com.nohex.itur.core.model.IturActivity
 import com.nohex.itur.core.model.IturActivityStatus
 import kotlinx.coroutines.runBlocking
+import java.util.Date
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -189,5 +191,40 @@ class FakeActivityRepositoryTest {
     @Test
     fun `GIVEN an activity WHEN requesting attention THEN no exception is thrown`() = runBlocking {
         repository(ACTIVITY).requestAttention(ACTIVITY_ID, PARTICIPANT_ID)
+    }
+
+    // --- getBroadcastsSince ---
+
+    @Test
+    fun `GIVEN no broadcasts WHEN getting broadcasts since null THEN returns empty list`() = runBlocking {
+        val result = repository(ACTIVITY).getBroadcastsSince(ACTIVITY_ID, since = null)
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `GIVEN broadcasts on another activity WHEN getting broadcasts THEN they are not included`() = runBlocking {
+        val repo = repository(ACTIVITY)
+        repo.addBroadcast(OTHER_ID, Broadcast(id = "b1", message = "hello", sentOn = Date()))
+        assertTrue(repo.getBroadcastsSince(ACTIVITY_ID, since = null).isEmpty())
+    }
+
+    @Test
+    fun `GIVEN broadcasts WHEN getting broadcasts since null THEN returns all of them`() = runBlocking {
+        val repo = repository(ACTIVITY)
+        val broadcast = Broadcast(id = "b1", message = "Return to the meeting point", sentOn = Date())
+        repo.addBroadcast(ACTIVITY_ID, broadcast)
+        assertEquals(listOf(broadcast), repo.getBroadcastsSince(ACTIVITY_ID, since = null))
+    }
+
+    @Test
+    fun `GIVEN broadcasts before and after a cutoff WHEN getting broadcasts since that cutoff THEN only later ones are returned`() = runBlocking {
+        val repo = repository(ACTIVITY)
+        val cutoff = Date(1_000_000)
+        val before = Broadcast(id = "before", message = "old", sentOn = Date(cutoff.time - 1))
+        val after = Broadcast(id = "after", message = "new", sentOn = Date(cutoff.time + 1))
+        repo.addBroadcast(ACTIVITY_ID, before)
+        repo.addBroadcast(ACTIVITY_ID, after)
+
+        assertEquals(listOf(after), repo.getBroadcastsSince(ACTIVITY_ID, since = cutoff))
     }
 }

@@ -9,14 +9,17 @@ import android.util.Log
 import androidx.compose.runtime.mutableStateListOf
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
+import com.nohex.itur.core.model.Broadcast
 import com.nohex.itur.core.model.IturActivity
 import com.nohex.itur.core.model.IturActivityStatus
 import java.util.Calendar
+import java.util.Date
 
 class FakeActivityRepository(
     initialActivities: List<IturActivity> = emptyList(),
 ) : ActivityRepository {
     private val activities = mutableStateListOf<IturActivity>().apply { addAll(initialActivities) }
+    private val broadcasts = mutableMapOf<IturActivityId, MutableList<Broadcast>>()
 
     override suspend fun getActivity(activityId: IturActivityId): DataResult<IturActivity> = activities
         .firstOrNull { it.id == activityId }
@@ -111,5 +114,12 @@ class FakeActivityRepository(
         )
 
         return DataResult.Success(activities[index])
+    }
+
+    override suspend fun getBroadcastsSince(activityId: IturActivityId, since: Date?): List<Broadcast> = broadcasts[activityId].orEmpty().filter { since == null || it.sentOn.after(since) }
+
+    /** Test/demo helper: simulates an operator broadcast arriving for an activity. */
+    fun addBroadcast(activityId: IturActivityId, broadcast: Broadcast) {
+        broadcasts.getOrPut(activityId) { mutableListOf() }.add(broadcast)
     }
 }
