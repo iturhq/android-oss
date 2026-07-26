@@ -184,8 +184,6 @@ fun MapLibreView(
                                         organizerLocation.location.latitude,
                                     ),
                                 ).apply {
-                                    // TODO:
-                                    // addStringProperty("label", it.userName)
                                     addStringProperty("id", organizerLocation.userId.value)
                                 },
                             ),
