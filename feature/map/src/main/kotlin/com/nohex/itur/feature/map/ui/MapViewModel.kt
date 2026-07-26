@@ -34,6 +34,7 @@ import com.nohex.itur.core.model.Broadcast
 import com.nohex.itur.core.model.IturActivity
 import com.nohex.itur.core.model.IturActivityStatus
 import com.nohex.itur.core.model.ParticipantLocation
+import com.nohex.itur.feature.map.config.MapStyleConfig
 import com.nohex.itur.feature.map.notifications.BroadcastNotifier
 import com.nohex.itur.feature.map.ui.MapUiState.Ongoing
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -56,6 +57,7 @@ constructor(
     private val locationsRepository: LocationRepository,
     private val locationClient: LocationClient,
     private val broadcastNotifier: BroadcastNotifier,
+    val mapStyleConfig: MapStyleConfig,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<MapUiState>(MapUiState.Idle())
     val uiState = _uiState.asStateFlow()

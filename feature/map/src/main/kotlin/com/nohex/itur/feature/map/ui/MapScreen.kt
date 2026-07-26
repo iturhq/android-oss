@@ -242,6 +242,7 @@ fun MapScreen(
                 NoMapView()
             } else {
                 MapLibreView(
+                    styleUrl = viewModel.mapStyleConfig.styleUrl,
                     isActivityOngoing = ongoingActivityId != null,
                     organizerId = organizerId,
                     currentUserId = currentUser?.id,

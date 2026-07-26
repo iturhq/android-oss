@@ -26,7 +26,6 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.model.ParticipantLocation
-import com.nohex.itur.feature.map.BuildConfig
 import com.nohex.itur.feature.map.R
 import org.maplibre.android.location.LocationComponent
 import org.maplibre.android.location.LocationComponentActivationOptions.builder
@@ -45,9 +44,6 @@ import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.Point
 
-private const val STYLE_URL =
-    "https://api.maptiler.com/maps/streets/style.json?key=${BuildConfig.MAPTILER_API_KEY}"
-
 private const val ORGANIZER_LAYER = "organizer-layer"
 private const val ORGANIZER_SOURCE = "organizer-source"
 private const val PARTICIPANT_LAYER = "participants-layer"
@@ -60,6 +56,7 @@ private const val MARKER_ORGANIZER = "marker-organizer"
  */
 @Composable
 fun MapLibreView(
+    styleUrl: String,
     isActivityOngoing: Boolean,
     currentUserId: UserId?,
     organizerId: UserId?,
@@ -112,7 +109,7 @@ fun MapLibreView(
         mapView.getMapAsync { map ->
             mapLibreMap = map
 
-            map.setStyle(STYLE_URL) { style ->
+            map.setStyle(styleUrl) { style ->
 
                 // Add marker for others.
                 vectorToBitmap(context, R.drawable.ic_location_other)?.let {

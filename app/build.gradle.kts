@@ -12,6 +12,8 @@ val localProperties = Properties().apply {
     }
 }
 val apiKey: String = localProperties.getProperty("MAPLIBRE_API_KEY") ?: ""
+val maptilerApiKey: String = localProperties.getProperty("MAPTILER_API_KEY") ?: ""
+val googleWebClientId: String = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID") ?: ""
 
 plugins {
     alias(libs.plugins.android.application)
@@ -38,6 +40,10 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "MAPLIBRE_API_KEY", "\"$apiKey\"")
+        // Application-owned configuration injected into reusable modules (feature:map, core:auth)
+        // via AppConfigModule, rather than those modules embedding it themselves.
+        buildConfigField("String", "MAPTILER_API_KEY", "\"$maptilerApiKey\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
     }
 
     // With built-in Kotlin in AGP 9.0, jvmTarget defaults to compileOptions.targetCompatibility
@@ -76,6 +82,9 @@ android {
         }
         create("demo") {
             dimension = "environment"
+            // Force credential-free regardless of local.properties, matching this flavor's
+            // existing MAPTILER_API_KEY/no-Firebase-config posture (see AOSS-0238).
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"\"")
         }
     }
 }

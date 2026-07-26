@@ -2,13 +2,6 @@
  * Itur © 2025 by Max Noé <code@itur.cat>
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
-import java.util.Properties
-
-val localProperties = Properties().apply {
-    val file = rootProject.file("local.properties")
-    if (file.exists()) file.inputStream().use { load(it) }
-}
-
 plugins {
     alias(libs.plugins.android.library)
     // Hilt
@@ -20,8 +13,6 @@ android {
     namespace = "com.nohex.itur.core.auth"
     compileSdk = 36
 
-    buildFeatures.buildConfig = true
-
     buildTypes {
         debug {
             enableUnitTestCoverage = true
@@ -32,30 +23,19 @@ android {
     productFlavors {
         create("prod") {
             dimension = "environment"
-            buildConfigField(
-                "String",
-                "GOOGLE_WEB_CLIENT_ID",
-                "\"${localProperties.getProperty("GOOGLE_WEB_CLIENT_ID", "")}\"",
-            )
         }
         create("local") {
             dimension = "environment"
-            buildConfigField(
-                "String",
-                "GOOGLE_WEB_CLIENT_ID",
-                "\"${localProperties.getProperty("GOOGLE_WEB_CLIENT_ID", "")}\"",
-            )
         }
         create("demo") {
             dimension = "environment"
-            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"\"")
         }
     }
 }
 
 dependencies {
     implementation(projects.core.domain)
-    implementation(projects.core.data)
+    implementation(projects.core.dataApi)
     // Hilt
     ksp (libs.hilt.compiler)
     implementation (libs.hilt.android)

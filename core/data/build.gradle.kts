@@ -40,22 +40,18 @@ android {
 }
 
 dependencies {
-    implementation(projects.core.domain)
-    implementation(projects.core.model)
-    implementation(projects.core.datastore)
-    implementation(project(":core:datastore-proto-jvm"))
+    // The repository contracts this module's flavors bind to an implementation.
+    implementation(projects.core.dataApi)
+    "prodImplementation"(projects.core.dataFirebase)
+    "localImplementation"(projects.core.dataFirebase)
+    "demoImplementation"(projects.core.dataFake)
 
     // Hilt
     implementation(libs.hilt.android)
-    implementation(libs.firebase.auth)
-    implementation(libs.androidx.core.ktx)
     ksp(libs.hilt.compiler)
-    // Firestore
+    // Firestore (this module's own DataModule constructs the FirebaseFirestore instance)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore.ktx)
-    // Runtime
-    implementation(platform(libs.androidx.compose.bom))
-    implementation (libs.androidx.runtime)
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlin.test.junit)

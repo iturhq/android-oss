@@ -27,6 +27,7 @@ jobs:
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> local.properties
           echo "MAPLIBRE_API_KEY=stub" >> local.properties
           echo "MAPTILER_API_KEY=stub" >> local.properties
+          echo "GOOGLE_WEB_CLIENT_ID=stub" >> local.properties
 
       - name: Create google-services.json stub
         run: |
@@ -83,7 +84,7 @@ jobs:
         run: ./gradlew -I spotless/spotless.gradle.kts spotlessCheck
 
       - name: Run unit tests with coverage
-        run: ./gradlew :core:auth:createDemoDebugUnitTestCoverageReport :core:data:createDemoDebugUnitTestCoverageReport :feature:map:createDemoDebugUnitTestCoverageReport
+        run: ./gradlew :core:auth:createDemoDebugUnitTestCoverageReport :core:data-fake:createDebugUnitTestCoverageReport :feature:map:createDemoDebugUnitTestCoverageReport
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -91,7 +92,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: |
             core/auth/build/reports/coverage/test/demo/debug/report.xml
-            core/data/build/reports/coverage/test/demo/debug/report.xml
+            core/data-fake/build/reports/coverage/test/debug/report.xml
             feature/map/build/reports/coverage/test/demo/debug/report.xml
           fail_ci_if_error: true
 

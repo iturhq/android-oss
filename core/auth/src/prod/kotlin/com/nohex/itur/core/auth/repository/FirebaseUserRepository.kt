@@ -20,7 +20,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
-import com.nohex.itur.core.auth.BuildConfig
+import com.nohex.itur.core.auth.config.GoogleSignInConfig
 import com.nohex.itur.core.data.repository.UserRepository
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.domain.model.User
@@ -35,6 +35,7 @@ import javax.inject.Inject
 class FirebaseUserRepository @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
     @ApplicationContext private val context: Context,
+    private val googleSignInConfig: GoogleSignInConfig,
 ) : UserRepository {
     private var currentUser: User? = null
 
@@ -84,7 +85,7 @@ class FirebaseUserRepository @Inject constructor(
         val credentialManager = CredentialManager.create(context)
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
-            .setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID)
+            .setServerClientId(googleSignInConfig.webClientId)
             .build()
         val request = GetCredentialRequest.Builder()
             .addCredentialOption(googleIdOption)

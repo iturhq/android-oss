@@ -19,6 +19,7 @@ import com.nohex.itur.core.location.LocationClient
 import com.nohex.itur.core.model.Broadcast
 import com.nohex.itur.core.model.IturActivity
 import com.nohex.itur.core.model.IturActivityStatus
+import com.nohex.itur.feature.map.config.MapStyleConfig
 import com.nohex.itur.feature.map.notifications.BroadcastNotifier
 import io.mockk.every
 import io.mockk.mockk
@@ -85,6 +86,7 @@ class MapViewModelTest {
         locationsRepository = locationRepo(activityRepo),
         locationClient = locationClient,
         broadcastNotifier = broadcastNotifier,
+        mapStyleConfig = MapStyleConfig(styleUrl = "https://example.invalid/style.json"),
     )
 
     /** Asserts the state is [MapUiState.Ongoing], showing the error message on failure. */

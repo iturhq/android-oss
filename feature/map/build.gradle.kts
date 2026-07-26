@@ -3,17 +3,6 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-// Read properties from `local.properties`.
-import java.util.Properties
-
-val localProperties = Properties().apply {
-    val file = rootProject.file("local.properties")
-    if (file.exists()) {
-        file.inputStream().use { load(it) }
-    }
-}
-val maptilerApiKey: String = localProperties.getProperty("MAPTILER_API_KEY", "")
-
 plugins {
     alias(libs.plugins.android.library)
     // Hilt
@@ -29,10 +18,7 @@ android {
     namespace = "com.nohex.itur.feature.map"
     compileSdk = 36
 
-    buildFeatures.buildConfig = true
-
     defaultConfig {
-        buildConfigField("String", "MAPTILER_API_KEY", "\"$maptilerApiKey\"")
         testInstrumentationRunner = "com.nohex.itur.feature.map.HiltTestRunner"
     }
 
@@ -66,8 +52,7 @@ dependencies {
     // Feature
     implementation(projects.core.domain)
     implementation(projects.core.model)
-    implementation(projects.core.data)
-    implementation(projects.core.auth)
+    implementation(projects.core.dataApi)
     implementation(projects.core.ui)
     implementation(projects.core.location)
 
@@ -113,6 +98,8 @@ dependencies {
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
+    // Fakes for the repository contracts, demo flavor only.
+    "testDemoImplementation"(projects.core.dataFake)
 
     // Android instrumented tests
     androidTestImplementation(libs.androidx.junit)

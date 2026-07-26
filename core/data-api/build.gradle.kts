@@ -7,12 +7,14 @@ plugins {
 }
 
 android {
-    namespace = "com.nohex.itur.core.model"
+    namespace = "com.nohex.itur.core.data.api"
     compileSdk = 36
 }
 
 dependencies {
-    implementation(projects.core.domain)
+    // These types appear directly in this module's own interfaces' public signatures.
+    api(projects.core.domain)
+    api(projects.core.model)
     implementation(libs.androidx.core.ktx)
 
     testImplementation(libs.kotlin.test)
