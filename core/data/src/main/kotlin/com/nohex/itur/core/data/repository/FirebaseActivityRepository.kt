@@ -7,6 +7,7 @@ package com.nohex.itur.core.data.repository
 
 import android.util.Log
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -129,23 +130,11 @@ constructor(
             participantIds = listOf(organizerId),
         )
 
-        // Serialise manually to avoid the gotchas related to value objects.
         return try {
             withContext(Dispatchers.IO) {
                 // Store the activity.
                 reference
-                    .set(
-                        IturActivityDTO(
-                            id = newActivity.id.value,
-                            organizerId = newActivity.organizerId.value,
-                            createdOn = newActivity.createdOn,
-                            startTime = newActivity.startTime,
-                            participantIds = newActivity.participantIds.map { it.value },
-                            status = newActivity.status.name,
-                            listed = newActivity.listed,
-                            attentionRequests = newActivity.attentionRequests.map { it.value },
-                        ),
-                    )
+                    .set(newActivity.toDto())
                     .await()
 
                 // Add the organiser as a participant.
@@ -266,11 +255,7 @@ constructor(
 
         return try {
             withContext(Dispatchers.IO) {
-                query.get().await().documents.mapNotNull { doc ->
-                    val message = doc.getString("message") ?: return@mapNotNull null
-                    val sentOn = doc.getTimestamp("sentOn") ?: return@mapNotNull null
-                    Broadcast(id = doc.id, message = message, sentOn = sentOn.toDate())
-                }
+                query.get().await().toObjects(BroadcastDTO::class.java).mapNotNull { it.toDomain() }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to fetch broadcasts for activity ${activityId.value}", e)
@@ -302,3 +287,28 @@ private fun IturActivityDTO.toDomain(): IturActivity = IturActivity(
     listed = listed,
     attentionRequests = attentionRequests.map { UserId(it) },
 )
+
+private fun IturActivity.toDto(): IturActivityDTO = IturActivityDTO(
+    id = id.value,
+    organizerId = organizerId.value,
+    participantIds = participantIds.map { it.value },
+    status = status.name,
+    createdOn = createdOn,
+    startTime = startTime,
+    finishedOn = finishedOn,
+    listed = listed,
+    attentionRequests = attentionRequests.map { it.value },
+)
+
+data class BroadcastDTO(
+    @DocumentId
+    var id: String = "",
+    var message: String? = null,
+    var sentOn: Date? = null,
+)
+
+private fun BroadcastDTO.toDomain(): Broadcast? {
+    val message = message ?: return null
+    val sentOn = sentOn ?: return null
+    return Broadcast(id = id, message = message, sentOn = sentOn)
+}
