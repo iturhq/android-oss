@@ -1,0 +1,15 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MagicNumber:FakeActivityRepository.kt$FakeActivityRepository$20</ID>
+    <ID>MagicNumber:FakeLocationRepository.kt$FakeLocationRepository$50.0</ID>
+    <ID>MaxLineLength:FakeActivityRepository.kt$FakeActivityRepository$DataResult.Success(activities.filter { it.organizerId == filter.organizerId &amp;&amp; it.status == IturActivityStatus.ONGOING })</ID>
+    <ID>MaxLineLength:FakeActivityRepository.kt$FakeActivityRepository$override suspend fun getBroadcastsSince(activityId: IturActivityId, since: Date?): List&lt;Broadcast&gt;</ID>
+    <ID>MaxLineLength:FakeActivityRepositoryTest.kt$FakeActivityRepositoryTest$fun</ID>
+    <ID>MaxLineLength:FakeActivityRepositoryTest.kt$FakeActivityRepositoryTest$private fun repository(vararg activities: IturActivity)</ID>
+    <ID>MaxLineLength:FakeLocationRepositoryTest.kt$FakeLocationRepositoryTest$fun</ID>
+    <ID>MaxLineLength:FakeLocationRepositoryTest.kt$FakeLocationRepositoryTest$private fun activityRepo(vararg activities: IturActivity)</ID>
+    <ID>UseRequire:FakeActivityRepository.kt$FakeActivityRepository$throw IllegalArgumentException("Activity not found")</ID>
+  </CurrentIssues>
+</SmellBaseline>

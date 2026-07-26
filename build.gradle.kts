@@ -13,6 +13,7 @@ plugins {
     alias(libs.plugins.gms) apply false
     alias(libs.plugins.hilt) apply false
     alias(libs.plugins.ksp) apply false
+    alias(libs.plugins.detekt) apply false
 }
 
 tasks.withType<Test> {
@@ -20,6 +21,23 @@ tasks.withType<Test> {
 }
 
 subprojects {
+    apply(plugin = "io.gitlab.arturbosch.detekt")
+    extensions.configure<io.gitlab.arturbosch.detekt.extensions.DetektExtension> {
+        buildUponDefaultConfig = true
+        allRules = false
+        config.setFrom(rootProject.file("config/detekt/detekt.yml"))
+        baseline = project.file("detekt-baseline.xml")
+        parallel = true
+    }
+    tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+        reports {
+            xml.required.set(true)
+            html.required.set(true)
+            txt.required.set(false)
+            sarif.required.set(false)
+            md.required.set(false)
+        }
+    }
     // Register a no-op `testClasses` task for Android modules so AS delegation doesn't fail.
     plugins.withId("com.android.application") { tasks.register("testClasses") }
     plugins.withId("com.android.library") { tasks.register("testClasses") }

@@ -38,6 +38,7 @@ barcodeScanning = "17.3.0"
 guava = "33.5.0-android"
 zxing = "4.3.0"
 wire = "6.0.0"
+detekt = "1.23.8"
 kotlinxCoroutines = "1.10.2"
 securityCrypto = "1.1.0"
 credentials = "1.5.0"
@@ -115,3 +116,4 @@ ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 gms = { id = "com.google.gms.google-services", version.ref = "gms" }
 firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebaseCrashlyticsGradle" }
 firebase-perf = { id = "com.google.firebase.firebase-perf", version.ref = "firebasePerfGradle" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
