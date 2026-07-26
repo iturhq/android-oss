@@ -9,6 +9,8 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.dataStoreFile
+import com.nohex.itur.core.datastore.AndroidKeystoreEmailCipher
+import com.nohex.itur.core.datastore.EmailCipher
 import com.nohex.itur.core.datastore.IturPreferences
 import com.nohex.itur.core.datastore.IturSettingsSerializer
 import dagger.Module
@@ -36,4 +38,8 @@ object DataStoreModule {
     ) {
         context.dataStoreFile("user_settings.pb")
     }
+
+    @Provides
+    @Singleton
+    internal fun providesEmailCipher(): EmailCipher = AndroidKeystoreEmailCipher()
 }
