@@ -51,6 +51,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.model.User
 import com.nohex.itur.core.ui.components.IturProgressIndicator
+import com.nohex.itur.feature.map.ui.components.help.HelpSheet
 import com.nohex.itur.feature.map.ui.components.map.IdleState
 import com.nohex.itur.feature.map.ui.components.map.MapLibreView
 import com.nohex.itur.feature.map.ui.components.map.NoMapView
@@ -90,6 +91,7 @@ fun MapScreen(
     // Whether the QR sheet is showing.
     var showQRDisplaySheet by remember { mutableStateOf(false) }
     var showQRScanSheet by remember { mutableStateOf(false) }
+    var showHelpSheet by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Show a snackbar when any state carries a user-facing message.
@@ -228,6 +230,15 @@ fun MapScreen(
         )
     }
 
+    if (showHelpSheet) {
+        (uiState as? MapUiState.Ongoing)?.let { ongoingUiState ->
+            HelpSheet(
+                onDismissRequest = { showHelpSheet = false },
+                isOrganizer = ongoingUiState.organizer.id == currentUser?.id,
+            )
+        }
+    }
+
     // The scaffold provides a snackbar host; the box inside holds the map and state overlays.
     Scaffold(
         snackbarHost = {
@@ -303,6 +314,7 @@ fun MapScreen(
                             }
                         },
                         onAttentionRequest = viewModel::requestAttention,
+                        onHelpRequested = { showHelpSheet = true },
                         isOrganizer = ongoingUiState.organizer.id == currentUser?.id,
                     )
                 }
