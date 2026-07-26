@@ -46,9 +46,9 @@ feature/
 
 ## Build flavours
 
-* `demo`: In-memory fake repositories, no credentials needed.
-* `local`: Connects to Firebase Emulator Suite running in [itur-dashboard](https://github.com/mnohe/itur-dashboard), requires `local.properties`.
-* `prod`: Live Firebase backend, requires `local.properties` and `google-services.json`.
+* `demo`: In-memory fake repositories, no credentials needed. Never links or calls Firebase Crashlytics/Performance Monitoring — see link:docs/adr/ADR-003-observability.adoc[ADR-003].
+* `local`: Connects to Firebase Emulator Suite running in [itur-dashboard](https://github.com/mnohe/itur-dashboard), requires `local.properties`. Reports crashes/performance to Firebase.
+* `prod`: Live Firebase backend, requires `local.properties` and `google-services.json`. Reports crashes/performance to Firebase.
 
 ## Prerequisites
 

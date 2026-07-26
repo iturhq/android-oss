@@ -1,0 +1,145 @@
+= ADR-003: Crash reporting and performance monitoring
+:toc: left
+:toclevels: 2
+:sectnums:
+:sectnumlevels: 2
+:icons: font
+
+
+[cols="1,3"]
+|===
+| Status      | Accepted
+| Date        | 2026-07-26
+| Deciders    | Max Noé
+|===
+
+== Context
+
+The app had no production crash reporting or performance monitoring. `prod`
+and `local` already require a real Firebase project for Auth and Firestore;
+`demo` is deliberately fully offline and credential-free (see README), with
+no Firebase account or API keys required, and must stay that way.
+
+Any observability solution therefore has to respect that existing boundary:
+whatever is added for `prod`/`local` must add zero new credential or account
+requirement, and must not touch, initialize, or link into `demo` at all.
+
+== Decision
+
+Use **Firebase Crashlytics** and **Firebase Performance Monitoring** for
+`prod`/`local` only, bound to a no-op implementation for `demo`.
+
+Introduced an `ObservabilityInitializer` interface
+(`app/src/main/.../observability/ObservabilityInitializer.kt`) with a single
+`initialize()` method, following the same per-flavor contract-and-binding
+pattern already used for `core:auth`'s `UserIdProviderModule` and
+`core:data`'s flavor DI wiring:
+
+* `app/src/{prod,local}/.../observability/FirebaseObservabilityInitializer.kt`
+  enables Crashlytics and Performance collection.
+* `app/src/demo/.../observability/NoOpObservabilityInitializer.kt` does
+  nothing.
+* A flavor-specific Hilt `@Binds` module (`ObservabilityModule`) wires the
+  right implementation per flavor.
+* `IturApplication.onCreate()` injects `ObservabilityInitializer` and calls
+  `initialize()` once, alongside the existing MapLibre bootstrap.
+
+The Crashlytics and Performance Monitoring Gradle plugins are applied
+unconditionally to `:app` (matching how the GMS plugin is already applied),
+but the runtime libraries (`firebase-crashlytics-ktx`, `firebase-perf-ktx`)
+are declared with `prodImplementation`/`localImplementation` only — `demo`
+never links either library, on top of never calling into them.
+
+== Rationale
+
+. **No new credential surface.** `prod`/`local` already require a live
+  Firebase project; Crashlytics and Performance Monitoring read from the
+  same `google-services.json` those flavors already need for Auth/Firestore.
+  Nothing new is asked of a self-hoster or contributor building `demo`.
+. **Matches the existing flavor-contract pattern.** Every other
+  flavor-sensitive piece of this app (user ID provisioning, repository
+  bindings, config injection) already uses an app/core-owned interface with
+  a real and a fake/no-op binding selected per flavor via Hilt. Observability
+  follows the same shape rather than inventing a new one (e.g. a runtime
+  `BuildConfig.FLAVOR` string check sprinkled through `IturApplication`).
+. **Firebase-native, not a third-party addition.** The app already depends
+  on the Firebase platform; Crashlytics/Performance are first-party Firebase
+  products maintained alongside Firestore/Auth, rather than introducing a
+  new vendor (Sentry, Bugsnag) with its own SDK, dashboard, and data-
+  processing agreement.
+. **Genuinely unreachable in `demo`, not just disabled.** `NoOpObservabilityInitializer`
+  has zero Firebase imports, and the demo build doesn't link the runtime
+  libraries at all — there is no `FirebaseCrashlytics`/`FirebasePerformance`
+  class on the demo APK's classpath to accidentally call, not merely a
+  runtime flag left off.
+
+== Consequences
+
+* Positive: crash and performance visibility for the only flavors that ship
+  to real users with a real backend.
+* Positive: the credential-free `demo` guarantee is structurally enforced
+  (unreachable code, not a disabled feature flag) rather than relying on
+  discipline to never call a Crashlytics API from demo-flavor code.
+* Positive: consistent with `AOSS-96EE`'s privacy framing — no user data
+  leaves the device in the flavor a contributor or evaluator is most likely
+  to run without reading the privacy implications first.
+* Negative: `prod`/`local` APK size grows modestly (two additional Firebase
+  libraries); considered acceptable given both flavors already ship the
+  Firebase Auth/Firestore SDKs.
+* Negative: crash/performance data now leaves the device for `prod`/`local`
+  users -- consistent with those flavors' existing Firebase-backed data
+  flows (Firestore, Auth), but worth surfacing explicitly to anyone auditing
+  what those flavors send off-device.
+
+== Alternatives considered
+
+=== Third-party crash reporting (Sentry, Bugsnag)
+
+[cols="1,4"]
+|===
+| Criterion | Assessment
+
+| Strengths
+a|
+* Open-source client SDKs; some support self-hosted collection backends
+* Not tied to Google/Firebase, which some contributors may prefer on
+  principle for an OSS project
+
+| Weaknesses
+a|
+* A new vendor relationship, SDK, and data-processing surface on top of the
+  one (Firebase) already in use for Auth/Firestore
+* No existing project dependency to piggyback on -- would need its own
+  account, DSN/API key, and per-flavor gating built from scratch
+* Self-hosting either is realistic infra work this project does not
+  currently have (no server/ops surface exists outside Firebase today)
+
+| Verdict
+| Rejected for now. Reasonable if this project ever moves off Firebase
+  entirely, but adding a second vendor purely for observability, while
+  Firebase already handles Auth/Firestore, is not justified today.
+|===
+
+=== `BuildConfig.FLAVOR` runtime check instead of a Hilt-bound interface
+
+[cols="1,4"]
+|===
+| Criterion | Assessment
+
+| Strengths
+a|
+* Fewer files; a single `if` in `IturApplication.onCreate()`
+
+| Weaknesses
+a|
+* `demo` would still compile-time link Crashlytics/Performance classes even
+  if never calling into them at runtime -- a future accidental call is a
+  silent behavior change, not a compile error
+* Inconsistent with every other flavor-sensitive contract in this codebase,
+  which uses interface + Hilt binding rather than runtime flavor branching
+
+| Verdict
+| Rejected. The Hilt-bound interface costs a few small files and keeps
+  `demo` unable to reach Crashlytics/Performance at all, matching the
+  existing pattern instead of adding a second one.
+|===
