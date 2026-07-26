@@ -52,6 +52,7 @@ fun OngoingStatePreview() {
         onStopRequested = {},
         onTrackGroupRequested = {},
         onAttentionRequest = {},
+        onHelpRequested = {},
     )
 }
 

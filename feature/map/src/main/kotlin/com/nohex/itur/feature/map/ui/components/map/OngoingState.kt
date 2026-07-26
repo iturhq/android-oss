@@ -42,11 +42,12 @@ internal fun OngoingState(
     onTrackUserRequested: () -> Unit,
     onTrackGroupRequested: () -> Unit,
     onAttentionRequest: () -> Unit,
+    onHelpRequested: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         FabSideColumn(horizontalAlignment = Alignment.Start, modifier = Modifier.padding(16.dp)) {
-            HelpFABs()
+            HelpFABs(onHelpRequested = onHelpRequested)
             TrackingFABs(
                 onTrackUserRequested = onTrackUserRequested,
             ) {
@@ -131,5 +132,6 @@ private fun OrganizerOngoingStatePreview() {
         onTrackUserRequested = {},
         onTrackGroupRequested = {},
         onAttentionRequest = {},
+        onHelpRequested = {},
     )
 }

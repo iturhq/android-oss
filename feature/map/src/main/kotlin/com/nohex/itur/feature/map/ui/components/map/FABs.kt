@@ -96,13 +96,12 @@ internal fun TrackingFABs(
 }
 
 @Composable
-internal fun HelpFABs() {
+internal fun HelpFABs(onHelpRequested: () -> Unit) {
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         FloatingActionButton(
-            // Help overlay not implemented yet; tracked as AOSS-A49A.
-            onClick = {},
+            onClick = onHelpRequested,
             modifier = Modifier.testTag("help_fab"),
         ) {
             Icon(IturIcons.Help, contentDescription = "Get help")

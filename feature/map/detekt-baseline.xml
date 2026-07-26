@@ -6,9 +6,14 @@
     <ID>FunctionNaming:ErrorState.kt$@Composable fun ErrorState( modifier: Modifier = Modifier, message: String? = null, )</ID>
     <ID>FunctionNaming:ErrorState.kt$@Preview(showBackground = true, showSystemUi = true) @Composable private fun MapErrorPreview()</ID>
     <ID>FunctionNaming:FABs.kt$@Composable internal fun FabSideColumn( horizontalAlignment: Alignment.Horizontal, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -&gt; Unit, )</ID>
-    <ID>FunctionNaming:FABs.kt$@Composable internal fun HelpFABs()</ID>
+    <ID>FunctionNaming:FABs.kt$@Composable internal fun HelpFABs(onHelpRequested: () -&gt; Unit)</ID>
     <ID>FunctionNaming:FABs.kt$@Composable internal fun TrackingFABs( onTrackUserRequested: () -&gt; Unit, content: @Composable () -&gt; Unit, )</ID>
     <ID>FunctionNaming:FABs.kt$@Composable internal fun UserFABs( onSignInRequested: () -&gt; Unit, onSignOutRequested: () -&gt; Unit, isSignedIn: Boolean, )</ID>
+    <ID>FunctionNaming:HelpSheet.kt$@Composable private fun HelpItem(icon: ImageVector, description: String)</ID>
+    <ID>FunctionNaming:HelpSheet.kt$@Composable private fun HelpSheetContent(isOrganizer: Boolean)</ID>
+    <ID>FunctionNaming:HelpSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun HelpSheet( onDismissRequest: () -&gt; Unit, isOrganizer: Boolean, )</ID>
+    <ID>FunctionNaming:HelpSheet.kt$@Preview(showBackground = true) @Composable private fun HelpSheetOrganizerPreview()</ID>
+    <ID>FunctionNaming:HelpSheet.kt$@Preview(showBackground = true) @Composable private fun HelpSheetParticipantPreview()</ID>
     <ID>FunctionNaming:IdleState.kt$@Composable fun IdleState( onStartRequested: () -&gt; Unit, onSignInRequested: () -&gt; Unit, onSignOutRequested: () -&gt; Unit, onQRRequested: () -&gt; Unit, modifier: Modifier = Modifier, isSignedIn: Boolean, )</ID>
     <ID>FunctionNaming:IdleState.kt$@Composable private fun ActivityFABs( // A (signed-in) user requests the creation of an activity. onStartRequested: () -&gt; Unit, // The QR button was pressed. onQRRequested: () -&gt; Unit, // Whether the user is registered or anonymous. isSignedIn: Boolean, )</ID>
     <ID>FunctionNaming:IdleState.kt$@Preview(showBackground = true) @Composable private fun IdleMapPreview()</ID>
@@ -19,7 +24,7 @@
     <ID>FunctionNaming:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun RecoverableErrorDialog(message: String, onRetry: () -&gt; Unit, onCancel: () -&gt; Unit)</ID>
     <ID>FunctionNaming:MapScreen.kt$@Preview(showBackground = true, showSystemUi = true) @Composable fun PreviewModalAlert()</ID>
     <ID>FunctionNaming:NoMapView.kt$@Composable fun NoMapView( modifier: Modifier = Modifier, )</ID>
-    <ID>FunctionNaming:OngoingState.kt$@Composable internal fun OngoingState( activity: IturActivity, organizer: User, participantIds: List&lt;UserId&gt;, locations: List&lt;ParticipantLocation&gt;, isOrganizer: Boolean, onStopRequested: () -&gt; Unit, onQRRequested: () -&gt; Unit, onTrackUserRequested: () -&gt; Unit, onTrackGroupRequested: () -&gt; Unit, onAttentionRequest: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>FunctionNaming:OngoingState.kt$@Composable internal fun OngoingState( activity: IturActivity, organizer: User, participantIds: List&lt;UserId&gt;, locations: List&lt;ParticipantLocation&gt;, isOrganizer: Boolean, onStopRequested: () -&gt; Unit, onQRRequested: () -&gt; Unit, onTrackUserRequested: () -&gt; Unit, onTrackGroupRequested: () -&gt; Unit, onAttentionRequest: () -&gt; Unit, onHelpRequested: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
     <ID>FunctionNaming:OngoingState.kt$@Composable private fun OngoingActivityFABs( onStopRequested: () -&gt; Unit, onAttentionRequest: () -&gt; Unit, onQRRequested: () -&gt; Unit, // Whether the user is the organiser. isOrganizer: Boolean, )</ID>
     <ID>FunctionNaming:OngoingState.kt$@Preview(showBackground = true, showSystemUi = true) @Composable private fun OrganizerOngoingStatePreview()</ID>
     <ID>FunctionNaming:QRDisplaySheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun QRDisplaySheet( activityId: IturActivityId, onDismissRequest: () -&gt; Unit, )</ID>
@@ -32,7 +37,7 @@
     <ID>LongParameterList:IdleState.kt$( onStartRequested: () -&gt; Unit, onSignInRequested: () -&gt; Unit, onSignOutRequested: () -&gt; Unit, onQRRequested: () -&gt; Unit, modifier: Modifier = Modifier, isSignedIn: Boolean, )</ID>
     <ID>LongParameterList:MapLibreView.kt$( styleUrl: String, isActivityOngoing: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, )</ID>
     <ID>LongParameterList:MapViewModel.kt$MapViewModel$( private val activityRepository: ActivityRepository, private val userRepository: UserRepository, private val locationsRepository: LocationRepository, private val locationClient: LocationClient, private val broadcastNotifier: BroadcastNotifier, val mapStyleConfig: MapStyleConfig, private val locationUpdateConfig: LocationUpdateConfig, )</ID>
-    <ID>LongParameterList:OngoingState.kt$( activity: IturActivity, organizer: User, participantIds: List&lt;UserId&gt;, locations: List&lt;ParticipantLocation&gt;, isOrganizer: Boolean, onStopRequested: () -&gt; Unit, onQRRequested: () -&gt; Unit, onTrackUserRequested: () -&gt; Unit, onTrackGroupRequested: () -&gt; Unit, onAttentionRequest: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>LongParameterList:OngoingState.kt$( activity: IturActivity, organizer: User, participantIds: List&lt;UserId&gt;, locations: List&lt;ParticipantLocation&gt;, isOrganizer: Boolean, onStopRequested: () -&gt; Unit, onQRRequested: () -&gt; Unit, onTrackUserRequested: () -&gt; Unit, onTrackGroupRequested: () -&gt; Unit, onAttentionRequest: () -&gt; Unit, onHelpRequested: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
     <ID>MagicNumber:ErrorState.kt$.3f</ID>
     <ID>MagicNumber:ErrorState.kt$.6f</ID>
     <ID>MagicNumber:MapLibreView.kt$1000</ID>
@@ -58,6 +63,8 @@
     <ID>UnusedParameter:OngoingState.kt$organizer: User</ID>
     <ID>UnusedParameter:OngoingState.kt$participantIds: List&lt;UserId&gt;</ID>
     <ID>UnusedPrivateMember:ErrorState.kt$@Preview(showBackground = true, showSystemUi = true) @Composable private fun MapErrorPreview()</ID>
+    <ID>UnusedPrivateMember:HelpSheet.kt$@Preview(showBackground = true) @Composable private fun HelpSheetOrganizerPreview()</ID>
+    <ID>UnusedPrivateMember:HelpSheet.kt$@Preview(showBackground = true) @Composable private fun HelpSheetParticipantPreview()</ID>
     <ID>UnusedPrivateMember:IdleState.kt$@Preview(showBackground = true) @Composable private fun IdleMapPreview()</ID>
     <ID>UnusedPrivateMember:OngoingState.kt$@Preview(showBackground = true, showSystemUi = true) @Composable private fun OrganizerOngoingStatePreview()</ID>
     <ID>UnusedPrivateMember:QRImage.kt$@Preview @Composable private fun PreviewQRImage()</ID>
