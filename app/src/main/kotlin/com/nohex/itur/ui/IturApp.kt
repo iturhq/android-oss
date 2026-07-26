@@ -27,7 +27,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import com.nohex.itur.core.ui.components.IturBackground
-import com.nohex.itur.feature.map.ui.MapScreen
 
 @Composable
 fun IturApp(
@@ -84,10 +83,9 @@ internal fun IturApp(
                     WindowInsets(0, 0, 0, 0),
                 ),
             ) {
-                MapScreen()
-//                IturNavHost(
-//                    appState = appState,
-//                )
+                IturNavHost(
+                    appState = appState,
+                )
             }
         }
     }
