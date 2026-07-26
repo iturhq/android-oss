@@ -12,11 +12,12 @@ import javax.inject.Inject
 
 class IturPreferencesDataStore @Inject constructor(
     private val iturPreferences: DataStore<IturPreferences>,
+    private val emailCipher: EmailCipher,
 ) {
     val preferences = iturPreferences.data
         .map {
             UserSettings(
-                email = it.user_email,
+                email = emailCipher.decrypt(it.user_email),
             )
         }
 
@@ -25,8 +26,9 @@ class IturPreferencesDataStore @Inject constructor(
      * surface that failure rather than have it silently dropped here.
      */
     suspend fun setUserEmail(userEmail: String) {
+        val encryptedEmail = emailCipher.encrypt(userEmail)
         iturPreferences.updateData { currentPreferences ->
-            currentPreferences.copy(user_email = userEmail)
+            currentPreferences.copy(user_email = encryptedEmail)
         }
     }
 }
