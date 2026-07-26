@@ -19,6 +19,12 @@ android {
         }
     }
 
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
+    }
+
     flavorDimensions += "environment"
     productFlavors {
         create("prod") {
@@ -61,4 +67,5 @@ dependencies {
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.junit.junit)
+    testImplementation(libs.mockk)
 }
