@@ -7,14 +7,22 @@ package com.nohex.itur
 
 import android.app.Application
 import android.os.StrictMode
+import com.nohex.itur.observability.ObservabilityInitializer
 import dagger.hilt.android.HiltAndroidApp
 import org.maplibre.android.MapLibre
 import org.maplibre.android.WellKnownTileServer
+import javax.inject.Inject
 
 @HiltAndroidApp
 class IturApplication : Application() {
+
+    @Inject
+    lateinit var observabilityInitializer: ObservabilityInitializer
+
     override fun onCreate() {
         super.onCreate()
+
+        observabilityInitializer.initialize()
 
         // Initialise MapLibre.
         MapLibre.getInstance(

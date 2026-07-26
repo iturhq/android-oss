@@ -23,6 +23,9 @@ plugins {
     alias(libs.plugins.ksp)
     // Firebase
     alias(libs.plugins.gms)
+    // Observability (prod/local only; see ObservabilityModule)
+    alias(libs.plugins.firebase.crashlytics)
+    alias(libs.plugins.firebase.perf)
 }
 
 android {
@@ -115,6 +118,16 @@ dependencies {
     ksp (libs.hilt.compiler)
     // Maps
     implementation(libs.android.maplibre)
+
+    // Observability: crash reporting + performance monitoring, prod/local only.
+    // The demo flavor stays credential-free and never links these (see
+    // ObservabilityModule and AOSS-96EE's task write-up).
+    "prodImplementation"(platform(libs.firebase.bom))
+    "prodImplementation"(libs.firebase.crashlytics.ktx)
+    "prodImplementation"(libs.firebase.perf.ktx)
+    "localImplementation"(platform(libs.firebase.bom))
+    "localImplementation"(libs.firebase.crashlytics.ktx)
+    "localImplementation"(libs.firebase.perf.ktx)
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlin.test.junit)
