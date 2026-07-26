@@ -7,16 +7,22 @@ package com.nohex.itur.feature.map.ui.components.qrdisplay
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.util.Log
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -31,6 +37,8 @@ import kotlinx.coroutines.withContext
 import java.net.URI
 import java.net.URISyntaxException
 
+private const val TAG = "QRImage"
+
 /**
  * ZXing's own quiet-zone margin, in QR modules (its standards-recommended minimum), kept
  * independent of any caller-requested pixel [padding][rememberQrBitmapPainter] -- see
@@ -38,13 +46,39 @@ import java.net.URISyntaxException
  */
 private const val QUIET_ZONE_MODULES = 4
 
+/**
+ * The outcome of attempting to build a QR bitmap: either it succeeded, or it failed for good
+ * (invalid input, or ZXing itself refused to encode it) -- as opposed to the third, implicit
+ * `null` state of "not attempted yet" that [rememberQrGenerationResult] represents separately.
+ * Distinguishing these lets [QRImage] show an explicit error instead of silently rendering the
+ * same blank placeholder forever that a still-loading QR would also show.
+ */
+private sealed interface QrGenerationResult {
+    data class Success(val bitmap: Bitmap) : QrGenerationResult
+    data object Failed : QrGenerationResult
+}
+
 @Composable
 fun QRImage(qrURL: String, size: Dp = 300.dp) {
-    Image(
-        painter = rememberQrBitmapPainter(qrURL),
-        contentDescription = qrURL,
-        modifier = Modifier.size(size),
-    )
+    val result = rememberQrGenerationResult(qrURL, size)
+    Box(modifier = Modifier.size(size), contentAlignment = Alignment.Center) {
+        when (result) {
+            is QrGenerationResult.Success ->
+                Image(
+                    painter = remember(result.bitmap) { BitmapPainter(result.bitmap.asImageBitmap()) },
+                    contentDescription = qrURL,
+                )
+
+            QrGenerationResult.Failed ->
+                Text(
+                    text = "Could not generate a QR code",
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+
+            null -> Unit // Still loading: render nothing yet, matching the previous blank placeholder.
+        }
+    }
 }
 
 @Composable
@@ -53,25 +87,36 @@ fun rememberQrBitmapPainter(
     size: Dp = 300.dp,
     padding: Dp = 0.dp,
 ): BitmapPainter {
+    val sizePx = with(LocalDensity.current) { size.roundToPx() }
+    val result = rememberQrGenerationResult(qrData, size, padding)
+    val bitmap = (result as? QrGenerationResult.Success)?.bitmap ?: buildBlankBitmap(sizePx)
+
+    return remember(bitmap) {
+        BitmapPainter(bitmap.asImageBitmap())
+    }
+}
+
+@Composable
+private fun rememberQrGenerationResult(
+    qrData: String,
+    size: Dp = 300.dp,
+    padding: Dp = 0.dp,
+): QrGenerationResult? {
     val density = LocalDensity.current
     // Calculate the right amount of pixels for the density.
     val sizePx = with(density) { size.roundToPx() }
     val paddingPx = with(density) { padding.roundToPx() }
 
-    val qrBitmapState = remember {
-        mutableStateOf<Bitmap?>(null)
+    val resultState = remember {
+        mutableStateOf<QrGenerationResult?>(null)
     }
 
     LaunchedEffect(qrData) {
-        val qrBitmap = buildQRBitmap(qrData, sizePx, paddingPx)
-        qrBitmapState.value = qrBitmap
+        resultState.value = null
+        resultState.value = buildQRBitmap(qrData, sizePx, paddingPx)
     }
 
-    val bitmap = qrBitmapState.value ?: buildBlankBitmap(sizePx)
-
-    return remember(bitmap) {
-        BitmapPainter(bitmap.asImageBitmap())
-    }
+    return resultState.value
 }
 
 /**
@@ -92,8 +137,11 @@ private suspend fun buildQRBitmap(
     qrData: String,
     sizePx: Int,
     paddingPx: Int,
-): Bitmap? = withContext(Dispatchers.IO) {
-    if (!qrData.isValidQrUrl()) return@withContext null
+): QrGenerationResult = withContext(Dispatchers.IO) {
+    if (!qrData.isValidQrUrl()) {
+        Log.w(TAG, "Refusing to generate a QR code for data that isn't a valid http(s) URL")
+        return@withContext QrGenerationResult.Failed
+    }
 
     val qrCodeWriter = QRCodeWriter()
 
@@ -116,9 +164,10 @@ private suspend fun buildQRBitmap(
         )
 
         val (finalSize, pixels) = renderQrPixels(bitmapMatrix, paddingPx)
-        Bitmap.createBitmap(pixels, finalSize, finalSize, Bitmap.Config.ARGB_8888)
-    } catch (_: WriterException) {
-        null
+        QrGenerationResult.Success(Bitmap.createBitmap(pixels, finalSize, finalSize, Bitmap.Config.ARGB_8888))
+    } catch (e: WriterException) {
+        Log.w(TAG, "ZXing failed to encode QR data", e)
+        QrGenerationResult.Failed
     }
 }
 
