@@ -10,3 +10,5 @@ include::ADR-002-unit-test-framework.adoc[leveloffset=+1]
 include::ADR-003-observability.adoc[leveloffset=+1]
 
 include::ADR-004-network-security-policy.adoc[leveloffset=+1]
+
+include::ADR-005-datastore-proto-wire.adoc[leveloffset=+1]

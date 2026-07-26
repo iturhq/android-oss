@@ -1,0 +1,71 @@
+= ADR-005: Wire for DataStore proto serialization
+:toc: left
+:toclevels: 2
+:sectnums:
+:sectnumlevels: 2
+:icons: font
+
+
+[cols="1,3"]
+|===
+| Status      | Accepted
+| Date        | 2026-07-26
+| Deciders    | Max Noé
+|===
+
+== Context
+
+This ADR documents a decision that predates this repository: `core:datastore-proto-jvm` and its Wire-generated `IturPreferences` message already existed exactly as they are today when this codebase was first imported here (commit `e0f017d`), and no contemporaneous decision record survived repository convergence. The reason and contributor guidance the task that produced this ADR (`AOSS-8CE6`) asked to "preserve" were never actually recorded anywhere accessible in this workspace -- this ADR reconstructs and documents that rationale from the current implementation instead of quoting a lost original source, and is written now specifically so that gap doesn't recur.
+
+`IturPreferencesDataStore` (`core:datastore`) persists one small, evolvable message -- currently just `user_email` -- via Jetpack DataStore's `Serializer<T>` interface, which needs some binary (or at least stable, versioned) serialization format for a Kotlin type. The two realistic options for that on Android are Google's own `protobuf-gradle-plugin` (the format DataStore's own documentation defaults to) and Square's Wire.
+
+== Decision
+
+Use **Wire** (`com.squareup.wire`), in a small, plain-JVM Gradle module (`core:datastore-proto-jvm`) separate from `core:datastore` itself:
+
+* The `.proto` schema lives at `core/datastore-proto-jvm/src/main/proto/com/nohex/itur/datastore/itur_preferences.proto`.
+* The Wire Gradle plugin (`alias(libs.plugins.wire)`, configured in that module's `build.gradle.kts`) compiles it directly to a Kotlin data class (`IturPreferences`, `java_multiple_files = true`) with a generated `ADAPTER` for encode/decode -- no `protoc` native binary, no generated Java interop layer.
+* `core:datastore`'s `IturSettingsSerializer` implements DataStore's `Serializer<IturPreferences>` by calling `IturPreferences.ADAPTER.decode(...)`/`.encode(...)` directly against Okio sources/sinks.
+* `core:datastore-proto-jvm` is a plain `kotlin("jvm")` module (not an Android library) since the generated code has no Android-platform dependency, and is exposed to `core:datastore` via `api(project(":core:datastore-proto-jvm"))` so `IturPreferences` is visible on `core:datastore`'s own public API.
+
+== Rationale
+
+. **No `protoc` native binary.** Google's `protobuf-gradle-plugin` shells out to the `protoc` compiler, a platform-specific native executable Gradle has to fetch and invoke. Wire's compiler is pure JVM, so `core:datastore-proto-jvm` builds the same way on every platform/CI runner this project's Gradle wrapper already runs on, with nothing beyond the Wire Gradle plugin itself.
+. **Idiomatic generated Kotlin, not Java interop.** `javaInterop = false` (set in the module's `wire { kotlin { ... } }` block) means Wire emits a genuine Kotlin `data class` with null-safety and `copy()`, rather than the builder-pattern Java classes `protobuf-gradle-plugin` produces by default. `IturSettingsSerializer`'s `defaultValue = IturPreferences()` and the round-trip test (`AOSS-F3C7`) both rely on this being a plain, constructible Kotlin value type.
+. **A separate plain-JVM module, not part of `core:datastore` itself.** Generated proto code has no reason to be an Android library (no `Context`, no Android APIs) or to force `core:datastore`'s consumers to also pull in the Wire Gradle plugin's configuration. Isolating it lets `core:datastore` depend on the generated types (`api`, since `IturPreferences` appears in its own public `Serializer<IturPreferences>`/`DataStore<IturPreferences>` signatures) without owning the proto toolchain itself.
+
+== Consequences
+
+* Positive: no native `protoc` dependency anywhere in this build.
+* Positive: the generated `IturPreferences` is a normal Kotlin data class other code can construct, copy, and compare in tests without any Java-interop ceremony (see `IturSettingsSerializerTest`, `AOSS-F3C7`).
+* Negative: Wire is a smaller, Square-maintained project rather than Google's own protobuf tooling -- a real (if so far unrealized) maintenance-risk trade-off against `protobuf-gradle-plugin`'s broader ecosystem backing.
+* Neutral: proto3 semantics still apply (missing fields decode to schema defaults, not null/absence) -- `AOSS-F3C7`'s tests exercise this directly for `IturPreferences`.
+
+== Contributor guidance
+
+* **Changing the schema:** edit `itur_preferences.proto` directly (adding a field is the common case -- proto3's field-number/default-value rules mean old serialized files remain readable by a newer schema as long as existing field numbers are never reused or renumbered). No manual codegen step is needed: the Wire plugin regenerates `IturPreferences` as part of `core:datastore-proto-jvm`'s normal `compileKotlin` task, so building the project (or opening it in an IDE with Gradle sync) is enough to see the updated generated class.
+* **Where the generated code lands:** `core/datastore-proto-jvm/build/generated/source/wire/...` (per the module's `wire { kotlin { out = ... } }` config) -- build output, not checked in; don't edit it directly, edit the `.proto` file.
+* **Adding a second persisted message:** add another `message` to the existing `.proto` file, or a new `.proto` file under the same `src/main/proto` tree, then give it its own `Serializer<T>`/`DataStore<T>` pair in `core:datastore` following `IturSettingsSerializer`/`DataStoreModule`'s existing shape -- there's no need for a second Wire-backed Gradle module just to add a message.
+* **Testing a serializer:** see `IturSettingsSerializerTest` (`AOSS-F3C7`) for the established pattern -- round-trip a populated and the default value, confirm an empty stream decodes to schema defaults (proto3 semantics, not an error), and confirm a truncated/corrupt stream surfaces as `CorruptionException` with the original decode failure preserved as its cause rather than swallowed.
+
+== Alternatives considered
+
+=== Google's `protobuf-gradle-plugin` (the DataStore-documented default)
+
+[cols="1,4"]
+|===
+| Criterion | Assessment
+
+| Strengths
+a|
+* What Jetpack DataStore's own documentation and samples use, so more contributors may already be familiar with it
+* Backed directly by the protobuf project rather than a third-party wrapper
+
+| Weaknesses
+a|
+* Requires the native `protoc` compiler as a build-time dependency
+* Default Java-interop-first generated classes are less idiomatic to consume from Kotlin than Wire's `javaInterop = false` output, without extra configuration
+
+| Verdict
+| Not chosen (as inherited from before this repository's history here). Revisit only if a concrete need for `protoc`-specific tooling or plugins arises -- none has so far.
+|===
