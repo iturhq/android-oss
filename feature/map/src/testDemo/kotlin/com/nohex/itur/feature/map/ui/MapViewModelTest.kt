@@ -8,10 +8,12 @@ package com.nohex.itur.feature.map.ui
 import android.content.Context
 import android.os.Looper
 import com.nohex.itur.core.data.TestFixtures
+import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.data.repository.DataResult
 import com.nohex.itur.core.data.repository.FakeActivityRepository
 import com.nohex.itur.core.data.repository.FakeLocationRepository
 import com.nohex.itur.core.data.repository.FakeUserRepository
+import com.nohex.itur.core.data.repository.UserRepository
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.domain.model.User
@@ -21,6 +23,7 @@ import com.nohex.itur.core.model.IturActivity
 import com.nohex.itur.core.model.IturActivityStatus
 import com.nohex.itur.feature.map.config.MapStyleConfig
 import com.nohex.itur.feature.map.notifications.BroadcastNotifier
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -75,11 +78,11 @@ class MapViewModelTest {
 
     private fun userRepo() = FakeUserRepository()
 
-    private fun locationRepo(activityRepo: FakeActivityRepository) = FakeLocationRepository(activityRepository = activityRepo)
+    private fun locationRepo(activityRepo: ActivityRepository) = FakeLocationRepository(activityRepository = activityRepo)
 
     private fun viewModel(
-        activityRepo: FakeActivityRepository = activityRepo(),
-        userRepo: FakeUserRepository = userRepo(),
+        activityRepo: ActivityRepository = activityRepo(),
+        userRepo: UserRepository = userRepo(),
     ) = MapViewModel(
         activityRepository = activityRepo,
         userRepository = userRepo,
@@ -374,6 +377,129 @@ class MapViewModelTest {
             vm.triggerIdleState()
 
             assertNull(vm.latestBroadcast.value)
+        }
+    }
+
+    // --- initialize / retry backoff ---
+
+    @Test
+    fun `GIVEN the backend is unreachable WHEN the ViewModel is created THEN uiState becomes BackendUnavailable with the first backoff countdown`() {
+        runTest {
+            val activityRepo = mockk<ActivityRepository>()
+            // Bounded (recovers on the 2nd attempt): an unbounded `throws` here would leave
+            // MapViewModel's own infinite-retry-until-reachable loop running against a
+            // never-advanced TestDispatcher scheduler for the rest of this test's lifetime.
+            coEvery { activityRepo.getActivities(any()) } throws RuntimeException("offline") andThen
+                DataResult.Success(emptyList())
+
+            val vm = viewModel(activityRepo = activityRepo)
+
+            assertEquals(MapUiState.BackendUnavailable(countdown = 5), vm.uiState.value)
+
+            // Drain the pending retry so no coroutine is left running past this test.
+            mainDispatcherRule.testDispatcher.scheduler.advanceUntilIdle()
+        }
+    }
+
+    @Test
+    fun `GIVEN the backend recovers WHEN retryNow is called THEN uiState becomes Idle without waiting for the countdown`() {
+        runTest {
+            val activityRepo = mockk<ActivityRepository>()
+            coEvery { activityRepo.getActivities(any()) } throws RuntimeException("offline") andThen
+                DataResult.Success(emptyList())
+
+            val vm = viewModel(activityRepo = activityRepo)
+            assertIs<MapUiState.BackendUnavailable>(vm.uiState.value)
+
+            vm.retryNow()
+
+            assertIs<MapUiState.Idle>(vm.uiState.value)
+        }
+    }
+
+    @Test
+    fun `GIVEN the backend recovers during the first backoff wait WHEN the countdown elapses THEN it retries automatically and uiState becomes Idle`() {
+        runTest {
+            val activityRepo = mockk<ActivityRepository>()
+            coEvery { activityRepo.getActivities(any()) } throws RuntimeException("offline") andThen
+                DataResult.Success(emptyList())
+
+            val vm = viewModel(activityRepo = activityRepo)
+            assertEquals(MapUiState.BackendUnavailable(countdown = 5), vm.uiState.value)
+
+            mainDispatcherRule.testDispatcher.scheduler.advanceUntilIdle()
+
+            assertIs<MapUiState.Idle>(vm.uiState.value)
+        }
+    }
+
+    // --- triggerOngoingState(activityId, context) recoverable errors ---
+
+    @Test
+    fun `GIVEN an activity that can no longer be found WHEN triggering its ongoing state THEN uiState becomes a RecoverableError`() {
+        runTest {
+            val activityRepo = mockk<ActivityRepository>()
+            coEvery { activityRepo.getActivities(any()) } returns DataResult.Success(emptyList())
+            coEvery { activityRepo.getActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns DataResult.NotFound(TestFixtures.ONGOING_ACTIVITY_ID.value)
+
+            val vm = viewModel(activityRepo = activityRepo)
+            vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+
+            val state = assertIs<MapUiState.RecoverableError>(vm.uiState.value)
+            assertEquals("The ongoing activity could not be resumed.", state.message)
+        }
+    }
+
+    @Test
+    fun `GIVEN a RecoverableError WHEN onCancel is invoked THEN uiState returns to Idle`() {
+        runTest {
+            val activityRepo = mockk<ActivityRepository>()
+            coEvery { activityRepo.getActivities(any()) } returns DataResult.Success(emptyList())
+            coEvery { activityRepo.getActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns DataResult.Error("backend error")
+
+            val vm = viewModel(activityRepo = activityRepo)
+            vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+            val state = assertIs<MapUiState.RecoverableError>(vm.uiState.value)
+
+            state.onCancel()
+
+            assertIs<MapUiState.Idle>(vm.uiState.value)
+        }
+    }
+
+    @Test
+    fun `GIVEN a RecoverableError WHEN onRetry succeeds THEN uiState becomes Ongoing`() {
+        runTest {
+            val activityRepo = mockk<ActivityRepository>()
+            coEvery { activityRepo.getActivities(any()) } returns DataResult.Success(emptyList())
+            coEvery { activityRepo.getActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns
+                DataResult.Error("backend error") andThen
+                DataResult.Success(TestFixtures.ongoingActivity)
+
+            val vm = viewModel(activityRepo = activityRepo)
+            vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+            val state = assertIs<MapUiState.RecoverableError>(vm.uiState.value)
+
+            state.onRetry()
+
+            assertOngoing(vm)
+        }
+    }
+
+    // --- startActivity failure ---
+
+    @Test
+    fun `GIVEN the backend rejects activity creation WHEN starting an activity THEN uiState becomes Error`() {
+        runTest {
+            val activityRepo = mockk<ActivityRepository>()
+            coEvery { activityRepo.getActivities(any()) } returns DataResult.Success(emptyList())
+            coEvery { activityRepo.createActivity(TestFixtures.ORGANIZER_ID) } returns DataResult.Error("quota exceeded")
+
+            val vm = viewModel(activityRepo = activityRepo)
+            vm.startActivity(context)
+
+            val state = assertIs<MapUiState.Error>(vm.uiState.value)
+            assertEquals("quota exceeded", state.message)
         }
     }
 }
