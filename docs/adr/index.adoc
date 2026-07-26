@@ -4,3 +4,5 @@
 :icons: font
 
 include::ADR-001-e2e-framework.adoc[leveloffset=+1]
+
+include::ADR-002-unit-test-framework.adoc[leveloffset=+1]

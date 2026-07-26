@@ -1,0 +1,96 @@
+= ADR-002: Unit test framework selection
+:toc: left
+:toclevels: 2
+:sectnums:
+:sectnumlevels: 2
+:icons: font
+
+
+[cols="1,3"]
+|===
+| Status      | Accepted
+| Date        | 2026-07-26
+| Deciders    | Max Noé
+|===
+
+== Context
+
+Every module's JVM unit tests (`src/test`) across `core:model`, `core:auth`,
+`core:data-fake`, `core:datastore`, and `feature:map` consistently use
+`kotlin.test`'s `@Test`/`assert*` API running on the JUnit 4 engine
+(`junit:junit`), following the same GIVEN/WHEN/THEN naming convention.
+
+Despite that, `app/build.gradle.kts` separately declared
+`testImplementation(libs.junit)`, where the version catalog's `junit` alias
+pointed at `org.junit.jupiter:junit-jupiter` (JUnit 5) — with no `app/src/test`
+source set and zero `org.junit.jupiter`/`@ExtendWith` usage anywhere in the
+repository. The project was declaring both major JUnit versions without ever
+having chosen or used the second one, exactly the ambiguity this decision
+resolves.
+
+Instrumented tests (`src/androidTest`) are unaffected: they use
+`androidx.test.ext:junit` (`androidx-junit`), which is unrelated to this
+choice and already consistent across the repository.
+
+== Decision
+
+Standardize on **JUnit 4** as the unit-testing engine for all `src/test`
+source sets, accessed through **`kotlin.test`**'s API rather than
+`org.junit.Test` directly — matching every existing test in the repository.
+
+Removed the unused JUnit 5 (`org.junit.jupiter:junit-jupiter`) version and
+library alias from `gradle/libs.versions.toml`, and replaced `app/build.gradle.kts`'s
+vestigial `testImplementation(libs.junit)` with the same
+`kotlin.test` + `kotlin-test-junit` + `junit:junit` trio every other module
+declares, so `:app` is ready for unit tests using the project's actual
+standard whenever it gets its first one.
+
+== Rationale
+
+. **Zero migration cost.** JUnit 5 was never actually used; removing it
+  deletes dead configuration rather than requiring any test rewrite.
+. **`kotlin.test` already covers the need.** Its `@Test` annotation compiles
+  down to the JUnit 4 runner via `kotlin-test-junit`, while giving Kotlin-idiomatic
+  `assertEquals`/`assertFailsWith`/`assertTrue` helpers — no reason to move to
+  raw JUnit 4 or to JUnit 5 for these modules' straightforward, synchronous
+  and `runBlocking`-wrapped suspend-function tests.
+. **Consistency with `androidTest`.** Espresso/Compose instrumented tests
+  (per link:ADR-001-e2e-framework.adoc[ADR-001]) run on the JUnit 4-based
+  Android test runner already; keeping `src/test` on JUnit 4 too avoids a
+  split test-runner story across the two source sets.
+
+== Consequences
+
+* Positive: one unit-test engine, one assertion API, one naming convention,
+  matching what every existing test file already does in practice.
+* Positive: removes an unused dependency and its transitive footprint from
+  `:app`.
+* Negative: none identified — no test relied on any JUnit 5-only feature
+  (parameterized tests, `@Nested`, extensions).
+
+== Alternatives considered
+
+=== Standardize on JUnit 5 instead
+
+[cols="1,4"]
+|===
+| Criterion | Assessment
+
+| Strengths
+a|
+* Newer feature set (`@ParameterizedTest`, `@Nested`, extension model)
+* Would have been a defensible choice if adopted from the start
+
+| Weaknesses
+a|
+* Would require rewriting every existing `src/test` file across `core:model`,
+  `core:auth`, `core:data-fake`, `core:datastore`, and `feature:map`
+* No current test need (parameterization, nested contexts) that JUnit 4 +
+  `kotlin.test` cannot already express
+* AGP's instrumented (`androidTest`) runner remains JUnit 4-based regardless,
+  so this would not even unify the whole test story
+
+| Verdict
+| Rejected. All of the actual switching cost with none of the migration
+  already done, for capabilities this project does not need yet.
+|===
