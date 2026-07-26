@@ -122,6 +122,9 @@ Kotlin file.  Run before committing:
 
 [GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html) — Itur © 2025 Max Noé \<code@itur.cat>
 
+Contributions are accepted under the same public licence and require the
+rights and provenance records described in [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ---
 
 This project was developed as the practical component of a final degree project at Universitat Oberta de Catalunya (UOC). The [associated academic paper](https://openaccess.uoc.edu/server/api/core/bitstreams/0ac923ef-e562-4ea5-a111-d57ac7154640/content) is available at the UOC's open access repository.
