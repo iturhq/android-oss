@@ -38,7 +38,7 @@ private val NEW_LOCATION = Location(latitude = 51.5, longitude = -0.1)
 class FirebaseLocationRepositoryTest {
     private val locationsCollection = mockk<CollectionReference>()
     private val firestore = mockk<FirebaseFirestore> {
-        every { collection("locations") } returns locationsCollection
+        every { collection(FirestoreCollections.LOCATIONS) } returns locationsCollection
     }
     private val repository = FirebaseLocationRepository(firestore)
 

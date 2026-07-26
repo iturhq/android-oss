@@ -21,6 +21,7 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
 import com.nohex.itur.core.auth.config.GoogleSignInConfig
+import com.nohex.itur.core.data.repository.FirestoreCollections
 import com.nohex.itur.core.data.repository.UserRepository
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.domain.model.User
@@ -125,7 +126,7 @@ class FirebaseUserRepository @Inject constructor(
 
     override suspend fun getAll(ids: List<UserId>): List<User> {
         val db = FirebaseFirestore.getInstance()
-        val snapshot = db.collection("users")
+        val snapshot = db.collection(FirestoreCollections.USERS)
             .whereIn(FieldPath.documentId(), ids.map { it.value })
             .get()
             .await()

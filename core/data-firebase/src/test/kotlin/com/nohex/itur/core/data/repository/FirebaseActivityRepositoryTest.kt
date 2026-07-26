@@ -43,7 +43,7 @@ private val ACTIVITY_DTO = IturActivityDTO(
 class FirebaseActivityRepositoryTest {
     private val activitiesCollection = mockk<CollectionReference>()
     private val firestore = mockk<FirebaseFirestore> {
-        every { collection("activities") } returns activitiesCollection
+        every { collection(FirestoreCollections.ACTIVITIES) } returns activitiesCollection
     }
     private val repository = FirebaseActivityRepository(firestore)
 

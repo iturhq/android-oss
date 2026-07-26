@@ -31,7 +31,7 @@ class FirebaseActivityRepository
 constructor(
     firestore: FirebaseFirestore,
 ) : ActivityRepository {
-    private val activitiesCollection = firestore.collection("activities")
+    private val activitiesCollection = firestore.collection(FirestoreCollections.ACTIVITIES)
 
     override suspend fun getActivity(activityId: IturActivityId): DataResult<IturActivity> {
         val reference = activitiesCollection.document(activityId.value)

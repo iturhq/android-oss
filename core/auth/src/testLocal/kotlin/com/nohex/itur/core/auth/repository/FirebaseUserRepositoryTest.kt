@@ -15,6 +15,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
 import com.nohex.itur.core.auth.config.GoogleSignInConfig
+import com.nohex.itur.core.data.repository.FirestoreCollections
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.domain.model.User
 import io.mockk.every
@@ -93,7 +94,7 @@ class FirebaseUserRepositoryTest {
         val firestore = mockk<FirebaseFirestore>()
         every { FirebaseFirestore.getInstance() } returns firestore
         val usersCollection = mockk<CollectionReference>()
-        every { firestore.collection("users") } returns usersCollection
+        every { firestore.collection(FirestoreCollections.USERS) } returns usersCollection
         val query = mockk<Query>()
         every { usersCollection.whereIn(FieldPath.documentId(), listOf("id-1", "id-2")) } returns query
 
@@ -126,7 +127,7 @@ class FirebaseUserRepositoryTest {
         val firestore = mockk<FirebaseFirestore>()
         every { FirebaseFirestore.getInstance() } returns firestore
         val usersCollection = mockk<CollectionReference>()
-        every { firestore.collection("users") } returns usersCollection
+        every { firestore.collection(FirestoreCollections.USERS) } returns usersCollection
         val query = mockk<Query>()
         every { usersCollection.whereIn(FieldPath.documentId(), listOf("id-1")) } returns query
         every { query.get() } returns failedTask(RuntimeException("offline"))

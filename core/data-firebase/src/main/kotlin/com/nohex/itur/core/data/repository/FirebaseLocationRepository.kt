@@ -23,7 +23,7 @@ class FirebaseLocationRepository
 constructor(
     firestore: FirebaseFirestore,
 ) : LocationRepository {
-    private val locationsCollection = firestore.collection("locations")
+    private val locationsCollection = firestore.collection(FirestoreCollections.LOCATIONS)
     override suspend fun getForActivity(activityId: IturActivityId): List<ParticipantLocation> = withContext(Dispatchers.IO) {
         val querySnapshot =
             locationsCollection.whereEqualTo("activityId", activityId.value)
