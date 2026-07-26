@@ -74,7 +74,8 @@ internal fun HelpFABs() {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         FloatingActionButton(
-            onClick = { /* TODO: Display help overlay */ },
+            // Help overlay not implemented yet; tracked as AOSS-A49A.
+            onClick = {},
             modifier = Modifier.testTag("help_fab"),
         ) {
             Icon(IturIcons.Help, contentDescription = "Get help")

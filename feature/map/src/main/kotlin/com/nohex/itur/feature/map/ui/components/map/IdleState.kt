@@ -52,7 +52,7 @@ fun IdleState(
                 .padding(8.dp),
         )
 
-        // TODO: Rearrange and encapsulate FABs.
+        // Shared with OngoingState.kt's near-identical scaffolding; tracked as AOSS-2A3E.
         Column(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.End,

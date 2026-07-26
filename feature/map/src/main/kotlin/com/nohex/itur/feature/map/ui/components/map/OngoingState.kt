@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.domain.model.User
 import com.nohex.itur.core.model.IturActivity
@@ -44,7 +45,7 @@ internal fun OngoingState(
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
-        // TODO: Rearrange and encapsulate FABs.
+        // Shared with IdleState.kt's near-identical scaffolding; tracked as AOSS-2A3E.
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -129,7 +130,11 @@ private fun OngoingActivityFABs(
 @Composable
 private fun OrganizerOngoingStatePreview() {
     OngoingState(
-        activity = TODO(),
+        activity = IturActivity(
+            id = IturActivityId("previewActivity00001"),
+            organizerId = UserId("preview-user"),
+            participantIds = listOf(),
+        ),
         organizer = User.AnonymousUser(UserId("preview-user")),
         participantIds = listOf(),
         locations = listOf(),
