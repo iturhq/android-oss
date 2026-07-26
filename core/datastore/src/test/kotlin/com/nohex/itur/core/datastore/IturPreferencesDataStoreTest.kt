@@ -33,21 +33,24 @@ private class FakeIturPreferencesStore(
 private class FakeEmailCipher : EmailCipher {
     override fun encrypt(plainText: String): String = if (plainText.isEmpty()) "" else "enc:" + plainText.reversed()
 
+    @Suppress("MaxLineLength")
     override fun decrypt(storedValue: String): String = if (storedValue.isEmpty()) "" else storedValue.removePrefix("enc:").reversed()
 }
 
 class IturPreferencesDataStoreTest {
 
     @Test
-    fun `GIVEN a set email WHEN reading the backing store directly THEN the raw value is encrypted, not plaintext`() = runBlocking {
-        val backingStore = FakeIturPreferencesStore()
-        val dataStore = IturPreferencesDataStore(backingStore, FakeEmailCipher())
+    fun `GIVEN a set email WHEN reading the backing store directly THEN the raw value is encrypted, not plaintext`() {
+        runBlocking {
+            val backingStore = FakeIturPreferencesStore()
+            val dataStore = IturPreferencesDataStore(backingStore, FakeEmailCipher())
 
-        dataStore.setUserEmail("person@example.com")
+            dataStore.setUserEmail("person@example.com")
 
-        val persisted = backingStore.data.first().user_email
-        assertNotEquals("person@example.com", persisted)
-        assertEquals("enc:moc.elpmaxe@nosrep", persisted)
+            val persisted = backingStore.data.first().user_email
+            assertNotEquals("person@example.com", persisted)
+            assertEquals("enc:moc.elpmaxe@nosrep", persisted)
+        }
     }
 
     @Test
@@ -61,9 +64,11 @@ class IturPreferencesDataStoreTest {
     }
 
     @Test
-    fun `GIVEN no email has been set WHEN reading preferences THEN it is an empty string, not a decryption failure`() = runBlocking {
-        val dataStore = IturPreferencesDataStore(FakeIturPreferencesStore(), FakeEmailCipher())
+    fun `GIVEN no email has been set WHEN reading preferences THEN it is an empty string, not a decryption failure`() {
+        runBlocking {
+            val dataStore = IturPreferencesDataStore(FakeIturPreferencesStore(), FakeEmailCipher())
 
-        assertEquals("", dataStore.preferences.first().email)
+            assertEquals("", dataStore.preferences.first().email)
+        }
     }
 }
