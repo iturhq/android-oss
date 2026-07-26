@@ -37,7 +37,6 @@ import com.nohex.itur.core.model.ParticipantLocation
 import com.nohex.itur.feature.map.notifications.BroadcastNotifier
 import com.nohex.itur.feature.map.ui.MapUiState.Ongoing
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -409,7 +408,11 @@ constructor(
                 // update the user's location for that activity.
                 ongoingActivityId.value?.let { activityId ->
                     currentUser.value?.let { participant ->
-                        CoroutineScope(Dispatchers.IO).launch {
+                        // Tied to viewModelScope (instead of an unmanaged CoroutineScope) so this
+                        // work is cancelled along with the rest of the ViewModel's work, rather
+                        // than continuing to run -- and potentially update now-stale state --
+                        // after the ViewModel is cleared.
+                        viewModelScope.launch(Dispatchers.IO) {
                             updateUserLocation(participant.id, activityId, location)
                         }
                     }
