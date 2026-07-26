@@ -84,7 +84,7 @@ jobs:
         run: ./gradlew -I spotless/spotless.gradle.kts spotlessCheck
 
       - name: Run unit tests with coverage
-        run: ./gradlew :core:auth:createDemoDebugUnitTestCoverageReport :core:data-fake:createDebugUnitTestCoverageReport :feature:map:createDemoDebugUnitTestCoverageReport
+        run: ./gradlew :core:auth:createDemoDebugUnitTestCoverageReport :core:data-fake:createDebugUnitTestCoverageReport :feature:map:createDemoDebugUnitTestCoverageReport :core:datastore:createDebugUnitTestCoverageReport
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -94,6 +94,7 @@ jobs:
             core/auth/build/reports/coverage/test/demo/debug/report.xml
             core/data-fake/build/reports/coverage/test/debug/report.xml
             feature/map/build/reports/coverage/test/demo/debug/report.xml
+            core/datastore/build/reports/coverage/test/debug/report.xml
           fail_ci_if_error: true
 
       - name: Assemble demo build

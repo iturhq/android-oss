@@ -12,6 +12,12 @@ plugins {
 android {
     namespace = "com.nohex.itur.core.datastore"
     compileSdk = 36
+
+    buildTypes {
+        debug {
+            enableUnitTestCoverage = true
+        }
+    }
 }
 
 dependencies {
@@ -25,4 +31,9 @@ dependencies {
     // Hilt
     ksp (libs.hilt.compiler)
     implementation (libs.hilt.android)
+
+    testImplementation(libs.kotlin.test)
+    testImplementation(libs.kotlin.test.junit)
+    testImplementation(libs.junit.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
