@@ -26,6 +26,8 @@ plugins {
     // Observability (prod/local only; see ObservabilityModule)
     alias(libs.plugins.firebase.crashlytics)
     alias(libs.plugins.firebase.perf)
+    // Generates the third-party license data OssLicensesMenuActivity displays (AOSS-386B).
+    alias(libs.plugins.oss.licenses)
 }
 
 android {
@@ -118,6 +120,9 @@ dependencies {
     ksp (libs.hilt.compiler)
     // Maps
     implementation(libs.android.maplibre)
+
+    // Third-party license attribution screen (AOSS-386B).
+    implementation(libs.play.services.oss.licenses)
 
     // Observability: crash reporting + performance monitoring, prod/local only.
     // The demo flavor stays credential-free and never links these (see
