@@ -24,10 +24,17 @@ import androidx.core.graphics.createBitmap
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.WriterException
+import com.google.zxing.common.BitMatrix
 import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlin.collections.set
+
+/**
+ * ZXing's own quiet-zone margin, in QR modules (its standards-recommended minimum), kept
+ * independent of any caller-requested pixel [padding][rememberQrBitmapPainter] -- see
+ * [buildQRBitmap].
+ */
+private const val QUIET_ZONE_MODULES = 4
 
 @Composable
 fun QRImage(qrURL: String, size: Dp = 300.dp) {
@@ -86,32 +93,57 @@ private suspend fun buildQRBitmap(
 ): Bitmap? = withContext(Dispatchers.IO) {
     val qrCodeWriter = QRCodeWriter()
 
-    val encodeHints = mutableMapOf<EncodeHintType, Any?>()
-        .apply {
-            this[EncodeHintType.MARGIN] = paddingPx
-        }
+    // ZXing's own MARGIN hint is a count of QR modules, not pixels, so it can't express the
+    // caller's Dp-based padding directly -- doing so would make the border's real size vary with
+    // screen density (the same padding: Dp would become a larger module-margin at higher
+    // densities, since paddingPx scales with density but a "module" doesn't). Leave it at the
+    // spec's standard quiet zone regardless of paddingPx, and add the requested pixel padding as
+    // a real pixel border ourselves in renderQrPixels.
+    val encodeHints = mapOf(EncodeHintType.MARGIN to QUIET_ZONE_MODULES)
+    val requestedContentSizePx = (sizePx - 2 * paddingPx).coerceAtLeast(1)
 
     try {
         val bitmapMatrix = qrCodeWriter.encode(
             qrData,
             BarcodeFormat.QR_CODE,
-            sizePx,
-            sizePx,
+            requestedContentSizePx,
+            requestedContentSizePx,
             encodeHints,
         )
 
-        // Use the actual matrix dimensions to avoid aliasing from size mismatch.
-        val matrixSize = bitmapMatrix.width
-        val bitArray = IntArray(matrixSize * matrixSize) { position ->
-            val x = position % matrixSize
-            val y = position / matrixSize
-            if (bitmapMatrix.get(x, y)) Color.BLACK else Color.WHITE
-        }
-
-        Bitmap.createBitmap(bitArray, matrixSize, matrixSize, Bitmap.Config.ARGB_8888)
+        val (finalSize, pixels) = renderQrPixels(bitmapMatrix, paddingPx)
+        Bitmap.createBitmap(pixels, finalSize, finalSize, Bitmap.Config.ARGB_8888)
     } catch (_: WriterException) {
         null
     }
+}
+
+/**
+ * Renders [bitmapMatrix]'s modules into a same-aspect ARGB pixel array, [paddingPx] pixels larger
+ * on each side than the matrix itself, that border filled with [Color.WHITE]. Kept free of
+ * [Bitmap] entirely (a real Android/Robolectric runtime, unlike ZXing's own encoder, would be
+ * needed to construct one) so it can be unit tested directly against a real encoded [BitMatrix].
+ *
+ * Uses the matrix's own (encoder-assigned) dimensions rather than the originally requested size,
+ * since ZXing rounds up to the nearest whole module and the two can differ -- reusing the
+ * requested size here would misalign or stretch the image.
+ */
+internal fun renderQrPixels(
+    bitmapMatrix: BitMatrix,
+    paddingPx: Int,
+): Pair<Int, IntArray> {
+    val matrixSize = bitmapMatrix.width
+    val finalSize = matrixSize + 2 * paddingPx
+    val pixels = IntArray(finalSize * finalSize) { position ->
+        val x = position % finalSize - paddingPx
+        val y = position / finalSize - paddingPx
+        if (x in 0 until matrixSize && y in 0 until matrixSize && bitmapMatrix.get(x, y)) {
+            Color.BLACK
+        } else {
+            Color.WHITE
+        }
+    }
+    return finalSize to pixels
 }
 
 @Preview
