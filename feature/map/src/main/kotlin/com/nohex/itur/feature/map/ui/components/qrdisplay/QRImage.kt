@@ -28,6 +28,8 @@ import com.google.zxing.common.BitMatrix
 import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.net.URI
+import java.net.URISyntaxException
 
 /**
  * ZXing's own quiet-zone margin, in QR modules (its standards-recommended minimum), kept
@@ -91,6 +93,8 @@ private suspend fun buildQRBitmap(
     sizePx: Int,
     paddingPx: Int,
 ): Bitmap? = withContext(Dispatchers.IO) {
+    if (!qrData.isValidQrUrl()) return@withContext null
+
     val qrCodeWriter = QRCodeWriter()
 
     // ZXing's own MARGIN hint is a count of QR modules, not pixels, so it can't express the
@@ -144,6 +148,24 @@ internal fun renderQrPixels(
         }
     }
     return finalSize to pixels
+}
+
+/**
+ * Whether this string is well-formed enough to justify generating a QR code for it: an absolute
+ * `http`/`https` URL with a host. ZXing itself imposes no such requirement -- it will happily
+ * encode any string, blank included -- so without this check, [buildQRBitmap] would produce a
+ * technically valid QR code out of garbage input.
+ */
+internal fun String.isValidQrUrl(): Boolean {
+    if (isBlank()) return false
+    val uri = try {
+        URI(this)
+    } catch (_: URISyntaxException) {
+        return false
+    }
+    return uri.isAbsolute &&
+        uri.scheme?.lowercase().let { it == "http" || it == "https" } &&
+        !uri.host.isNullOrBlank()
 }
 
 @Preview

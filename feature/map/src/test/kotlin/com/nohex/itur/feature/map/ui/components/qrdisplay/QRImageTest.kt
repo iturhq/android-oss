@@ -12,6 +12,7 @@ import com.google.zxing.common.BitMatrix
 import com.google.zxing.qrcode.QRCodeWriter
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 private const val SAMPLE_URL = "https://itur.cat/activities/abcdefghij0123456789"
@@ -97,5 +98,49 @@ class QRImageTest {
 
         assertEquals(matrix.width, finalSize)
         assertTrue(matrix.width > 0)
+    }
+
+    // --- isValidQrUrl ---
+
+    @Test
+    fun `GIVEN an https URL WHEN validating THEN it is valid`() {
+        assertTrue(SAMPLE_URL.isValidQrUrl())
+    }
+
+    @Test
+    fun `GIVEN an http URL WHEN validating THEN it is valid`() {
+        assertTrue("http://itur.cat/activities/abcdefghij0123456789".isValidQrUrl())
+    }
+
+    @Test
+    fun `GIVEN a blank string WHEN validating THEN it is invalid`() {
+        assertFalse("".isValidQrUrl())
+        assertFalse("   ".isValidQrUrl())
+    }
+
+    @Test
+    fun `GIVEN plain text with no scheme WHEN validating THEN it is invalid`() {
+        assertFalse("not a url".isValidQrUrl())
+    }
+
+    @Test
+    fun `GIVEN a scheme-relative URL WHEN validating THEN it is invalid`() {
+        assertFalse("itur.cat/activities/abcdefghij0123456789".isValidQrUrl())
+    }
+
+    @Test
+    fun `GIVEN a non-http scheme WHEN validating THEN it is invalid`() {
+        assertFalse("ftp://itur.cat/activities/abcdefghij0123456789".isValidQrUrl())
+        assertFalse("javascript:alert(1)".isValidQrUrl())
+    }
+
+    @Test
+    fun `GIVEN an http URL with no host WHEN validating THEN it is invalid`() {
+        assertFalse("http:///activities/abcdefghij0123456789".isValidQrUrl())
+    }
+
+    @Test
+    fun `GIVEN a syntactically malformed URI WHEN validating THEN it is invalid`() {
+        assertFalse("https://itur.cat/activities/ abcdefghij".isValidQrUrl())
     }
 }
