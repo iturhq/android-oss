@@ -47,23 +47,15 @@ constructor(
 
     override suspend fun removeForActivity(activityId: IturActivityId) {
         withContext(Dispatchers.IO) {
-            try {
-                val querySnapshot = locationsCollection
-                    .whereEqualTo("activityId", activityId.value)
-                    .get()
-                    .await()
-                querySnapshot.documents.forEach { it.reference.delete().await() }
-                Log.d(
-                    "FirestoreLocationRepo",
-                    "Removed ${querySnapshot.size()} location(s) for activity ${activityId.value}",
-                )
-            } catch (e: Exception) {
-                Log.e(
-                    "FirestoreLocationRepo",
-                    "Error removing locations for activity ${activityId.value}",
-                    e,
-                )
-            }
+            val querySnapshot = locationsCollection
+                .whereEqualTo("activityId", activityId.value)
+                .get()
+                .await()
+            querySnapshot.documents.forEach { it.reference.delete().await() }
+            Log.d(
+                "FirestoreLocationRepo",
+                "Removed ${querySnapshot.size()} location(s) for activity ${activityId.value}",
+            )
         }
     }
 
@@ -71,50 +63,44 @@ constructor(
         userId: UserId,
         activityId: IturActivityId,
         location: Location,
-    ) = withContext(Dispatchers.IO) {
-        try {
-            val querySnapshot = locationsCollection
-                .whereEqualTo("activityId", activityId.value)
-                .whereEqualTo("userId", userId.value)
-                .get()
-                .await()
+    ): Unit = withContext(Dispatchers.IO) {
+        val querySnapshot = locationsCollection
+            .whereEqualTo("activityId", activityId.value)
+            .whereEqualTo("userId", userId.value)
+            .get()
+            .await()
 
-            val firebaseLocation = GeoPoint(location.latitude, location.longitude)
+        val firebaseLocation = GeoPoint(location.latitude, location.longitude)
 
-            // If there is no record of this user and activity...
-            if (querySnapshot.isEmpty) {
-                // ... create new location record...
-                val newRecord = ParticipantLocationDTO(
-                    activityId = activityId.value,
-                    userId = userId.value,
-                    location = firebaseLocation,
-                    updatedOn = Timestamp.now(),
-                )
-                val newReference = locationsCollection.add(newRecord).await()
+        // If there is no record of this user and activity...
+        if (querySnapshot.isEmpty) {
+            // ... create new location record...
+            val newRecord = ParticipantLocationDTO(
+                activityId = activityId.value,
+                userId = userId.value,
+                location = firebaseLocation,
+                updatedOn = Timestamp.now(),
+            )
+            val newReference = locationsCollection.add(newRecord).await()
 
-                Log.d(
-                    "FirestoreLocationRepo",
-                    "Created location ${newReference.id} for user ${userId.value} in activity ${activityId.value}",
-                )
-            } else {
-                // ...otherwise update the existing record.
-                val documentId = querySnapshot.documents.first().id
-                locationsCollection.document(documentId).update(
-                    mapOf(
-                        "location" to firebaseLocation,
-                        "updatedOn" to Timestamp.now(),
-                    ),
-                ).await()
+            Log.d(
+                "FirestoreLocationRepo",
+                "Created location ${newReference.id} for user ${userId.value} in activity ${activityId.value}",
+            )
+        } else {
+            // ...otherwise update the existing record.
+            val documentId = querySnapshot.documents.first().id
+            locationsCollection.document(documentId).update(
+                mapOf(
+                    "location" to firebaseLocation,
+                    "updatedOn" to Timestamp.now(),
+                ),
+            ).await()
 
-                Log.d(
-                    "FirestoreLocationRepo",
-                    "Updated location $documentId for user ${userId.value} in activity ${activityId.value}",
-                )
-            }
-
-            return@withContext
-        } catch (e: Exception) {
-            Log.e("FirestoreLocationRepo", "Error updating location", e)
+            Log.d(
+                "FirestoreLocationRepo",
+                "Updated location $documentId for user ${userId.value} in activity ${activityId.value}",
+            )
         }
     }
 }

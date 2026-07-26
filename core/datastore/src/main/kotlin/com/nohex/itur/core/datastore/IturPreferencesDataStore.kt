@@ -5,11 +5,9 @@
 
 package com.nohex.itur.core.datastore
 
-import android.util.Log
 import androidx.datastore.core.DataStore
 import com.nohex.itur.core.model.UserSettings
 import kotlinx.coroutines.flow.map
-import java.io.IOException
 import javax.inject.Inject
 
 class IturPreferencesDataStore @Inject constructor(
@@ -22,17 +20,13 @@ class IturPreferencesDataStore @Inject constructor(
             )
         }
 
+    /**
+     * @throws java.io.IOException if the update could not be persisted; callers decide how to
+     * surface that failure rather than have it silently dropped here.
+     */
     suspend fun setUserEmail(userEmail: String) {
-        try {
-            iturPreferences.updateData { currentPreferences ->
-                currentPreferences.copy(user_email = userEmail)
-            }
-        } catch (e: IOException) {
-            Log.e(
-                "IturPreferences",
-                "Failed to update user settings for email",
-                e,
-            )
+        iturPreferences.updateData { currentPreferences ->
+            currentPreferences.copy(user_email = userEmail)
         }
     }
 }
