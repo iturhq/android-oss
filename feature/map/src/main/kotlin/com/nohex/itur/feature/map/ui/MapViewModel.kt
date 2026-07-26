@@ -34,6 +34,7 @@ import com.nohex.itur.core.model.Broadcast
 import com.nohex.itur.core.model.IturActivity
 import com.nohex.itur.core.model.IturActivityStatus
 import com.nohex.itur.core.model.ParticipantLocation
+import com.nohex.itur.feature.map.config.LocationUpdateConfig
 import com.nohex.itur.feature.map.config.MapStyleConfig
 import com.nohex.itur.feature.map.notifications.BroadcastNotifier
 import com.nohex.itur.feature.map.ui.MapUiState.Ongoing
@@ -58,6 +59,7 @@ constructor(
     private val locationClient: LocationClient,
     private val broadcastNotifier: BroadcastNotifier,
     val mapStyleConfig: MapStyleConfig,
+    private val locationUpdateConfig: LocationUpdateConfig,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<MapUiState>(MapUiState.Idle())
     val uiState = _uiState.asStateFlow()
@@ -435,7 +437,7 @@ constructor(
         ) {
             Log.d("MapScreen", "Requesting location updates")
             locationClient.requestUpdates(
-                LocationRequest.Builder(PRIORITY_HIGH_ACCURACY, 2000).build(),
+                LocationRequest.Builder(PRIORITY_HIGH_ACCURACY, locationUpdateConfig.updateIntervalMillis).build(),
                 locationCallback,
                 Looper.getMainLooper(),
             )
