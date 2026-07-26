@@ -45,14 +45,7 @@ internal fun OngoingState(
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
-        // Shared with IdleState.kt's near-identical scaffolding; tracked as AOSS-2A3E.
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.Start,
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
+        FabSideColumn(horizontalAlignment = Alignment.Start, modifier = Modifier.padding(16.dp)) {
             HelpFABs()
             TrackingFABs(
                 onTrackUserRequested = onTrackUserRequested,
@@ -66,13 +59,7 @@ internal fun OngoingState(
             }
         }
         // End FABs
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
+        FabSideColumn(horizontalAlignment = Alignment.End, modifier = Modifier.padding(16.dp)) {
             // User actions not available during an activity.
             // Column left for layout.
             Column { }

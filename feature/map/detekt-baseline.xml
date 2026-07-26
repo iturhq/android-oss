@@ -3,11 +3,9 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>CyclomaticComplexMethod:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MapScreen( modifier: Modifier = Modifier, viewModel: MapViewModel = hiltViewModel(), )</ID>
-    <ID>ForbiddenComment:FABs.kt$/* TODO: Display help overlay */</ID>
-    <ID>ForbiddenComment:IdleState.kt$// TODO: Rearrange and encapsulate FABs.</ID>
-    <ID>ForbiddenComment:OngoingState.kt$// TODO: Rearrange and encapsulate FABs.</ID>
     <ID>FunctionNaming:ErrorState.kt$@Composable fun ErrorState( modifier: Modifier = Modifier, message: String? = null, )</ID>
     <ID>FunctionNaming:ErrorState.kt$@Preview(showBackground = true, showSystemUi = true) @Composable private fun MapErrorPreview()</ID>
+    <ID>FunctionNaming:FABs.kt$@Composable internal fun FabSideColumn( horizontalAlignment: Alignment.Horizontal, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -&gt; Unit, )</ID>
     <ID>FunctionNaming:FABs.kt$@Composable internal fun HelpFABs()</ID>
     <ID>FunctionNaming:FABs.kt$@Composable internal fun TrackingFABs( onTrackUserRequested: () -&gt; Unit, content: @Composable () -&gt; Unit, )</ID>
     <ID>FunctionNaming:FABs.kt$@Composable internal fun UserFABs( onSignInRequested: () -&gt; Unit, onSignOutRequested: () -&gt; Unit, isSignedIn: Boolean, )</ID>

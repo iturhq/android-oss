@@ -52,12 +52,7 @@ fun IdleState(
                 .padding(8.dp),
         )
 
-        // Shared with OngoingState.kt's near-identical scaffolding; tracked as AOSS-2A3E.
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
+        FabSideColumn(horizontalAlignment = Alignment.End) {
             // User actions, top right.
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
