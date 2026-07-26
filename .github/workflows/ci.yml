@@ -83,6 +83,9 @@ jobs:
       - name: Check formatting
         run: ./gradlew -I spotless/spotless.gradle.kts spotlessCheck
 
+      - name: Run static analysis
+        run: ./gradlew detekt
+
       - name: Run unit tests with coverage
         run: ./gradlew :core:auth:createLocalDebugUnitTestCoverageReport :core:data-fake:createDebugUnitTestCoverageReport :feature:map:createDemoDebugUnitTestCoverageReport :core:datastore:createDebugUnitTestCoverageReport
 

@@ -1,0 +1,18 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MaxLineLength:FirebaseActivityRepositoryTest.kt$FirebaseActivityRepositoryTest$every { toObjects(BroadcastDTO::class.java) } returns listOf(BroadcastDTO(id = "b1", message = "hi", sentOn = Date()))</ID>
+    <ID>MaxLineLength:FirebaseActivityRepositoryTest.kt$FirebaseActivityRepositoryTest$fun</ID>
+    <ID>MaxLineLength:FirebaseActivityRepositoryTest.kt$FirebaseActivityRepositoryTest$val querySnapshot = mockk&lt;QuerySnapshot&gt; { every { toObjects(BroadcastDTO::class.java) } returns listOf(incomplete) }</ID>
+    <ID>MaxLineLength:FirebaseActivityRepositoryTest.kt$FirebaseActivityRepositoryTest$val querySnapshot = mockk&lt;QuerySnapshot&gt; { every { toObjects(IturActivityDTO::class.java) } returns listOf(ACTIVITY_DTO) }</ID>
+    <ID>MaxLineLength:FirebaseLocationRepository.kt$FirebaseLocationRepository$override suspend</ID>
+    <ID>MaxLineLength:FirebaseLocationRepositoryTest.kt$FirebaseLocationRepositoryTest$fun</ID>
+    <ID>MaxLineLength:FirebaseLocationRepositoryTest.kt$FirebaseLocationRepositoryTest$val querySnapshot = mockk&lt;QuerySnapshot&gt; { every { toObjects(ParticipantLocationDTO::class.java) } returns emptyList() }</ID>
+    <ID>MaxLineLength:FirebaseLocationRepositoryTest.kt$FirebaseLocationRepositoryTest$val querySnapshot = mockk&lt;QuerySnapshot&gt; { every { toObjects(ParticipantLocationDTO::class.java) } returns listOf(dto) }</ID>
+    <ID>ReturnCount:FirebaseActivityRepository.kt$private fun BroadcastDTO.toDomain(): Broadcast?</ID>
+    <ID>TooGenericExceptionCaught:FirebaseActivityRepository.kt$FirebaseActivityRepository$e: Exception</ID>
+    <ID>TooManyFunctions:FirebaseActivityRepository.kt$FirebaseActivityRepository : ActivityRepository</ID>
+    <ID>UnusedPrivateMember:FirebaseActivityRepository.kt$FirebaseActivityRepository$private suspend fun performDataOperation( activityId: IturActivityId, operationName: String, dataOperation: (DocumentReference) -&gt; Unit, needsRefresh: Boolean = true, ): DataResult&lt;IturActivity&gt;</ID>
+  </CurrentIssues>
+</SmellBaseline>

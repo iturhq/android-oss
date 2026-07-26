@@ -1,0 +1,128 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>FunctionNaming:Background.kt$@Composable fun IturBackground( modifier: Modifier = Modifier, content: @Composable () -&gt; Unit, )</ID>
+    <ID>FunctionNaming:IturButton.kt$@Composable fun IturButton( label: String, modifier: Modifier = Modifier, type: ActionButtonType = ActionButtonType.PRIMARY, onClick: () -&gt; Unit, )</ID>
+    <ID>FunctionNaming:IturButton.kt$@Preview @Composable fun DangerButtonPreview()</ID>
+    <ID>FunctionNaming:IturButton.kt$@Preview @Composable fun SecondaryButtonPreview()</ID>
+    <ID>FunctionNaming:IturButton.kt$@Preview @Composable fun WarningButtonPreview()</ID>
+    <ID>FunctionNaming:IturButton.kt$@Preview(showBackground = true) @Composable fun DefaultButtonPreview()</ID>
+    <ID>FunctionNaming:IturProgressIndicator.kt$@Composable fun IturProgressIndicator( modifier: Modifier = Modifier, label: String? = null, )</ID>
+    <ID>FunctionNaming:IturProgressIndicator.kt$@Preview(showBackground = true) @Composable fun IturProgressIndicatorPreview()</ID>
+    <ID>FunctionNaming:IturProgressIndicator.kt$@Preview(showBackground = true) @Composable fun IturProgressIndicatorWithTextPreview()</ID>
+    <ID>FunctionNaming:Theme.kt$@Composable fun IturTheme( darkTheme: Boolean = isSystemInDarkTheme(), dynamicColor: Boolean = true, content: @Composable() () -&gt; Unit, )</ID>
+    <ID>MagicNumber:Color.kt$0xFF000000</ID>
+    <ID>MagicNumber:Color.kt$0xFF000B20</ID>
+    <ID>MagicNumber:Color.kt$0xFF002551</ID>
+    <ID>MagicNumber:Color.kt$0xFF030B1A</ID>
+    <ID>MagicNumber:Color.kt$0xFF032B5B</ID>
+    <ID>MagicNumber:Color.kt$0xFF06070C</ID>
+    <ID>MagicNumber:Color.kt$0xFF0A305F</ID>
+    <ID>MagicNumber:Color.kt$0xFF0C0E13</ID>
+    <ID>MagicNumber:Color.kt$0xFF0F1116</ID>
+    <ID>MagicNumber:Color.kt$0xFF111318</ID>
+    <ID>MagicNumber:Color.kt$0xFF133665</ID>
+    <ID>MagicNumber:Color.kt$0xFF191C20</ID>
+    <ID>MagicNumber:Color.kt$0xFF1B0500</ID>
+    <ID>MagicNumber:Color.kt$0xFF1B1E22</ID>
+    <ID>MagicNumber:Color.kt$0xFF1D2024</ID>
+    <ID>MagicNumber:Color.kt$0xFF1D2636</ID>
+    <ID>MagicNumber:Color.kt$0xFF220001</ID>
+    <ID>MagicNumber:Color.kt$0xFF232C3D</ID>
+    <ID>MagicNumber:Color.kt$0xFF26282D</ID>
+    <ID>MagicNumber:Color.kt$0xFF274777</ID>
+    <ID>MagicNumber:Color.kt$0xFF282A2F</ID>
+    <ID>MagicNumber:Color.kt$0xFF283141</ID>
+    <ID>MagicNumber:Color.kt$0xFF292C33</ID>
+    <ID>MagicNumber:Color.kt$0xFF294878</ID>
+    <ID>MagicNumber:Color.kt$0xFF2A497A</ID>
+    <ID>MagicNumber:Color.kt$0xFF2E3036</ID>
+    <ID>MagicNumber:Color.kt$0xFF2E3647</ID>
+    <ID>MagicNumber:Color.kt$0xFF313238</ID>
+    <ID>MagicNumber:Color.kt$0xFF33353A</ID>
+    <ID>MagicNumber:Color.kt$0xFF33363E</ID>
+    <ID>MagicNumber:Color.kt$0xFF37393E</ID>
+    <ID>MagicNumber:Color.kt$0xFF393B41</ID>
+    <ID>MagicNumber:Color.kt$0xFF3C3E43</ID>
+    <ID>MagicNumber:Color.kt$0xFF3E4759</ID>
+    <ID>MagicNumber:Color.kt$0xFF41495B</ID>
+    <ID>MagicNumber:Color.kt$0xFF415F91</ID>
+    <ID>MagicNumber:Color.kt$0xFF43444A</ID>
+    <ID>MagicNumber:Color.kt$0xFF44474E</ID>
+    <ID>MagicNumber:Color.kt$0xFF451700</ID>
+    <ID>MagicNumber:Color.kt$0xFF45474C</ID>
+    <ID>MagicNumber:Color.kt$0xFF464951</ID>
+    <ID>MagicNumber:Color.kt$0xFF481313</ID>
+    <ID>MagicNumber:Color.kt$0xFF4E5056</ID>
+    <ID>MagicNumber:Color.kt$0xFF4F1D02</ID>
+    <ID>MagicNumber:Color.kt$0xFF4F525A</ID>
+    <ID>MagicNumber:Color.kt$0xFF506DA0</ID>
+    <ID>MagicNumber:Color.kt$0xFF511918</ID>
+    <ID>MagicNumber:Color.kt$0xFF542104</ID>
+    <ID>MagicNumber:Color.kt$0xFF565F71</ID>
+    <ID>MagicNumber:Color.kt$0xFF571D1C</ID>
+    <ID>MagicNumber:Color.kt$0xFF5B2709</ID>
+    <ID>MagicNumber:Color.kt$0xFF5E2322</ID>
+    <ID>MagicNumber:Color.kt$0xFF646D80</ID>
+    <ID>MagicNumber:Color.kt$0xFF6A6D75</ID>
+    <ID>MagicNumber:Color.kt$0xFF703718</ID>
+    <ID>MagicNumber:Color.kt$0xFF733331</ID>
+    <ID>MagicNumber:Color.kt$0xFF73391A</ID>
+    <ID>MagicNumber:Color.kt$0xFF74777F</ID>
+    <ID>MagicNumber:Color.kt$0xFF7491C7</ID>
+    <ID>MagicNumber:Color.kt$0xFF763533</ID>
+    <ID>MagicNumber:Color.kt$0xFF8891A5</ID>
+    <ID>MagicNumber:Color.kt$0xFF8D4D2D</ID>
+    <ID>MagicNumber:Color.kt$0xFF8E9099</ID>
+    <ID>MagicNumber:Color.kt$0xFF904A47</ID>
+    <ID>MagicNumber:Color.kt$0xFF9F5C3A</ID>
+    <ID>MagicNumber:Color.kt$0xFFA15854</ID>
+    <ID>MagicNumber:Color.kt$0xFFA6C3FC</ID>
+    <ID>MagicNumber:Color.kt$0xFFAAC7FF</ID>
+    <ID>MagicNumber:Color.kt$0xFFAFB2BB</ID>
+    <ID>MagicNumber:Color.kt$0xFFB8B8BF</ID>
+    <ID>MagicNumber:Color.kt$0xFFBAC3D8</ID>
+    <ID>MagicNumber:Color.kt$0xFFBEC6DC</ID>
+    <ID>MagicNumber:Color.kt$0xFFC0C2CC</ID>
+    <ID>MagicNumber:Color.kt$0xFFC4C6D0</ID>
+    <ID>MagicNumber:Color.kt$0xFFC5C6CD</ID>
+    <ID>MagicNumber:Color.kt$0xFFC97E5A</ID>
+    <ID>MagicNumber:Color.kt$0xFFCB7B76</ID>
+    <ID>MagicNumber:Color.kt$0xFFCDDDFF</ID>
+    <ID>MagicNumber:Color.kt$0xFFD1D1D8</ID>
+    <ID>MagicNumber:Color.kt$0xFFD3D4DB</ID>
+    <ID>MagicNumber:Color.kt$0xFFD4DCF2</ID>
+    <ID>MagicNumber:Color.kt$0xFFD6E3FF</ID>
+    <ID>MagicNumber:Color.kt$0xFFD9D9E0</ID>
+    <ID>MagicNumber:Color.kt$0xFFDADCE6</ID>
+    <ID>MagicNumber:Color.kt$0xFFDAE2F9</ID>
+    <ID>MagicNumber:Color.kt$0xFFDCDCE3</ID>
+    <ID>MagicNumber:Color.kt$0xFFE0E2EC</ID>
+    <ID>MagicNumber:Color.kt$0xFFE2E2E9</ID>
+    <ID>MagicNumber:Color.kt$0xFFE7E8EE</ID>
+    <ID>MagicNumber:Color.kt$0xFFEBF0FF</ID>
+    <ID>MagicNumber:Color.kt$0xFFEDEDF4</ID>
+    <ID>MagicNumber:Color.kt$0xFFEEEFF9</ID>
+    <ID>MagicNumber:Color.kt$0xFFF0F0F7</ID>
+    <ID>MagicNumber:Color.kt$0xFFF3F3FA</ID>
+    <ID>MagicNumber:Color.kt$0xFFF9F9FF</ID>
+    <ID>MagicNumber:Color.kt$0xFFFFAEA8</ID>
+    <ID>MagicNumber:Color.kt$0xFFFFB08B</ID>
+    <ID>MagicNumber:Color.kt$0xFFFFB3AE</ID>
+    <ID>MagicNumber:Color.kt$0xFFFFB693</ID>
+    <ID>MagicNumber:Color.kt$0xFFFFD2CE</ID>
+    <ID>MagicNumber:Color.kt$0xFFFFD3C0</ID>
+    <ID>MagicNumber:Color.kt$0xFFFFDAD7</ID>
+    <ID>MagicNumber:Color.kt$0xFFFFDBCC</ID>
+    <ID>MagicNumber:Color.kt$0xFFFFECE5</ID>
+    <ID>MagicNumber:Color.kt$0xFFFFECEA</ID>
+    <ID>MagicNumber:Color.kt$0xFFFFFFFF</ID>
+    <ID>MagicNumber:IturProgressIndicator.kt$.3f</ID>
+    <ID>MagicNumber:IturProgressIndicator.kt$0.4f</ID>
+    <ID>UnusedPrivateProperty:Theme.kt$private val highContrastDarkColorScheme = darkColorScheme( primary = primaryDarkHighContrast, onPrimary = onPrimaryDarkHighContrast, primaryContainer = primaryContainerDarkHighContrast, onPrimaryContainer = onPrimaryContainerDarkHighContrast, secondary = secondaryDarkHighContrast, onSecondary = onSecondaryDarkHighContrast, secondaryContainer = secondaryContainerDarkHighContrast, onSecondaryContainer = onSecondaryContainerDarkHighContrast, tertiary = tertiaryDarkHighContrast, onTertiary = onTertiaryDarkHighContrast, tertiaryContainer = tertiaryContainerDarkHighContrast, onTertiaryContainer = onTertiaryContainerDarkHighContrast, error = errorDarkHighContrast, onError = onErrorDarkHighContrast, errorContainer = errorContainerDarkHighContrast, onErrorContainer = onErrorContainerDarkHighContrast, background = backgroundDarkHighContrast, onBackground = onBackgroundDarkHighContrast, surface = surfaceDarkHighContrast, onSurface = onSurfaceDarkHighContrast, surfaceVariant = surfaceVariantDarkHighContrast, onSurfaceVariant = onSurfaceVariantDarkHighContrast, outline = outlineDarkHighContrast, outlineVariant = outlineVariantDarkHighContrast, scrim = scrimDarkHighContrast, inverseSurface = inverseSurfaceDarkHighContrast, inverseOnSurface = inverseOnSurfaceDarkHighContrast, inversePrimary = inversePrimaryDarkHighContrast, surfaceDim = surfaceDimDarkHighContrast, surfaceBright = surfaceBrightDarkHighContrast, surfaceContainerLowest = surfaceContainerLowestDarkHighContrast, surfaceContainerLow = surfaceContainerLowDarkHighContrast, surfaceContainer = surfaceContainerDarkHighContrast, surfaceContainerHigh = surfaceContainerHighDarkHighContrast, surfaceContainerHighest = surfaceContainerHighestDarkHighContrast, )</ID>
+    <ID>UnusedPrivateProperty:Theme.kt$private val highContrastLightColorScheme = lightColorScheme( primary = primaryLightHighContrast, onPrimary = onPrimaryLightHighContrast, primaryContainer = primaryContainerLightHighContrast, onPrimaryContainer = onPrimaryContainerLightHighContrast, secondary = secondaryLightHighContrast, onSecondary = onSecondaryLightHighContrast, secondaryContainer = secondaryContainerLightHighContrast, onSecondaryContainer = onSecondaryContainerLightHighContrast, tertiary = tertiaryLightHighContrast, onTertiary = onTertiaryLightHighContrast, tertiaryContainer = tertiaryContainerLightHighContrast, onTertiaryContainer = onTertiaryContainerLightHighContrast, error = errorLightHighContrast, onError = onErrorLightHighContrast, errorContainer = errorContainerLightHighContrast, onErrorContainer = onErrorContainerLightHighContrast, background = backgroundLightHighContrast, onBackground = onBackgroundLightHighContrast, surface = surfaceLightHighContrast, onSurface = onSurfaceLightHighContrast, surfaceVariant = surfaceVariantLightHighContrast, onSurfaceVariant = onSurfaceVariantLightHighContrast, outline = outlineLightHighContrast, outlineVariant = outlineVariantLightHighContrast, scrim = scrimLightHighContrast, inverseSurface = inverseSurfaceLightHighContrast, inverseOnSurface = inverseOnSurfaceLightHighContrast, inversePrimary = inversePrimaryLightHighContrast, surfaceDim = surfaceDimLightHighContrast, surfaceBright = surfaceBrightLightHighContrast, surfaceContainerLowest = surfaceContainerLowestLightHighContrast, surfaceContainerLow = surfaceContainerLowLightHighContrast, surfaceContainer = surfaceContainerLightHighContrast, surfaceContainerHigh = surfaceContainerHighLightHighContrast, surfaceContainerHighest = surfaceContainerHighestLightHighContrast, )</ID>
+    <ID>UnusedPrivateProperty:Theme.kt$private val mediumContrastDarkColorScheme = darkColorScheme( primary = primaryDarkMediumContrast, onPrimary = onPrimaryDarkMediumContrast, primaryContainer = primaryContainerDarkMediumContrast, onPrimaryContainer = onPrimaryContainerDarkMediumContrast, secondary = secondaryDarkMediumContrast, onSecondary = onSecondaryDarkMediumContrast, secondaryContainer = secondaryContainerDarkMediumContrast, onSecondaryContainer = onSecondaryContainerDarkMediumContrast, tertiary = tertiaryDarkMediumContrast, onTertiary = onTertiaryDarkMediumContrast, tertiaryContainer = tertiaryContainerDarkMediumContrast, onTertiaryContainer = onTertiaryContainerDarkMediumContrast, error = errorDarkMediumContrast, onError = onErrorDarkMediumContrast, errorContainer = errorContainerDarkMediumContrast, onErrorContainer = onErrorContainerDarkMediumContrast, background = backgroundDarkMediumContrast, onBackground = onBackgroundDarkMediumContrast, surface = surfaceDarkMediumContrast, onSurface = onSurfaceDarkMediumContrast, surfaceVariant = surfaceVariantDarkMediumContrast, onSurfaceVariant = onSurfaceVariantDarkMediumContrast, outline = outlineDarkMediumContrast, outlineVariant = outlineVariantDarkMediumContrast, scrim = scrimDarkMediumContrast, inverseSurface = inverseSurfaceDarkMediumContrast, inverseOnSurface = inverseOnSurfaceDarkMediumContrast, inversePrimary = inversePrimaryDarkMediumContrast, surfaceDim = surfaceDimDarkMediumContrast, surfaceBright = surfaceBrightDarkMediumContrast, surfaceContainerLowest = surfaceContainerLowestDarkMediumContrast, surfaceContainerLow = surfaceContainerLowDarkMediumContrast, surfaceContainer = surfaceContainerDarkMediumContrast, surfaceContainerHigh = surfaceContainerHighDarkMediumContrast, surfaceContainerHighest = surfaceContainerHighestDarkMediumContrast, )</ID>
+    <ID>UnusedPrivateProperty:Theme.kt$private val mediumContrastLightColorScheme = lightColorScheme( primary = primaryLightMediumContrast, onPrimary = onPrimaryLightMediumContrast, primaryContainer = primaryContainerLightMediumContrast, onPrimaryContainer = onPrimaryContainerLightMediumContrast, secondary = secondaryLightMediumContrast, onSecondary = onSecondaryLightMediumContrast, secondaryContainer = secondaryContainerLightMediumContrast, onSecondaryContainer = onSecondaryContainerLightMediumContrast, tertiary = tertiaryLightMediumContrast, onTertiary = onTertiaryLightMediumContrast, tertiaryContainer = tertiaryContainerLightMediumContrast, onTertiaryContainer = onTertiaryContainerLightMediumContrast, error = errorLightMediumContrast, onError = onErrorLightMediumContrast, errorContainer = errorContainerLightMediumContrast, onErrorContainer = onErrorContainerLightMediumContrast, background = backgroundLightMediumContrast, onBackground = onBackgroundLightMediumContrast, surface = surfaceLightMediumContrast, onSurface = onSurfaceLightMediumContrast, surfaceVariant = surfaceVariantLightMediumContrast, onSurfaceVariant = onSurfaceVariantLightMediumContrast, outline = outlineLightMediumContrast, outlineVariant = outlineVariantLightMediumContrast, scrim = scrimLightMediumContrast, inverseSurface = inverseSurfaceLightMediumContrast, inverseOnSurface = inverseOnSurfaceLightMediumContrast, inversePrimary = inversePrimaryLightMediumContrast, surfaceDim = surfaceDimLightMediumContrast, surfaceBright = surfaceBrightLightMediumContrast, surfaceContainerLowest = surfaceContainerLowestLightMediumContrast, surfaceContainerLow = surfaceContainerLowLightMediumContrast, surfaceContainer = surfaceContainerLightMediumContrast, surfaceContainerHigh = surfaceContainerHighLightMediumContrast, surfaceContainerHighest = surfaceContainerHighestLightMediumContrast, )</ID>
+  </CurrentIssues>
+</SmellBaseline>
