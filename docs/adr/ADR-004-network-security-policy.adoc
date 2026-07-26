@@ -1,0 +1,132 @@
+= ADR-004: Network security configuration
+:toc: left
+:toclevels: 2
+:sectnums:
+:sectnumlevels: 2
+:icons: font
+
+
+[cols="1,3"]
+|===
+| Status      | Accepted
+| Date        | 2026-07-26
+| Deciders    | Max Noé
+|===
+
+== Context
+
+The app had no `android:networkSecurityConfig` at all: its certificate and
+trust policy was whatever Android's platform default happens to be for
+`targetSdk 36` (cleartext traffic disallowed, system trust anchors only).
+That default is the right policy, but it was implicit -- nothing in the
+repository recorded that this was a deliberate choice, and nothing would
+have caught a future change (a lowered `targetSdk`, a manifest edit) quietly
+reintroducing cleartext traffic.
+
+Separately, the `local` flavor genuinely needs one narrow exception: its
+Firestore and Auth clients (`core/data`'s `DataModule`, `core/auth`'s
+`FirebaseAuthModule`) call `useEmulator("10.0.2.2", ...)` to reach a
+Firestore/Auth emulator suite over plain HTTP, per each file's
+`EMULATOR_HOST` constant. `10.0.2.2` is the Android emulator's fixed alias
+for the host machine's loopback interface -- it never resolves to a real
+Internet host, on-device or in production.
+
+== Decision
+
+Add an explicit `network_security_config.xml`, referenced from
+`AndroidManifest.xml` via `android:networkSecurityConfig`:
+
+* `app/src/main/res/xml/network_security_config.xml` -- the policy for
+  every flavor by default: `cleartextTrafficPermitted="false"`, system
+  trust anchors only. This is the same behavior the platform default
+  already provided; the change makes it an explicit, versioned,
+  documented artifact instead of an implicit one.
+* `app/src/local/res/xml/network_security_config.xml` -- a `local`-flavor
+  override (standard Android resource-file override by source set, not a
+  manifest merge) that keeps the same base policy but adds one
+  `domain-config` cleartext exception scoped to exactly `10.0.2.2`.
+  `prod` and `demo` get zero exceptions.
+
+== Rationale
+
+. **Explicit over implicit.** A security policy that happens to match the
+  platform default by omission is one accidental manifest or `targetSdk`
+  change away from silently regressing. A committed, reviewable XML file
+  is not.
+. **The `local`-only exception is as narrow as it can be.** Scoped to a
+  single non-routable address that only ever means "this device's own
+  host machine" inside an emulator, with `includeSubdomains="false"`.
+  `prod` builds -- the only ones real users install -- never see it, since
+  Android resource merging selects the flavor-specific file over
+  `src/main`'s for a `local` build and uses `src/main`'s unmodified for
+  `prod`/`demo`.
+. **No certificate pinning.** Considered and rejected here -- see
+  Alternatives.
+
+== Consequences
+
+* Positive: the certificate/trust policy is now a reviewable artifact,
+  not tribal knowledge about what Android happens to default to.
+* Positive: no behavior change for `prod` or `demo` -- both already
+  disallowed cleartext implicitly; this makes that explicit.
+* Neutral: `local` behavior is also unchanged -- the emulator connection
+  already worked (Android's default cleartext policy for a fresh project
+  created before stricter defaults existed, or simply never having been
+  tightened, isn't something this ADR needs to adjudicate); this ADR's
+  value is making that exception visible and scoped, not fixing a break.
+
+== Alternatives considered
+
+=== Certificate pinning for Firebase/MapLibre endpoints
+
+[cols="1,4"]
+|===
+| Criterion | Assessment
+
+| Strengths
+a|
+* Stronger guarantee against a compromised or coerced CA than trusting the
+  system store alone
+
+| Weaknesses
+a|
+* Pins expire and must be rotated in lockstep with the server's actual
+  certificate/key changes, or the app breaks for every user until an app
+  update ships -- real operational burden this project has no process for
+* Both Firebase and MapTiler/MapLibre's tile infrastructure are third-party
+  services outside this project's control; pinning their certificates
+  couples the app's availability to their rotation schedule
+* System-trust-anchor HTTPS is already the substantive protection here;
+  pinning primarily defends against a compromised public CA, a materially
+  narrower threat than what motivated this ADR (an explicit, auditable
+  cleartext policy)
+
+| Verdict
+| Rejected. The operational risk (an expired pin breaking the app for every
+  user until a store update lands) outweighs the incremental protection,
+  for a project with no current release/rotation process built for it.
+|===
+
+=== Leave the policy implicit (no `network_security_config.xml`)
+
+[cols="1,4"]
+|===
+| Criterion | Assessment
+
+| Strengths
+a|
+* Zero new files; the platform default is already the intended policy
+
+| Weaknesses
+a|
+* Not reviewable, not documented, and not resilient to an unrelated future
+  change (e.g. lowering `targetSdk`) quietly loosening it
+* Provides nowhere to put the `local`-only emulator exception except a
+  manifest-wide `usesCleartextTraffic="true"`, which would loosen `prod`
+  too since flavor source sets can't override that manifest attribute as
+  cleanly as they can override a referenced XML resource
+
+| Verdict
+| Rejected. An explicit file costs little and directly enables scoping the
+  `local` exception to `prod`/`demo` never seeing it.
+|===

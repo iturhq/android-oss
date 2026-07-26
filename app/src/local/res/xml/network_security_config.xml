@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Itur © 2025 by Max Noé <code@itur.cat>
+  ~ SPDX-License-Identifier: GPL-3.0-or-later
+  -->
+<network-security-config>
+    <!--
+        `local`-flavor override of src/main/res/xml/network_security_config.xml. Adds one narrow
+        cleartext exception, scoped only to the Android emulator's host-loopback alias, for the
+        Firestore/Auth emulator connections FirebaseAuthModule/DataModule point at in this flavor
+        (see EMULATOR_HOST in both). Everything else stays as restrictive as the base policy.
+    -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>
