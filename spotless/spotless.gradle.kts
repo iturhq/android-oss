@@ -1,6 +1,6 @@
 /*
  * Itur © 2025 by Max Noé <code@itur.cat>
- * SPDX-License-Identifier: AGPL-3.0-or-later
+ * SPDX-License-Identifier: GPL-3.0-or-later
  */
 initscript {
     val spotlessVersion = "7.0.4"
