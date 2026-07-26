@@ -10,6 +10,7 @@ import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.data.repository.FirebaseActivityRepository
 import com.nohex.itur.core.data.repository.FirebaseLocationRepository
 import com.nohex.itur.core.data.repository.LocationRepository
+import com.nohex.itur.core.data.repository.UserRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -34,5 +35,8 @@ object DataModule {
     fun provideActivityRepository(firestore: FirebaseFirestore): ActivityRepository = FirebaseActivityRepository(firestore)
 
     @Provides
-    fun provideLocationRepository(firestore: FirebaseFirestore): LocationRepository = FirebaseLocationRepository(firestore)
+    fun provideLocationRepository(
+        firestore: FirebaseFirestore,
+        userRepository: UserRepository,
+    ): LocationRepository = FirebaseLocationRepository(firestore, userRepository)
 }
