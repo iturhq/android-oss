@@ -184,7 +184,9 @@ fun MapScreen(
         }
     }
     // Request location permissions, if needed.
-    var locationPermissionGranted by remember { mutableStateOf(false) }
+    var locationPermissionGranted by remember {
+        mutableStateOf(locationPermissionCheck(context))
+    }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { isGranted ->
@@ -192,10 +194,8 @@ fun MapScreen(
     }
 
     // Request location permission when entering the map screen.
-    LaunchedEffect(locationPermissionCheck) {
-        if (locationPermissionCheck(context)) {
-            locationPermissionGranted = true
-        } else {
+    LaunchedEffect(Unit) {
+        if (!locationPermissionGranted) {
             locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
     }
