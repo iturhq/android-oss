@@ -55,7 +55,13 @@ class ScenarioUserRepository : UserRepository {
 }
 
 class ScenarioActivityRepository : ActivityRepository {
-    private val activities = TestFixtures.activities.toMutableList()
+    // The anonymous actor starts outside every activity. Join scenarios add them explicitly;
+    // organizer and registered-participant cold-start scenarios retain their fixture membership.
+    private val activities = TestFixtures.activities.map { activity ->
+        activity.copy(
+            participantIds = activity.participantIds - TestFixtures.PARTICIPANT_1_ID,
+        )
+    }.toMutableList()
 
     var createFailure: String? = null
     var addFailure: String? = null
