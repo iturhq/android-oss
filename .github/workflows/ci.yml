@@ -108,6 +108,8 @@ jobs:
 
   map-screen-instrumented-tests:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -143,3 +145,13 @@ jobs:
           target: google_apis
           disable-animations: true
           script: ./gradlew :feature:map:connectedDemoDebugAndroidTest --console=plain
+
+      - name: Mark MapScreen emulator verification
+        if: github.event_name == 'push'
+        run: |
+          short_sha=${GITHUB_SHA:0:7}
+          tag="ui-verified-map-screen-${short_sha}"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git tag -a "$tag" -m "MapScreen instrumented tests passed on a hosted Android emulator"
+          git push origin "$tag"
