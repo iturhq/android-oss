@@ -13,7 +13,7 @@ import dagger.hilt.android.AndroidEntryPoint
  *
  * `feature:map` is a library module with no launcher `Activity` of its own; `MapScreen()` calls
  * `hiltViewModel()` internally, which needs a Hilt-aware `ViewModelStoreOwner`, so
- * `createAndroidComposeRule` needs an `@AndroidEntryPoint` host to attach to.
+ * `createAndroidComposeRule` needs an `@AndroidEntryPoint` host in the debug target APK.
  */
 @AndroidEntryPoint
 class HiltTestActivity : ComponentActivity()
