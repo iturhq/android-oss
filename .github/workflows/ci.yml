@@ -146,7 +146,10 @@ jobs:
           emulator-options: >-
             -no-window -gpu swiftshader_indirect -no-snapshot
             -noaudio -no-boot-anim -camera-back none
-          script: ./gradlew :feature:map:connectedDemoDebugAndroidTest --console=plain
+          script: >-
+            bash -o pipefail -c
+            './gradlew :feature:map:connectedDemoDebugAndroidTest
+            --console=plain --stacktrace 2>&1 | tee emulator-test.log'
 
       - name: Mark MapScreen emulator verification
         if: github.event_name == 'push'
@@ -156,4 +159,20 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git tag -a "$tag" -m "MapScreen instrumented tests passed on a hosted Android emulator"
+          git push origin "$tag"
+
+      - name: Mark MapScreen emulator failure with diagnostics
+        if: failure() && github.event_name == 'push'
+        run: |
+          short_sha=${GITHUB_SHA:0:7}
+          tag="ui-failed-map-screen-${short_sha}"
+          if test -f emulator-test.log; then
+            tail -80 emulator-test.log > emulator-test-tail.log
+          else
+            echo "The emulator action failed before Gradle produced emulator-test.log." \
+              > emulator-test-tail.log
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git tag -a "$tag" -F emulator-test-tail.log
           git push origin "$tag"
