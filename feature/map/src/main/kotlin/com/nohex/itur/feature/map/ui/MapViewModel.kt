@@ -122,7 +122,7 @@ constructor(
     private suspend fun restoreInitialState() {
         try {
             _currentUser.value = userRepository.getCurrentUser()
-            _ongoingActivityId.value = findOrganizedOngoingActivity()?.id
+            _ongoingActivityId.value = findOngoingActivity()?.id
 
             initialRestorePending = false
             _uiState.value = MapUiState.Idle()
@@ -132,11 +132,21 @@ constructor(
         }
     }
 
-    private suspend fun findOrganizedOngoingActivity(): IturActivity? {
+    private suspend fun findOngoingActivity(): IturActivity? {
         val user = _currentUser.value ?: return null
-        return when (
-            val result =
-                activityRepository.getActivities(ActivityFilter.OngoingByOrganizer(user.id))
+        val organized = when (
+            val result = activityRepository.getActivities(
+                ActivityFilter.OngoingByOrganizer(user.id),
+            )
+        ) {
+            is DataResult.Success -> result.data.firstOrNull()
+            is DataResult.Error -> throw BackendInitializationException(result.message)
+            is DataResult.NotFound -> null
+        }
+        return organized ?: when (
+            val result = activityRepository.getActivities(
+                ActivityFilter.OngoingByParticipant(user.id),
+            )
         ) {
             is DataResult.Success -> result.data.firstOrNull()
             is DataResult.Error -> throw BackendInitializationException(result.message)
@@ -415,8 +425,11 @@ constructor(
                     // Set the next state.
                     triggerIdleState("You are no longer participating in an activity")
                 } catch (e: Exception) {
-                    Log.e("MapViewModel", "Failed to leave activity $activityId", e)
-                    reportBackendFailure(e)
+                    val message = "Failed to leave activity $activityId"
+                    Log.e("MapViewModel", message, e)
+                    if (!reportBackendFailure(e)) {
+                        _uiState.value = MapUiState.Error(message)
+                    }
                 }
             }
         }

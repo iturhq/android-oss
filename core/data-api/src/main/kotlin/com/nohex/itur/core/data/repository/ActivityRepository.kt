@@ -81,4 +81,9 @@ sealed class ActivityFilter {
     data class OngoingByOrganizer(
         val organizerId: UserId,
     ) : ActivityFilter()
+
+    // Retrieve ongoing activities containing the user as a participant.
+    data class OngoingByParticipant(
+        val participantId: UserId,
+    ) : ActivityFilter()
 }

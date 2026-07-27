@@ -5,11 +5,7 @@
 
 package com.nohex.itur.feature.map
 
-import com.nohex.itur.core.data.TestFixtures
 import com.nohex.itur.core.data.repository.ActivityRepository
-import com.nohex.itur.core.data.repository.FakeActivityRepository
-import com.nohex.itur.core.data.repository.FakeLocationRepository
-import com.nohex.itur.core.data.repository.FakeUserRepository
 import com.nohex.itur.core.data.repository.LocationRepository
 import com.nohex.itur.core.data.repository.UserRepository
 import dagger.Module
@@ -28,21 +24,31 @@ object TestDataModule {
 
     @Provides
     @Singleton
-    fun provideActivityRepository(): ActivityRepository = FakeActivityRepository(initialActivities = TestFixtures.activities)
+    fun provideScenarioActivityRepository(): ScenarioActivityRepository = ScenarioActivityRepository()
 
     @Provides
     @Singleton
-    fun provideUserRepository(): UserRepository = FakeUserRepository()
+    fun provideActivityRepository(
+        repository: ScenarioActivityRepository,
+    ): ActivityRepository = repository
+
+    @Provides
+    @Singleton
+    fun provideScenarioUserRepository(): ScenarioUserRepository = ScenarioUserRepository()
+
+    @Provides
+    @Singleton
+    fun provideUserRepository(repository: ScenarioUserRepository): UserRepository = repository
+
+    @Provides
+    @Singleton
+    fun provideScenarioLocationRepository(
+        activityRepository: ScenarioActivityRepository,
+    ): ScenarioLocationRepository = ScenarioLocationRepository(activityRepository)
 
     @Provides
     @Singleton
     fun provideLocationRepository(
-        activityRepository: ActivityRepository,
-    ): LocationRepository = FakeLocationRepository(
-        activityRepository = activityRepository,
-        initialLocations = mapOf(
-            TestFixtures.ONGOING_ACTIVITY_ID to TestFixtures.ongoingActivityLocations
-                .associate { it.userId to it.location },
-        ),
-    )
+        repository: ScenarioLocationRepository,
+    ): LocationRepository = repository
 }

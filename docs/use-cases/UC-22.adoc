@@ -1,42 +1,30 @@
-= UC-22: Organiser acknowledges hails
+= UC-22: Pending hails at the organiser boundary
 :icons: font
 
 [cols="1,3"]
 |===
 | ID | UC-22
-| Path type | Positive
+| Path type | Deferred boundary
 | Feature | xref:../features.adoc#_feature_6_hail_organiser[Feature 6 — Hail organiser]
 |===
 
 == Preconditions
 
-* App is in the Ongoing state with the *organiser* role.
-* At least one participant has sent a hail (i.e., `FakeActivityRepository` has a pending attention request).
+* App is in the Ongoing state with the organiser role.
+* The activity has at least one pending `attentionRequests` entry.
 
-== Steps — acknowledge one hail
+== Steps
 
-. Observe the in-app notification indicating that a participant is hailing.
-. Expand the notification to reveal the full list of hailing participants.
-. Tap *Acknowledge* next to one participant.
-. Observe the notification list.
+. Launch or resume the organiser's ongoing activity.
+. Observe the organiser controls.
+. Inspect the fake repository state.
 
-== Expected result — acknowledge one hail
+== Expected result
 
-* The acknowledged participant is removed from the list.
-* If other participants are still hailing, the notification remains with the remaining entries.
-* The acknowledged participant's "Hail organiser" FAB is restored to its default colour on their device (verified via `FakeActivityRepository` state).
-* No crash occurs.
-
-== Steps — acknowledge all hails
-
-. With multiple participants hailing, tap *Acknowledge all* in the notification.
-. Observe the notification.
-
-== Expected result — acknowledge all hails
-
-* The notification list is cleared entirely.
-* All hailing participants' "Hail organiser" FABs are restored to their default colour (verified via `FakeActivityRepository` state).
-* No crash occurs.
+* The organiser Ongoing overlay renders without error.
+* The participant-only *Hail organiser* action is absent.
+* Pending attention state is retained in the repository.
+* *Show QR* and *Stop activity* remain available.
 
 == UI identifiers
 
@@ -44,24 +32,21 @@
 |===
 | Element | Selector | Tool
 
-| Hail in-app notification
-| text contains the hailing participant's name or ID (TBD)
+| "Hail organiser" FAB (absent)
+| `testTag = "hail_organiser_fab"` — assert `doesNotExist()`
 | Espresso / Compose
 
-| Notification expand control
-| `contentDescription = "Show all hails"` or equivalent (TBD)
-| Espresso / Compose
-
-| "Acknowledge" button (per participant)
-| text = `Acknowledge` adjacent to participant entry (TBD)
-| Espresso / Compose
-
-| "Acknowledge all" button
-| text = `Acknowledge all` (TBD)
+| "Show QR" FAB
+| `testTag = "show_qr_fab"`
 | Espresso / Compose
 |===
 
-== Notes
+== Deferred organiser UI
 
-Exact selector values are TBD pending UI implementation.
-The test can verify the `FakeActivityRepository` state directly to confirm that all pending attention requests have been cleared after acknowledgement.
+Per canonical `UC-ACTIVITY-005`, organiser-facing presentation is future
+work: “Organiser-facing UI or `itur-admin` can surface the request when
+implemented.” The older Android draft invented acknowledgement controls
+whose selectors were all still marked TBD and for which the repository
+contract has no acknowledgement command. That proposal is explicitly
+declined in this project; this executable boundary scenario prevents it
+from being mistaken for delivered behavior.

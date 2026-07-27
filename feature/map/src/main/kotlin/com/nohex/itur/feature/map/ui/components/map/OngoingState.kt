@@ -110,7 +110,10 @@ private fun OngoingActivityFABs(
         onClick = onStopRequested,
         modifier = Modifier.testTag("stop_activity_fab"),
     ) {
-        Icon(IturIcons.Stop, contentDescription = "Stop activity")
+        Icon(
+            IturIcons.Stop,
+            contentDescription = if (isOrganizer) "Stop activity" else "Exit activity",
+        )
     }
 }
 

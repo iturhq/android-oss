@@ -24,14 +24,14 @@
 
 == Expected result — retry path
 
-* A dialog appears explaining that the activity could not be resumed, and offering *Retry* and *Exit activity* choices.
-* After tapping *Retry*: another attempt is made to rejoin. If the back-end now succeeds, the Ongoing overlay appears.
+* A dialog appears explaining that the activity could not be resumed, and offering *Try again* and *Cancel* choices.
+* After tapping *Try again*: another attempt is made to rejoin. If the back-end now succeeds, the Ongoing overlay appears.
 
 == Steps — exit path
 
 . Launch the application (back-end consistently returns an error).
 . Observe the error dialog.
-. Tap *Exit activity*.
+. Tap *Cancel*.
 
 == Expected result — exit path
 
@@ -47,15 +47,15 @@
 | Element | Selector | Tool
 
 | Resume-failure dialog
-| text contains `could not be resumed` (exact copy TBD)
+| text = `The ongoing activity could not be resumed.`
 | Espresso / Compose
 
-| Dialog — "Retry" button
-| text = `Retry`
+| Dialog — "Try again" button
+| text = `Try again`
 | Espresso / Compose
 
-| Dialog — "Exit activity" button
-| text = `Exit activity`
+| Dialog — "Cancel" button
+| text = `Cancel`
 | Espresso / Compose
 
 | Idle overlay — "Join an activity" FAB (after exit)

@@ -70,6 +70,12 @@ constructor(
                     .whereEqualTo("organizerId", filter.organizerId.value)
                     .whereEqualTo("status", IturActivityStatus.ONGOING.name)
             }
+
+            is ActivityFilter.OngoingByParticipant -> {
+                activitiesCollection
+                    .whereArrayContains("participantIds", filter.participantId.value)
+                    .whereEqualTo("status", IturActivityStatus.ONGOING.name)
+            }
         }
 
         return try {

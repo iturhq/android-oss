@@ -74,6 +74,15 @@ import org.maplibre.android.maps.MapLibreMap
 fun MapScreen(
     modifier: Modifier = Modifier,
     viewModel: MapViewModel = hiltViewModel(),
+    qrScanSheet: @Composable (
+        onDismissRequest: () -> Unit,
+        onScanSuccess: (String) -> Unit,
+    ) -> Unit = { onDismissRequest, onScanSuccess ->
+        QRScanSheet(
+            onDismissRequest = onDismissRequest,
+            onScanSuccess = onScanSuccess,
+        )
+    },
 ) {
     val context = LocalContext.current
 
@@ -98,14 +107,15 @@ fun MapScreen(
     var showQRDisplaySheet by remember { mutableStateOf(false) }
     var showQRScanSheet by remember { mutableStateOf(false) }
     var showHelpSheet by remember { mutableStateOf(false) }
+    var localMessage by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Show a snackbar when any state carries a user-facing message.
     val displayMessage = when (val state = uiState) {
         is MapUiState.Idle -> state.message
         is MapUiState.Error -> state.message
-        else -> null
-    }
+        else -> localMessage
+    } ?: localMessage
 
     DisposableEffect(lifecycleOwner, viewModel) {
         val observer = LifecycleEventObserver { _, event ->
@@ -149,7 +159,10 @@ fun MapScreen(
         )
     }
     LaunchedEffect(displayMessage) {
-        displayMessage?.let { snackbarHostState.showSnackbar(it) }
+        displayMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            if (localMessage == it) localMessage = null
+        }
     }
     LaunchedEffect(latestBroadcast) {
         latestBroadcast?.let { snackbarHostState.showSnackbar("Alert: ${it.message}") }
@@ -163,6 +176,10 @@ fun MapScreen(
         ActivityResultContracts.RequestPermission(),
     ) { isGranted ->
         cameraPermissionGranted = isGranted
+        if (!isGranted) {
+            showQRScanSheet = false
+            localMessage = "Camera access is required to scan an activity QR code"
+        }
     }
     // Request location permissions, if needed.
     var locationPermissionGranted by remember { mutableStateOf(false) }
@@ -247,15 +264,17 @@ fun MapScreen(
             }
         }
 
-        QRScanSheet(
-            onDismissRequest = { showQRScanSheet = false },
-            onScanSuccess = { code ->
-                IturActivityId.from(code)?.let {
-                    viewModel.joinActivity(activityId = it, context = context)
-                    showQRScanSheet = false
-                }
-            },
-        )
+        if (cameraPermissionGranted) {
+            qrScanSheet(
+                { showQRScanSheet = false },
+                { code ->
+                    IturActivityId.from(code)?.let {
+                        viewModel.joinActivity(activityId = it, context = context)
+                        showQRScanSheet = false
+                    }
+                },
+            )
+        }
     }
 
     if (showHelpSheet) {
@@ -276,77 +295,94 @@ fun MapScreen(
         },
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
-            // Do not show the map in previews.
-            if (LocalInspectionMode.current) {
-                NoMapView()
+            if (!locationPermissionGranted) {
+                LocationPermissionRequired()
             } else {
-                MapLibreView(
-                    styleUrl = viewModel.mapStyleConfig.styleUrl,
-                    isActivityOngoing = ongoingActivityId != null,
-                    organizerId = organizerId,
-                    currentUserId = currentUser?.id,
-                    participantLocations = participantLocations,
-                    modifier = modifier.fillMaxSize(),
-                    onMapReady = { map ->
-                        mapLibreMap = map
-                    },
-                )
-            }
-
-            when (uiState) {
-                is MapUiState.Loading -> IturProgressIndicator(label = "Preparing activity...")
-                is MapUiState.Error,
-                is MapUiState.Idle,
-                is MapUiState.RecoverableError,
-                -> {
-                    IdleState(
-                        onStartRequested = { viewModel.startActivity(context) },
-                        onSignInRequested = { viewModel.signIn(context) },
-                        onSignOutRequested = { viewModel.signOut() },
-                        onQRRequested = { showQRScanSheet = true },
-                        modifier = modifier,
-                        isSignedIn = currentUser is User.RegisteredUser,
+                // Do not show the map in previews.
+                if (LocalInspectionMode.current) {
+                    NoMapView()
+                } else {
+                    MapLibreView(
+                        styleUrl = viewModel.mapStyleConfig.styleUrl,
+                        isActivityOngoing = ongoingActivityId != null,
+                        organizerId = organizerId,
+                        currentUserId = currentUser?.id,
+                        participantLocations = participantLocations,
+                        modifier = modifier.fillMaxSize(),
+                        onMapReady = { map ->
+                            mapLibreMap = map
+                        },
                     )
                 }
 
-                is MapUiState.Ongoing -> {
-                    // Set the current activity.
-                    val ongoingUiState = (uiState as MapUiState.Ongoing)
-                    OngoingState(
-                        activity = ongoingUiState.activity,
-                        organizer = ongoingUiState.organizer,
-                        participantIds = ongoingUiState.participantIds,
-                        locations = ongoingUiState.locations,
-                        onStopRequested = viewModel::leaveActivity,
-                        onQRRequested = { showQRDisplaySheet = true },
-                        onTrackUserRequested = {
-                            Log.d("MapScreen", "Requested zoom on user")
-                            mapLibreMap?.let { map ->
-                                lastLocation?.let {
-                                    zoomOnUser(
-                                        map = map,
-                                        location = it,
+                when (uiState) {
+                    is MapUiState.Loading -> IturProgressIndicator(label = "Preparing activity...")
+                    is MapUiState.Error,
+                    is MapUiState.Idle,
+                    is MapUiState.RecoverableError,
+                    -> {
+                        IdleState(
+                            onStartRequested = { viewModel.startActivity(context) },
+                            onSignInRequested = { viewModel.signIn(context) },
+                            onSignOutRequested = { viewModel.signOut() },
+                            onQRRequested = { showQRScanSheet = true },
+                            modifier = modifier,
+                            isSignedIn = currentUser is User.RegisteredUser,
+                        )
+                    }
+
+                    is MapUiState.Ongoing -> {
+                        // Set the current activity.
+                        val ongoingUiState = (uiState as MapUiState.Ongoing)
+                        OngoingState(
+                            activity = ongoingUiState.activity,
+                            organizer = ongoingUiState.organizer,
+                            participantIds = ongoingUiState.participantIds,
+                            locations = ongoingUiState.locations,
+                            onStopRequested = viewModel::leaveActivity,
+                            onQRRequested = { showQRDisplaySheet = true },
+                            onTrackUserRequested = {
+                                Log.d("MapScreen", "Requested zoom on user")
+                                mapLibreMap?.let { map ->
+                                    lastLocation?.let {
+                                        zoomOnUser(
+                                            map = map,
+                                            location = it,
+                                        )
+                                    }
+                                }
+                            },
+                            onTrackGroupRequested = {
+                                Log.d("MapScreen", "Requested zoom on group")
+                                mapLibreMap?.let {
+                                    zoomOnGroup(
+                                        map = it,
+                                        participantLocations = participantLocations,
+                                        currentLocation = lastLocation,
                                     )
                                 }
-                            }
-                        },
-                        onTrackGroupRequested = {
-                            Log.d("MapScreen", "Requested zoom on group")
-                            mapLibreMap?.let {
-                                zoomOnGroup(
-                                    map = it,
-                                    participantLocations = participantLocations,
-                                    currentLocation = lastLocation,
-                                )
-                            }
-                        },
-                        onAttentionRequest = viewModel::requestAttention,
-                        onHelpRequested = { showHelpSheet = true },
-                        isOrganizer = ongoingUiState.organizer.id == currentUser?.id,
-                    )
+                            },
+                            onAttentionRequest = viewModel::requestAttention,
+                            onHelpRequested = { showHelpSheet = true },
+                            isOrganizer = ongoingUiState.organizer.id == currentUser?.id,
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LocationPermissionRequired() {
+    Box(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "Location permission is required before the map can be shown.",
+            style = MaterialTheme.typography.bodyLarge,
+        )
     }
 }
 

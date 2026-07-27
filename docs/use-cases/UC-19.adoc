@@ -10,33 +10,20 @@
 
 == Preconditions
 
-* App is in the Ongoing state with the *participant* role.
+* App is in the Ongoing state with the participant role.
 
-== Steps — hail and cancel
+== Steps
 
-. Verify *Hail organiser* FAB is visible and in its default (inactive) colour.
-. Tap *Hail organiser* FAB.
-. Observe the FAB colour change.
-. Tap *Hail organiser* FAB again.
-. Observe the FAB colour return to its default state.
+. Verify *Hail organiser* is visible.
+. Tap *Hail organiser* once.
+. Observe the ongoing overlay and repository state.
 
-== Expected result — hail and cancel
+== Expected result
 
-* After step 2: the FAB changes colour to indicate the active hailing state; `requestAttention()` is called exactly once.
-* After step 4: the FAB returns to its default colour; `cancelAttention()` (or equivalent) is called exactly once.
-* App remains in the Ongoing state throughout.
-* No error Toast appears.
-
-== Steps — organiser clears the hail
-
-. Tap *Hail organiser* FAB (FAB turns active colour).
-. Simulate the organiser acknowledging the hail from their end (via `FakeActivityRepository`).
-. Observe the FAB state without any further user interaction.
-
-== Expected result — organiser clears the hail
-
-* The FAB automatically returns to its default colour when the organiser's acknowledgement is received.
-* No user action is required on the participant's side.
+* `requestAttention()` is called exactly once.
+* The participant ID is present exactly once in `attentionRequests`.
+* The app remains in the Ongoing state.
+* No error appears.
 
 == UI identifiers
 
@@ -44,15 +31,15 @@
 |===
 | Element | Selector | Tool
 
-| "Hail organiser" FAB (inactive)
-| `contentDescription = "Hail organiser"`, default background colour
-| Espresso / Compose
-
-| "Hail organiser" FAB (active)
-| `contentDescription = "Hail organiser"`, active/highlighted colour
+| "Hail organiser" FAB
+| `testTag = "hail_organiser_fab"`, `contentDescription = "Hail organiser"`
 | Espresso / Compose
 |===
 
-== Notes
+== Reconciliation
 
-The exact colour tokens for inactive and active states are TBD; the test should assert on `SemanticsProperties` or a `testTag` state modifier rather than on raw colour values.
+The canonical `UC-ACTIVITY-005` contract defines a lightweight,
+idempotent one-shot attention request. It does not define participant-side
+cancellation or acknowledgement state. An older Android draft's toggle and
+colour-change proposal is therefore explicitly declined rather than tested
+as if it existed.

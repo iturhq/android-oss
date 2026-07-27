@@ -23,5 +23,9 @@ object TestLocationModule {
 
     @Provides
     @Singleton
-    fun provideLocationClient(): LocationClient = FakeLocationClient()
+    fun provideFakeLocationClient(): FakeLocationClient = FakeLocationClient()
+
+    @Provides
+    @Singleton
+    fun provideLocationClient(client: FakeLocationClient): LocationClient = client
 }

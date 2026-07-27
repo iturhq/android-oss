@@ -25,8 +25,8 @@
 * Map tiles load and the `MapLibreView` is visible.
 * Idle overlay is displayed.
 * *Join an activity* FAB is visible.
-* *Start an activity* FAB is visible (always shown in the Idle state).
 * *Sign in* FAB is visible (anonymous user).
+* *Start an activity* FAB is not visible until the user signs in.
 * No error message appears.
 
 == UI identifiers
@@ -44,7 +44,7 @@
 | Espresso / Compose
 
 | "Start an activity" FAB
-| text = `Start an activity`
+| text = `Start an activity` — assert `doesNotExist()`
 | Espresso / Compose
 
 | "Sign in" FAB

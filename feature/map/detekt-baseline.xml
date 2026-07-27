@@ -2,7 +2,7 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>CyclomaticComplexMethod:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MapScreen( modifier: Modifier = Modifier, viewModel: MapViewModel = hiltViewModel(), )</ID>
+    <ID>CyclomaticComplexMethod:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MapScreen( modifier: Modifier = Modifier, viewModel: MapViewModel = hiltViewModel(), qrScanSheet: @Composable ( onDismissRequest: () -&gt; Unit, onScanSuccess: (String) -&gt; Unit, ) -&gt; Unit = { onDismissRequest, onScanSuccess -&gt; QRScanSheet( onDismissRequest = onDismissRequest, onScanSuccess = onScanSuccess, ) }, )</ID>
     <ID>FunctionNaming:ErrorState.kt$@Composable fun ErrorState( modifier: Modifier = Modifier, message: String? = null, )</ID>
     <ID>FunctionNaming:ErrorState.kt$@Preview(showBackground = true, showSystemUi = true) @Composable private fun MapErrorPreview()</ID>
     <ID>FunctionNaming:FABs.kt$@Composable internal fun FabSideColumn( horizontalAlignment: Alignment.Horizontal, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -&gt; Unit, )</ID>
@@ -18,8 +18,9 @@
     <ID>FunctionNaming:IdleState.kt$@Composable private fun ActivityFABs( // A (signed-in) user requests the creation of an activity. onStartRequested: () -&gt; Unit, // The QR button was pressed. onQRRequested: () -&gt; Unit, // Whether the user is registered or anonymous. isSignedIn: Boolean, )</ID>
     <ID>FunctionNaming:IdleState.kt$@Preview(showBackground = true) @Composable private fun IdleMapPreview()</ID>
     <ID>FunctionNaming:MapLibreView.kt$@Composable fun MapLibreView( styleUrl: String, isActivityOngoing: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, )</ID>
+    <ID>FunctionNaming:MapScreen.kt$@Composable private fun LocationPermissionRequired()</ID>
     <ID>FunctionNaming:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun BackendUnavailableDialog( failingServiceNames: List&lt;String&gt;, countdown: Int?, onRetryNow: () -&gt; Unit, onExit: () -&gt; Unit, )</ID>
-    <ID>FunctionNaming:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MapScreen( modifier: Modifier = Modifier, viewModel: MapViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MapScreen( modifier: Modifier = Modifier, viewModel: MapViewModel = hiltViewModel(), qrScanSheet: @Composable ( onDismissRequest: () -&gt; Unit, onScanSuccess: (String) -&gt; Unit, ) -&gt; Unit = { onDismissRequest, onScanSuccess -&gt; QRScanSheet( onDismissRequest = onDismissRequest, onScanSuccess = onScanSuccess, ) }, )</ID>
     <ID>FunctionNaming:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ModalAlert(text: String, onDismissRequest: () -&gt; Unit)</ID>
     <ID>FunctionNaming:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun RecoverableErrorDialog(message: String, onRetry: () -&gt; Unit, onCancel: () -&gt; Unit)</ID>
     <ID>FunctionNaming:MapScreen.kt$@Preview(showBackground = true, showSystemUi = true) @Composable fun PreviewModalAlert()</ID>
@@ -33,7 +34,7 @@
     <ID>FunctionNaming:QRScanSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun QRScanSheet( onDismissRequest: () -&gt; Unit, onScanSuccess: (String) -&gt; Unit, )</ID>
     <ID>FunctionNaming:QRScanner.kt$@OptIn(ExperimentalGetImage::class) @Composable fun QRScanner( onScanSuccess: (String) -&gt; Unit, modifier: Modifier = Modifier, )</ID>
     <ID>LongMethod:MapLibreView.kt$@Composable fun MapLibreView( styleUrl: String, isActivityOngoing: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, )</ID>
-    <ID>LongMethod:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MapScreen( modifier: Modifier = Modifier, viewModel: MapViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MapScreen( modifier: Modifier = Modifier, viewModel: MapViewModel = hiltViewModel(), qrScanSheet: @Composable ( onDismissRequest: () -&gt; Unit, onScanSuccess: (String) -&gt; Unit, ) -&gt; Unit = { onDismissRequest, onScanSuccess -&gt; QRScanSheet( onDismissRequest = onDismissRequest, onScanSuccess = onScanSuccess, ) }, )</ID>
     <ID>LongParameterList:IdleState.kt$( onStartRequested: () -&gt; Unit, onSignInRequested: () -&gt; Unit, onSignOutRequested: () -&gt; Unit, onQRRequested: () -&gt; Unit, modifier: Modifier = Modifier, isSignedIn: Boolean, )</ID>
     <ID>LongParameterList:MapLibreView.kt$( styleUrl: String, isActivityOngoing: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, )</ID>
     <ID>LongParameterList:MapViewModel.kt$MapViewModel$( private val activityRepository: ActivityRepository, private val userRepository: UserRepository, private val locationsRepository: LocationRepository, private val locationClient: LocationClient, private val broadcastNotifier: BroadcastNotifier, val mapStyleConfig: MapStyleConfig, private val locationUpdateConfig: LocationUpdateConfig, private val backendHealthChecks: Set&lt;@JvmSuppressWildcards BackendHealthCheck&gt;, )</ID>

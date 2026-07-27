@@ -23,7 +23,7 @@
 == Expected result
 
 * The QR scan sheet does *not* open.
-* A toast informs the user that QR scanning requires camera access.
+* A snackbar informs the user that QR scanning requires camera access.
 * App remains in the Idle state.
 * Tapping *Join an activity* again shows the same toast again.
 * No Ongoing state is entered.
@@ -42,9 +42,9 @@
 | UIAutomator text: `Don't allow` or `Deny`
 | UIAutomator
 
-| Camera-required toast
-| text contains `camera` (exact copy TBD)
-| Espresso Toast matcher
+| Camera-required snackbar
+| text contains `Camera access is required`
+| Espresso / Compose
 
 | QR Scan sheet (absent)
 | text = `Scan an activity QR to join` — assert `doesNotExist()`

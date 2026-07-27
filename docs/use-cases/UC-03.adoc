@@ -15,14 +15,14 @@
 
 == Steps
 
-. Observe the Idle overlay: *Sign in* FAB is visible; *Start an activity* FAB is visible.
+. Observe the Idle overlay: *Sign in* FAB is visible; *Start an activity* is absent.
 . Tap the *Sign in* FAB.
 . Wait for the state transition to complete.
 
 == Expected result
 
-* *Sign in* FAB is replaced by a user info FAB and a sign-out FAB (light orange background).
-* *Start an activity* FAB remains visible (it was already present before sign-in).
+* *Sign in* FAB is replaced by a sign-out FAB (light orange background).
+* *Start an activity* FAB appears after sign-in.
 * *Join an activity* FAB remains visible.
 * No error Toast or error state appears.
 * `currentUser` resolves to a `RegisteredUser`.
@@ -37,15 +37,11 @@
 | `contentDescription = "Sign in"`, text = `Sign in`
 | Espresso / Compose
 
-| User info FAB (appears after)
-| `contentDescription = "User info"` (TBC)
-| Espresso / Compose
-
 | Sign-out FAB (appears after)
 | `contentDescription = "Sign out"`, text = `Sign out`
 | Espresso / Compose
 
-| "Start an activity" FAB (still visible)
+| "Start an activity" FAB (appears after)
 | text = `Start an activity`
 | Espresso / Compose
 |===

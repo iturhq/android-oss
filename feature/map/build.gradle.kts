@@ -108,6 +108,7 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.ui.test.junit4)
     androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.androidx.test.uiautomator)
     androidTestImplementation(libs.hilt.android.testing)
     "androidTestDemoImplementation"(projects.core.dataFake)
     kspAndroidTest(libs.hilt.compiler)

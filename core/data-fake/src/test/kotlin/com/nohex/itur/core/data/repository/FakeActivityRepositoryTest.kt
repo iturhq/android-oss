@@ -86,6 +86,18 @@ class FakeActivityRepositoryTest {
         assertEquals(listOf(ACTIVITY), result.data)
     }
 
+    @Test
+    fun `GIVEN mixed activities WHEN filtering ongoing by participant THEN returns their ongoing activity`() = runBlocking {
+        val finished = ACTIVITY.copy(
+            id = OTHER_ID,
+            status = IturActivityStatus.FINISHED,
+        )
+        val result = repository(ACTIVITY, finished)
+            .getActivities(ActivityFilter.OngoingByParticipant(PARTICIPANT_ID))
+        assertIs<DataResult.Success<List<IturActivity>>>(result)
+        assertEquals(listOf(ACTIVITY), result.data)
+    }
+
     // --- createActivity ---
 
     @Test
