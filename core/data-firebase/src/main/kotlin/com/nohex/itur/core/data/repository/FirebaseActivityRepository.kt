@@ -259,7 +259,7 @@ constructor(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to fetch broadcasts for activity ${activityId.value}", e)
-            emptyList()
+            throw e
         }
     }
 }

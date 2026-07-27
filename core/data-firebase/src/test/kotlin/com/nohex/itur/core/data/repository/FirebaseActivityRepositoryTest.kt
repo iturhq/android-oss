@@ -424,7 +424,7 @@ class FirebaseActivityRepositoryTest {
     }
 
     @Test
-    fun `GIVEN Firestore throws WHEN getting broadcasts THEN returns an empty list rather than propagating`() = runBlocking {
+    fun `GIVEN Firestore throws WHEN getting broadcasts THEN propagates for availability reporting`() = runBlocking {
         val docRef = mockk<DocumentReference>()
         every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
         val broadcasts = mockk<CollectionReference>()
@@ -433,8 +433,9 @@ class FirebaseActivityRepositoryTest {
         every { broadcasts.orderBy("sentOn") } returns ordered
         every { ordered.get() } returns failedTask(RuntimeException("offline"))
 
-        val result = repository.getBroadcastsSince(ACTIVITY_ID, since = null)
-
-        assertTrue(result.isEmpty())
+        val exception = assertFailsWith<RuntimeException> {
+            repository.getBroadcastsSince(ACTIVITY_ID, since = null)
+        }
+        assertEquals("offline", exception.message)
     }
 }

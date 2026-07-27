@@ -33,6 +33,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -48,6 +49,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.model.User
 import com.nohex.itur.core.ui.components.IturProgressIndicator
@@ -74,6 +78,8 @@ fun MapScreen(
     val context = LocalContext.current
 
     val uiState by viewModel.uiState.collectAsState()
+    val backendAvailability by viewModel.backendAvailability.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
     // The current user.
     val currentUser by viewModel.currentUser.collectAsState()
     // The identifier of the activity displayed on the map, when there is one.
@@ -101,13 +107,35 @@ fun MapScreen(
         else -> null
     }
 
-    // Show a blocking dialog when the backend cannot be reached on start-up.
-    if (uiState is MapUiState.BackendUnavailable) {
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> viewModel.startBackendMonitoring()
+                Lifecycle.Event.ON_STOP -> viewModel.stopBackendMonitoring()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            viewModel.startBackendMonitoring()
+        }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.stopBackendMonitoring()
+        }
+    }
+
+    // Availability is independent of the map state, so the operation underneath is preserved.
+    if (backendAvailability.failingServices.isNotEmpty()) {
         val activity = LocalContext.current as Activity
         BackendUnavailableDialog(
-            countdown = (uiState as MapUiState.BackendUnavailable).countdown,
+            failingServiceNames = backendAvailability.failingServices.map { it.displayName },
+            countdown = backendAvailability.retryCountdown,
             onRetryNow = viewModel::retryNow,
-            onExit = { activity.finish() },
+            onExit = {
+                viewModel.stopBackendMonitoring()
+                activity.finish()
+            },
         )
     }
 
@@ -267,7 +295,6 @@ fun MapScreen(
 
             when (uiState) {
                 is MapUiState.Loading -> IturProgressIndicator(label = "Preparing activity...")
-                is MapUiState.BackendUnavailable -> IturProgressIndicator(label = "Connecting…")
                 is MapUiState.Error,
                 is MapUiState.Idle,
                 is MapUiState.RecoverableError,
@@ -324,13 +351,13 @@ fun MapScreen(
 }
 
 /**
- * A non-dismissible dialog shown when the backend cannot be reached on start-up.
- * It counts down to an automatic retry and lets the user retry immediately or exit.
+ * A non-dismissible overlay shown whenever one or more required services are unavailable.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BackendUnavailableDialog(
-    countdown: Int,
+    failingServiceNames: List<String>,
+    countdown: Int?,
     onRetryNow: () -> Unit,
     onExit: () -> Unit,
 ) {
@@ -345,14 +372,14 @@ fun BackendUnavailableDialog(
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
                 Text(
-                    text = "Server unavailable",
+                    text = "Service unavailable",
                     style = MaterialTheme.typography.headlineSmall,
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(text = "The server could not be reached. Check that the network is available and the backend is running.")
+                Text(text = "Failed connection to ${failingServiceNames.joinToString()}.")
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Retrying in ${countdown}s\u2026",
+                    text = countdown?.let { "Retrying in ${it}s\u2026" } ?: "Checking\u2026",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
