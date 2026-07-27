@@ -14,6 +14,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.rule.GrantPermissionRule
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
@@ -34,6 +35,12 @@ class CameraPermissionUseCaseTest {
     val hiltRule = HiltAndroidRule(this)
 
     @get:Rule(order = 1)
+    val locationPermissionRule: GrantPermissionRule = GrantPermissionRule.grant(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+    )
+
+    @get:Rule(order = 2)
     val composeRule = createAndroidComposeRule<HiltTestActivity>()
 
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -42,14 +49,6 @@ class CameraPermissionUseCaseTest {
     @Before
     fun setUp() {
         hiltRule.inject()
-        val packageName = instrumentation.targetContext.packageName
-        instrumentation.uiAutomation.grantRuntimePermission(
-            packageName,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-        )
-        instrumentation.uiAutomation.executeShellCommand(
-            "pm revoke $packageName ${Manifest.permission.CAMERA}",
-        ).close()
         instrumentation.runOnMainSync {
             MapLibre.getInstance(
                 ApplicationProvider.getApplicationContext<Context>(),

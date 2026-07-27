@@ -50,14 +50,14 @@ class CanonicalUseCasesTest {
     val hiltRule = HiltAndroidRule(this)
 
     @get:Rule(order = 1)
-    val composeRule = createAndroidComposeRule<HiltTestActivity>()
-
-    @get:Rule(order = 2)
     val permissionRule: GrantPermissionRule = GrantPermissionRule.grant(
         Manifest.permission.ACCESS_FINE_LOCATION,
         Manifest.permission.ACCESS_COARSE_LOCATION,
         Manifest.permission.CAMERA,
     )
+
+    @get:Rule(order = 2)
+    val composeRule = createAndroidComposeRule<HiltTestActivity>()
 
     @Inject
     lateinit var users: ScenarioUserRepository

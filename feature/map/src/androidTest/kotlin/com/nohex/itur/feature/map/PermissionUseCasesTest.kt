@@ -5,7 +5,6 @@
 
 package com.nohex.itur.feature.map
 
-import android.Manifest
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -46,10 +45,6 @@ class PermissionUseCasesTest {
     @Before
     fun setUp() {
         hiltRule.inject()
-        instrumentation.uiAutomation.executeShellCommand(
-            "pm revoke ${instrumentation.targetContext.packageName} " +
-                Manifest.permission.ACCESS_FINE_LOCATION,
-        ).close()
         instrumentation.runOnMainSync {
             MapLibre.getInstance(
                 ApplicationProvider.getApplicationContext<Context>(),

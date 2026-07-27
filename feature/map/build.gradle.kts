@@ -22,6 +22,7 @@ android {
         minSdk = 24
         multiDexEnabled = true
         testInstrumentationRunner = "com.nohex.itur.feature.map.HiltTestRunner"
+        testInstrumentationRunnerArguments["clearPackageData"] = "true"
     }
 
     buildTypes {
@@ -31,6 +32,7 @@ android {
     }
 
     testOptions {
+        execution = "ANDROIDX_TEST_ORCHESTRATOR"
         unitTests {
             isReturnDefaultValues = true
         }
@@ -110,6 +112,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(libs.androidx.test.uiautomator)
     androidTestImplementation(libs.hilt.android.testing)
+    androidTestUtil(libs.androidx.test.orchestrator)
     "androidTestDemoImplementation"(projects.core.dataFake)
     kspAndroidTest(libs.hilt.compiler)
     debugImplementation(libs.androidx.ui.test.manifest)
