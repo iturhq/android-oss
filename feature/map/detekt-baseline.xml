@@ -18,7 +18,7 @@
     <ID>FunctionNaming:IdleState.kt$@Composable private fun ActivityFABs( // A (signed-in) user requests the creation of an activity. onStartRequested: () -&gt; Unit, // The QR button was pressed. onQRRequested: () -&gt; Unit, // Whether the user is registered or anonymous. isSignedIn: Boolean, )</ID>
     <ID>FunctionNaming:IdleState.kt$@Preview(showBackground = true) @Composable private fun IdleMapPreview()</ID>
     <ID>FunctionNaming:MapLibreView.kt$@Composable fun MapLibreView( styleUrl: String, isActivityOngoing: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, )</ID>
-    <ID>FunctionNaming:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun BackendUnavailableDialog( countdown: Int, onRetryNow: () -&gt; Unit, onExit: () -&gt; Unit, )</ID>
+    <ID>FunctionNaming:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun BackendUnavailableDialog( failingServiceNames: List&lt;String&gt;, countdown: Int?, onRetryNow: () -&gt; Unit, onExit: () -&gt; Unit, )</ID>
     <ID>FunctionNaming:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MapScreen( modifier: Modifier = Modifier, viewModel: MapViewModel = hiltViewModel(), )</ID>
     <ID>FunctionNaming:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ModalAlert(text: String, onDismissRequest: () -&gt; Unit)</ID>
     <ID>FunctionNaming:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun RecoverableErrorDialog(message: String, onRetry: () -&gt; Unit, onCancel: () -&gt; Unit)</ID>
@@ -36,7 +36,7 @@
     <ID>LongMethod:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MapScreen( modifier: Modifier = Modifier, viewModel: MapViewModel = hiltViewModel(), )</ID>
     <ID>LongParameterList:IdleState.kt$( onStartRequested: () -&gt; Unit, onSignInRequested: () -&gt; Unit, onSignOutRequested: () -&gt; Unit, onQRRequested: () -&gt; Unit, modifier: Modifier = Modifier, isSignedIn: Boolean, )</ID>
     <ID>LongParameterList:MapLibreView.kt$( styleUrl: String, isActivityOngoing: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, )</ID>
-    <ID>LongParameterList:MapViewModel.kt$MapViewModel$( private val activityRepository: ActivityRepository, private val userRepository: UserRepository, private val locationsRepository: LocationRepository, private val locationClient: LocationClient, private val broadcastNotifier: BroadcastNotifier, val mapStyleConfig: MapStyleConfig, private val locationUpdateConfig: LocationUpdateConfig, )</ID>
+    <ID>LongParameterList:MapViewModel.kt$MapViewModel$( private val activityRepository: ActivityRepository, private val userRepository: UserRepository, private val locationsRepository: LocationRepository, private val locationClient: LocationClient, private val broadcastNotifier: BroadcastNotifier, val mapStyleConfig: MapStyleConfig, private val locationUpdateConfig: LocationUpdateConfig, private val backendHealthChecks: Set&lt;@JvmSuppressWildcards BackendHealthCheck&gt;, )</ID>
     <ID>LongParameterList:OngoingState.kt$( activity: IturActivity, organizer: User, participantIds: List&lt;UserId&gt;, locations: List&lt;ParticipantLocation&gt;, isOrganizer: Boolean, onStopRequested: () -&gt; Unit, onQRRequested: () -&gt; Unit, onTrackUserRequested: () -&gt; Unit, onTrackGroupRequested: () -&gt; Unit, onAttentionRequest: () -&gt; Unit, onHelpRequested: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
     <ID>MagicNumber:ErrorState.kt$.3f</ID>
     <ID>MagicNumber:ErrorState.kt$.6f</ID>
@@ -51,12 +51,10 @@
     <ID>MagicNumber:MapViewModel.kt$MapViewModel$1_000L</ID>
     <ID>MagicNumber:NoMapView.kt$.3f</ID>
     <ID>MatchingDeclarationName:MapNavigation.kt$MapRoute</ID>
-    <ID>MaxLineLength:MapScreen.kt$Text(text = "The server could not be reached. Check that the network is available and the backend is running.")</ID>
     <ID>MaxLineLength:QRImageTest.kt$QRImageTest$fun</ID>
     <ID>ReturnCount:QRImage.kt$internal fun String.isValidQrUrl(): Boolean</ID>
     <ID>TooGenericExceptionCaught:MapUtils.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:MapViewModel.kt$MapViewModel$e: Exception</ID>
-    <ID>TooGenericExceptionThrown:MapViewModel.kt$MapViewModel$throw Exception(result.message)</ID>
     <ID>TooManyFunctions:MapViewModel.kt$MapViewModel : ViewModel</ID>
     <ID>UnusedParameter:OngoingState.kt$activity: IturActivity</ID>
     <ID>UnusedParameter:OngoingState.kt$locations: List&lt;ParticipantLocation&gt;</ID>

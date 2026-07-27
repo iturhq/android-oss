@@ -6,6 +6,8 @@
 package com.nohex.itur.core.data.di
 
 import com.google.firebase.firestore.FirebaseFirestore
+import com.nohex.itur.core.data.health.BackendHealthCheck
+import com.nohex.itur.core.data.health.FirestoreBackendHealthCheck
 import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.data.repository.FirebaseActivityRepository
 import com.nohex.itur.core.data.repository.FirebaseLocationRepository
@@ -15,6 +17,7 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import dagger.multibindings.IntoSet
 import javax.inject.Singleton
 
 @Module
@@ -30,6 +33,12 @@ object DataModule {
     fun provideFirestore(): FirebaseFirestore = FirebaseFirestore.getInstance().also {
         it.useEmulator(EMULATOR_HOST, FIRESTORE_EMULATOR_PORT)
     }
+
+    @Provides
+    @IntoSet
+    fun provideFirestoreHealthCheck(
+        healthCheck: FirestoreBackendHealthCheck,
+    ): BackendHealthCheck = healthCheck
 
     @Provides
     fun provideActivityRepository(firestore: FirebaseFirestore): ActivityRepository = FirebaseActivityRepository(firestore)
