@@ -18,11 +18,11 @@ import com.nohex.itur.core.ui.theme.IturTheme
 import com.nohex.itur.feature.map.ui.MapScreen
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
-import org.maplibre.android.MapLibre
-import org.maplibre.android.WellKnownTileServer
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.maplibre.android.MapLibre
+import org.maplibre.android.WellKnownTileServer
 
 /**
  * Instrumented tests for [MapScreen], exercising it through the demo flavor's real Hilt graph
