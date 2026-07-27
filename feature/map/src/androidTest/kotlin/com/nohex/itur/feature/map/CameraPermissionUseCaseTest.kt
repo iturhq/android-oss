@@ -58,7 +58,7 @@ class CameraPermissionUseCaseTest {
         }
         composeRule.setContent {
             IturTheme {
-                MapScreen()
+                MapScreen(locationPermissionCheck = { true })
             }
         }
     }

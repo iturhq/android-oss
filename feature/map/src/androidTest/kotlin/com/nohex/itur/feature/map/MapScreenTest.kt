@@ -65,7 +65,7 @@ class MapScreenTest {
         }
         composeRule.setContent {
             IturTheme {
-                MapScreen()
+                MapScreen(locationPermissionCheck = { true })
             }
         }
     }

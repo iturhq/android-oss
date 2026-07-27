@@ -7,6 +7,7 @@ package com.nohex.itur.feature.map.ui
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
@@ -74,6 +75,7 @@ import org.maplibre.android.maps.MapLibreMap
 fun MapScreen(
     modifier: Modifier = Modifier,
     viewModel: MapViewModel = hiltViewModel(),
+    locationPermissionCheck: (Context) -> Boolean = ::hasFineLocationPermission,
     qrScanSheet: @Composable (
         onDismissRequest: () -> Unit,
         onScanSuccess: (String) -> Unit,
@@ -190,13 +192,8 @@ fun MapScreen(
     }
 
     // Request location permission when entering the map screen.
-    LaunchedEffect(Unit) {
-        val hasLocationPermission = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (hasLocationPermission) {
+    LaunchedEffect(locationPermissionCheck) {
+        if (locationPermissionCheck(context)) {
             locationPermissionGranted = true
         } else {
             locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -372,6 +369,11 @@ fun MapScreen(
         }
     }
 }
+
+private fun hasFineLocationPermission(context: Context): Boolean = ContextCompat.checkSelfPermission(
+    context,
+    Manifest.permission.ACCESS_FINE_LOCATION,
+) == PackageManager.PERMISSION_GRANTED
 
 @Composable
 private fun LocationPermissionRequired() {

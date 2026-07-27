@@ -87,6 +87,7 @@ class CanonicalUseCasesTest {
         composeRule.setContent {
             IturTheme {
                 MapScreen(
+                    locationPermissionCheck = { true },
                     qrScanSheet = { _, onScanSuccess ->
                         Column {
                             Text("Scan an activity QR to join")
