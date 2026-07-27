@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
 import com.nohex.itur.core.ui.theme.IturTheme
 import com.nohex.itur.feature.map.ui.MapScreen
@@ -55,11 +56,13 @@ class MapScreenTest {
         hiltRule.inject()
         // Instrumented library tests run under HiltTestApplication rather than IturApplication,
         // so repeat the production process-level MapLibre initialization before creating MapView.
-        MapLibre.getInstance(
-            ApplicationProvider.getApplicationContext<Context>(),
-            "",
-            WellKnownTileServer.MapLibre,
-        )
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            MapLibre.getInstance(
+                ApplicationProvider.getApplicationContext<Context>(),
+                "",
+                WellKnownTileServer.MapLibre,
+            )
+        }
         composeRule.setContent {
             IturTheme {
                 MapScreen()
