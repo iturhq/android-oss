@@ -19,6 +19,8 @@ android {
     compileSdk = 36
 
     defaultConfig {
+        minSdk = 24
+        multiDexEnabled = true
         testInstrumentationRunner = "com.nohex.itur.feature.map.HiltTestRunner"
     }
 
@@ -105,7 +107,9 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(libs.hilt.android.testing)
+    "androidTestDemoImplementation"(projects.core.dataFake)
     kspAndroidTest(libs.hilt.compiler)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
