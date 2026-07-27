@@ -167,7 +167,17 @@ jobs:
           short_sha=${GITHUB_SHA:0:7}
           tag="ui-failed-map-screen-${short_sha}"
           if test -f emulator-test.log; then
-            tail -80 emulator-test.log > emulator-test-tail.log
+            {
+              echo "=== Gradle failure summary ==="
+              grep -E \
+                'FAILURE:|What went wrong|Execution failed for task|Caused by:|> .*failed|BUILD FAILED' \
+                emulator-test.log || true
+              echo "=== Android test result XML ==="
+              find feature/map/build/outputs/androidTest-results \
+                -type f -name '*.xml' -print -exec tail -160 {} \; 2>/dev/null || true
+              echo "=== Final Gradle output ==="
+              tail -120 emulator-test.log
+            } > emulator-test-tail.log
           else
             echo "The emulator action failed before Gradle produced emulator-test.log." \
               > emulator-test-tail.log
