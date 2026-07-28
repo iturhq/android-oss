@@ -44,6 +44,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -204,6 +205,13 @@ constructor(
                     try {
                         withTimeout(BACKEND_PROBE_TIMEOUT_MILLIS) { check.probe() }
                         null
+                    } catch (e: TimeoutCancellationException) {
+                        Log.w(
+                            "MapViewModel",
+                            "Backend probe timed out for ${check.service.id}",
+                            e,
+                        )
+                        check.service
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
