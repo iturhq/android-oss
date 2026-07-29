@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -104,12 +105,19 @@ class CanonicalUseCasesTest {
                 )
             }
         }
-        waitForTag("join_activity_fab")
+        // A cold start can restore straight into an ongoing activity (as its organizer or as
+        // a participant) instead of idle, so wait for whichever of those first-frame states
+        // the restore actually lands on rather than assuming idle.
+        waitForAnyTag("join_activity_fab", "show_qr_fab", "hail_organiser_fab")
     }
 
     private fun waitForTag(tag: String) {
+        waitForAnyTag(tag)
+    }
+
+    private fun waitForAnyTag(vararg tags: String) {
         composeRule.waitUntil(timeoutMillis = 10_000) {
-            composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+            tags.any { tag -> composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() }
         }
     }
 
@@ -226,7 +234,11 @@ class CanonicalUseCasesTest {
         composeRule.onNodeWithTag("join_activity_fab").performClick()
         composeRule.onNodeWithTag("emit_qr_scan").performClick()
 
-        composeRule.onNodeWithText("Activity ${missing.value} not found").assertIsDisplayed()
+        val notFoundMessage = "Activity ${missing.value} not found"
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithText(notFoundMessage).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText(notFoundMessage).assertIsDisplayed()
         composeRule.onNodeWithTag("hail_organiser_fab").assertDoesNotExist()
     }
 

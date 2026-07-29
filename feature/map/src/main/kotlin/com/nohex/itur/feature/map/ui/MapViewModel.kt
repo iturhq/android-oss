@@ -363,20 +363,24 @@ constructor(
             val previousState = _uiState.value
             _uiState.value = MapUiState.Loading
             try {
-                currentUser.value?.let {
-                    // Join the activity.
-                    val result = activityRepository.addParticipant(activityId, it.id)
-                    // Change the UI state.
-                    when (result) {
-                        is DataResult.Success -> triggerOngoingState(result.data, context)
-                        is DataResult.Error -> {
-                            requestHealthCheck()
-                            _uiState.value = MapUiState.Error(result.message)
-                        }
-                        is DataResult.NotFound ->
-                            _uiState.value =
-                                MapUiState.Error("Activity ${result.id} not found")
+                // The initial restore (see restoreInitialState) may still be in flight when a
+                // scanned QR code is acted on, so currentUser.value can still be null here.
+                // Resolve it directly instead of silently dropping the join.
+                val user = currentUser.value ?: userRepository.getCurrentUser().also {
+                    _currentUser.value = it
+                }
+                // Join the activity.
+                val result = activityRepository.addParticipant(activityId, user.id)
+                // Change the UI state.
+                when (result) {
+                    is DataResult.Success -> triggerOngoingState(result.data, context)
+                    is DataResult.Error -> {
+                        requestHealthCheck()
+                        _uiState.value = MapUiState.Error(result.message)
                     }
+                    is DataResult.NotFound ->
+                        _uiState.value =
+                            MapUiState.Error("Activity ${result.id} not found")
                 }
             } catch (e: Exception) {
                 val message = "Failed to join activity $activityId"

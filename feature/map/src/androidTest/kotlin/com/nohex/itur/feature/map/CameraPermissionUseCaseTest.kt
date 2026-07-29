@@ -27,6 +27,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.maplibre.android.MapLibre
 import org.maplibre.android.WellKnownTileServer
+import java.util.regex.Pattern
 
 @HiltAndroidTest
 class CameraPermissionUseCaseTest {
@@ -66,7 +67,14 @@ class CameraPermissionUseCaseTest {
     @Test
     fun uc10_deniedCameraPermissionKeepsIdleState() {
         composeRule.onNodeWithTag("join_activity_fab").performClick()
-        val deny = device.wait(Until.findObject(By.textContains("Deny")), 5_000)
+        // Prefer the dialog's resource ID, the same reliable strategy already used for the
+        // location permission dialog in PermissionUseCasesTest -- matching on visible text alone
+        // is brittle across API levels and locales.
+        val denyControl = By.res(
+            Pattern.compile(".*:id/permission_deny_button"),
+        )
+        val deny = device.wait(Until.findObject(denyControl), 5_000)
+            ?: device.wait(Until.findObject(By.textContains("Deny")), 2_000)
             ?: device.wait(Until.findObject(By.textContains("Don't allow")), 2_000)
         checkNotNull(deny) { "Android camera permission dialog did not expose a deny action" }
             .click()
