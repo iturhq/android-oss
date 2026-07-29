@@ -8,10 +8,8 @@ package com.nohex.itur.feature.map
 import android.Manifest
 import android.content.Context
 import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.Button
 import androidx.compose.material3.Text
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -45,6 +43,8 @@ import javax.inject.Inject
  */
 @HiltAndroidTest
 class CanonicalUseCasesTest {
+    private var injectedScanCode: String? = null
+    private var scanCallback: ((String) -> Unit)? = null
 
     @get:Rule(order = 0)
     val hiltRule = HiltAndroidRule(this)
@@ -83,28 +83,30 @@ class CanonicalUseCasesTest {
         }
     }
 
-    private fun launch(scanCode: String? = null) {
+    private fun launch(
+        scanCode: String? = null,
+        initialTag: String = "join_activity_fab",
+    ) {
+        injectedScanCode = scanCode
         composeRule.setContent {
             IturTheme {
                 MapScreen(
                     locationPermissionCheck = { true },
                     qrScanSheet = { _, onScanSuccess ->
+                        SideEffect {
+                            scanCallback = onScanSuccess
+                        }
                         Column {
                             Text("Scan an activity QR to join")
-                            scanCode?.let { code ->
-                                Button(
-                                    onClick = { onScanSuccess(code) },
-                                    modifier = Modifier.testTag("emit_qr_scan"),
-                                ) {
-                                    Text("Emit test scan")
-                                }
-                            }
                         }
                     },
                 )
             }
         }
-        waitForTag("join_activity_fab")
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            activities.initialLookupComplete.get()
+        }
+        waitForTag(initialTag)
     }
 
     private fun waitForTag(tag: String) {
@@ -126,9 +128,19 @@ class CanonicalUseCasesTest {
 
     private fun joinAsParticipant() {
         composeRule.onNodeWithTag("join_activity_fab").performClick()
-        waitForTag("emit_qr_scan")
-        composeRule.onNodeWithTag("emit_qr_scan").performClick()
+        composeRule.onNodeWithText("Scan an activity QR to join").assertIsDisplayed()
+        emitScan()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            users.anonymous.id in
+                activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)?.participantIds.orEmpty()
+        }
         waitForTag("hail_organiser_fab")
+    }
+
+    private fun emitScan() {
+        composeRule.runOnIdle {
+            checkNotNull(scanCallback).invoke(requireNotNull(injectedScanCode))
+        }
     }
 
     @Test
@@ -212,7 +224,8 @@ class CanonicalUseCasesTest {
         launch("https://example.invalid/not-an-itur-activity")
 
         composeRule.onNodeWithTag("join_activity_fab").performClick()
-        composeRule.onNodeWithTag("emit_qr_scan").performClick()
+        composeRule.onNodeWithText("Scan an activity QR to join").assertIsDisplayed()
+        emitScan()
 
         composeRule.onNodeWithText("Scan an activity QR to join").assertIsDisplayed()
         composeRule.onNodeWithTag("stop_activity_fab").assertDoesNotExist()
@@ -224,7 +237,8 @@ class CanonicalUseCasesTest {
         launch(missing.url)
 
         composeRule.onNodeWithTag("join_activity_fab").performClick()
-        composeRule.onNodeWithTag("emit_qr_scan").performClick()
+        composeRule.onNodeWithText("Scan an activity QR to join").assertIsDisplayed()
+        emitScan()
 
         composeRule.onNodeWithText("Activity ${missing.value} not found").assertIsDisplayed()
         composeRule.onNodeWithTag("hail_organiser_fab").assertDoesNotExist()
@@ -326,9 +340,7 @@ class CanonicalUseCasesTest {
     @Test
     fun uc20_organizerActivityAutoResumesOnColdStart() {
         users.current = users.registered
-        launch()
-
-        waitForTag("show_qr_fab")
+        launch(initialTag = "show_qr_fab")
         composeRule.onNodeWithTag("stop_activity_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("hail_organiser_fab").assertDoesNotExist()
     }
@@ -336,9 +348,7 @@ class CanonicalUseCasesTest {
     @Test
     fun uc20_participantActivityAutoResumesOnColdStart() {
         users.current = users.participant
-        launch()
-
-        waitForTag("hail_organiser_fab")
+        launch(initialTag = "hail_organiser_fab")
         composeRule.onNodeWithContentDescription("Exit activity").assertIsDisplayed()
         composeRule.onNodeWithTag("show_qr_fab").assertDoesNotExist()
     }
@@ -364,9 +374,7 @@ class CanonicalUseCasesTest {
                 ),
             ),
         )
-        launch()
-
-        waitForTag("show_qr_fab")
+        launch(initialTag = "show_qr_fab")
         composeRule.onNodeWithTag("hail_organiser_fab").assertDoesNotExist()
         assertEquals(
             listOf(TestFixtures.PARTICIPANT_1_ID),

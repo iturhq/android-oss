@@ -76,6 +76,7 @@ fun MapScreen(
     modifier: Modifier = Modifier,
     viewModel: MapViewModel = hiltViewModel(),
     locationPermissionCheck: (Context) -> Boolean = ::hasFineLocationPermission,
+    cameraPermissionRequest: (((Boolean) -> Unit) -> Unit)? = null,
     qrScanSheet: @Composable (
         onDismissRequest: () -> Unit,
         onScanSuccess: (String) -> Unit,
@@ -174,15 +175,17 @@ fun MapScreen(
 
     // Request camera permission, if needed.
     var cameraPermissionGranted by remember { mutableStateOf(false) }
-    val cameraPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { isGranted ->
+    val onCameraPermissionResult: (Boolean) -> Unit = { isGranted ->
         cameraPermissionGranted = isGranted
         if (!isGranted) {
             showQRScanSheet = false
             localMessage = "Camera access is required to scan an activity QR code"
         }
     }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+        onResult = onCameraPermissionResult,
+    )
     // Request location permissions, if needed.
     var locationPermissionGranted by remember {
         mutableStateOf(locationPermissionCheck(context))
@@ -257,7 +260,10 @@ fun MapScreen(
             if (hasCameraPermission) {
                 cameraPermissionGranted = true
             } else {
-                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                // API 29 test hosts return camera denial without displaying a dialog, so tests
+                // inject that system result while UC-01/02 cover real permission-dialog wiring.
+                cameraPermissionRequest?.invoke(onCameraPermissionResult)
+                    ?: cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
             }
         }
 

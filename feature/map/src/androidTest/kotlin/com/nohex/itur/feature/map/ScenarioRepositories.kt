@@ -21,6 +21,7 @@ import com.nohex.itur.core.model.IturActivityStatus
 import com.nohex.itur.core.model.Location
 import com.nohex.itur.core.model.ParticipantLocation
 import java.util.Date
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 class ScenarioUserRepository : UserRepository {
@@ -68,6 +69,7 @@ class ScenarioActivityRepository : ActivityRepository {
     var removeFailure: Throwable? = null
     var updateFailure: Throwable? = null
     var getActivityFailuresRemaining = 0
+    val initialLookupComplete = AtomicBoolean()
     val attentionRequestCount = AtomicInteger()
 
     fun replaceActivities(replacement: List<IturActivity>) {
@@ -86,13 +88,13 @@ class ScenarioActivityRepository : ActivityRepository {
                 activities.filter {
                     it.organizerId == filter.organizerId &&
                         it.status == IturActivityStatus.ONGOING
-                }
+                }.also { initialLookupComplete.set(true) }
 
             is ActivityFilter.OngoingByParticipant ->
                 activities.filter {
                     filter.participantId in it.participantIds &&
                         it.status == IturActivityStatus.ONGOING
-                }
+                }.also { initialLookupComplete.set(true) }
         },
     )
 
