@@ -15,9 +15,6 @@ import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
-import androidx.test.uiautomator.By
-import androidx.test.uiautomator.UiDevice
-import androidx.test.uiautomator.Until
 import com.nohex.itur.core.ui.theme.IturTheme
 import com.nohex.itur.feature.map.ui.MapScreen
 import dagger.hilt.android.testing.HiltAndroidRule
@@ -44,7 +41,6 @@ class CameraPermissionUseCaseTest {
     val composeRule = createAndroidComposeRule<HiltTestActivity>()
 
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
-    private val device = UiDevice.getInstance(instrumentation)
 
     @Before
     fun setUp() {
@@ -58,7 +54,10 @@ class CameraPermissionUseCaseTest {
         }
         composeRule.setContent {
             IturTheme {
-                MapScreen(locationPermissionCheck = { true })
+                MapScreen(
+                    locationPermissionCheck = { true },
+                    cameraPermissionRequest = { onResult -> onResult(false) },
+                )
             }
         }
     }
@@ -66,11 +65,6 @@ class CameraPermissionUseCaseTest {
     @Test
     fun uc10_deniedCameraPermissionKeepsIdleState() {
         composeRule.onNodeWithTag("join_activity_fab").performClick()
-        val deny = device.wait(Until.findObject(By.textContains("Deny")), 5_000)
-            ?: device.wait(Until.findObject(By.textContains("Don't allow")), 2_000)
-        checkNotNull(deny) { "Android camera permission dialog did not expose a deny action" }
-            .click()
-        device.waitForIdle()
 
         composeRule.onNodeWithText(
             "Camera access is required",
