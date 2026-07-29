@@ -47,6 +47,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.test.fail
 
 // An activity where the organiser is a user that is NOT in FakeUserRepository's registered user
@@ -404,6 +405,53 @@ class MapViewModelTest {
             vm.backendAvailability.value,
         )
         vm.stopBackendMonitoring()
+    }
+
+    @Test
+    fun `GIVEN a service probe times out THEN availability names it as failed`() = runTest {
+        val hangingService = object : BackendHealthCheck {
+            override val service = BackendService("hanging", "Hanging service")
+
+            override suspend fun probe() {
+                kotlinx.coroutines.awaitCancellation()
+            }
+        }
+        val vm = viewModel(healthChecks = setOf(hangingService))
+
+        vm.startBackendMonitoring()
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(5_001L)
+        runCurrent()
+
+        assertEquals(
+            listOf(hangingService.service),
+            vm.backendAvailability.value.failingServices,
+        )
+        vm.stopBackendMonitoring()
+    }
+
+    @Test
+    fun `GIVEN an in-flight probe WHEN monitoring stops THEN genuine cancellation propagates`() = runTest {
+        var cancellationObserved = false
+        val hangingService = object : BackendHealthCheck {
+            override val service = BackendService("hanging", "Hanging service")
+
+            override suspend fun probe() {
+                try {
+                    kotlinx.coroutines.awaitCancellation()
+                } finally {
+                    cancellationObserved = true
+                }
+            }
+        }
+        val vm = viewModel(healthChecks = setOf(hangingService))
+        vm.startBackendMonitoring()
+        runCurrent()
+
+        vm.stopBackendMonitoring()
+        runCurrent()
+
+        assertTrue(cancellationObserved)
+        assertEquals(BackendAvailabilityUiState(), vm.backendAvailability.value)
     }
 
     @Test
