@@ -43,6 +43,7 @@ internal fun OngoingState(
     onTrackGroupRequested: () -> Unit,
     onAttentionRequest: () -> Unit,
     onHelpRequested: () -> Unit,
+    selfLocationAvailable: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -50,6 +51,7 @@ internal fun OngoingState(
             HelpFABs(onHelpRequested = onHelpRequested)
             TrackingFABs(
                 onTrackUserRequested = onTrackUserRequested,
+                selfLocationAvailable = selfLocationAvailable,
             ) {
                 FloatingActionButton(
                     onClick = onTrackGroupRequested,
@@ -136,5 +138,6 @@ private fun OrganizerOngoingStatePreview() {
         onTrackGroupRequested = {},
         onAttentionRequest = {},
         onHelpRequested = {},
+        selfLocationAvailable = true,
     )
 }

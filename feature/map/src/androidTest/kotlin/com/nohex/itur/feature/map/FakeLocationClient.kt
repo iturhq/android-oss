@@ -11,6 +11,7 @@ import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.nohex.itur.core.location.LocationClient
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * A controllable [LocationClient] for instrumented tests.
@@ -21,16 +22,20 @@ import com.nohex.itur.core.location.LocationClient
 class FakeLocationClient : LocationClient {
 
     private var activeCallback: LocationCallback? = null
+    val requestCount = AtomicInteger()
+    val removeCount = AtomicInteger()
 
     override fun requestUpdates(
         request: LocationRequest,
         callback: LocationCallback,
         looper: Looper,
     ) {
+        requestCount.incrementAndGet()
         activeCallback = callback
     }
 
     override fun removeUpdates(callback: LocationCallback) {
+        removeCount.incrementAndGet()
         if (activeCallback === callback) activeCallback = null
     }
 

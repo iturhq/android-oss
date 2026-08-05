@@ -21,9 +21,13 @@
 
 == Expected result
 
-* The map is *not* shown.
-* A guidance screen (or in-overlay message) is displayed, instructing the user to grant the location permission before the app can proceed.
-* No Idle overlay with FABs appears.
+* The persistent map and Idle controls remain visible.
+* A compact notice explains that self-location sharing is off and offers *Enable location*.
+* Starting or joining an activity remains possible; group markers and *Track group* remain
+  available when the app enters Ongoing state.
+* Self-location updates do not start and *Recenter* is absent while permission is denied.
+* Granting permission from the notice enables self-location and *Recenter* without replacing the
+  native map view or recreating the application shell.
 * No crash occurs.
 * No location data is written to Firestore.
 
@@ -37,13 +41,17 @@
 | UIAutomator text: `Don't allow` or `Deny`
 | UIAutomator
 
-| Location-required guidance message
-| text = `Location permission is required before the map can be shown.`
-| Espresso / Compose
+| Location notice
+| `testTag = "location_permission_notice"`, text starts `Location access is off`
+| Compose
 
-| Map / Idle overlay (absent)
-| `Join an activity` — assert `doesNotExist()`
-| Espresso / Compose
+| Persistent map surface
+| `testTag = "persistent_map_surface"`
+| Compose
+
+| Group/self controls
+| `zoom_group_fab` exists; `recenter_fab` does not exist until permission is granted
+| Compose
 |===
 
 == Notes

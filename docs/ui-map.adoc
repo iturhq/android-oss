@@ -18,7 +18,7 @@ The overlay composable rendered on top changes with `MapUiState`.
 | UI Element | Identifier / Content Description | Always Present
 
 | MapLibre map view (`AndroidView`)
-| —
+| Compose: `persistent_map_surface`; native view: `itur-persistent-map-native-view`
 | ✓
 
 | Organizer marker layer
@@ -30,9 +30,19 @@ The overlay composable rendered on top changes with `MapUiState`.
 | ✓ (invisible when idle)
 
 | Loading progress indicator
-| Text: `Preparing activity…`
+| Text: `Preparing activity…`; `map_state_loading`
 | Only during `Loading` state
 |===
+
+The stable state tags are `map_state_loading`, `map_state_idle`, `map_state_ongoing`,
+`map_state_error`, and `map_state_recoverable_error`. Backend and resume-failure dialogs use
+`backend_unavailable_overlay` and `recoverable_error_overlay`. These hooks let tests assert that
+state presentation changes while `persistent_map_surface` remains mounted.
+
+When fine-location permission is denied, `location_permission_notice` is layered below the top
+action row. The basemap, participant markers, and group controls remain available. Only the
+location component and controls that require the device's own fix, such as `recenter_fab`, are
+disabled until permission is granted.
 
 === State: idle
 
@@ -88,6 +98,10 @@ Shown for `MapUiState.Idle` and `MapUiState.Error` (error message displayed via 
 | "Track group" FAB (left column, top)
 | `Track group`
 | Always
+
+| "Recenter" FAB
+| `Recenter`
+| Fine-location permission granted
 
 | "Recenter" FAB (left column, below Track group)
 | `Recenter`

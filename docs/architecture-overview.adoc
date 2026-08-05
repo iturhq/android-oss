@@ -21,6 +21,10 @@ The app follows MVVM{zwsp}footnote:[https://en.wikipedia.org/wiki/Model%E2%80%93
 |===
 
 The `MapScreen` is a **state machine**: all UI changes are driven by `MapUiState`.
+`MapLibreView` is mounted outside that state switch, so loading, idle, ongoing, recoverable-error,
+and backend-unavailable presentations are overlays on one persistent map surface. Fine-location
+permission gates only the native location component and self-location controls; it does not gate
+the basemap or group markers.
 
 [mermaid, map-ui-state, png]
 ....

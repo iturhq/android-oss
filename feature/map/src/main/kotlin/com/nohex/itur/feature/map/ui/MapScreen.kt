@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -76,6 +77,7 @@ fun MapScreen(
     modifier: Modifier = Modifier,
     viewModel: MapViewModel = hiltViewModel(),
     locationPermissionCheck: (Context) -> Boolean = ::hasFineLocationPermission,
+    locationPermissionRequest: (((Boolean) -> Unit) -> Unit)? = null,
     cameraPermissionRequest: (((Boolean) -> Unit) -> Unit)? = null,
     qrScanSheet: @Composable (
         onDismissRequest: () -> Unit,
@@ -111,6 +113,9 @@ fun MapScreen(
     var showQRScanSheet by remember { mutableStateOf(false) }
     var showHelpSheet by remember { mutableStateOf(false) }
     var localMessage by remember { mutableStateOf<String?>(null) }
+    var locationPermissionGranted by remember {
+        mutableStateOf(locationPermissionCheck(context))
+    }
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Show a snackbar when any state carries a user-facing message.
@@ -124,6 +129,13 @@ fun MapScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> viewModel.startBackendMonitoring()
+                Lifecycle.Event.ON_RESUME -> {
+                    val granted = locationPermissionCheck(context)
+                    if (granted != locationPermissionGranted) {
+                        locationPermissionGranted = granted
+                        viewModel.onLocationPermissionChanged(granted, context)
+                    }
+                }
                 Lifecycle.Event.ON_STOP -> viewModel.stopBackendMonitoring()
                 else -> Unit
             }
@@ -187,19 +199,24 @@ fun MapScreen(
         onResult = onCameraPermissionResult,
     )
     // Request location permissions, if needed.
-    var locationPermissionGranted by remember {
-        mutableStateOf(locationPermissionCheck(context))
-    }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { isGranted ->
         locationPermissionGranted = isGranted
+        viewModel.onLocationPermissionChanged(isGranted, context)
+    }
+
+    val requestLocationPermission = {
+        locationPermissionRequest?.invoke { isGranted ->
+            locationPermissionGranted = isGranted
+            viewModel.onLocationPermissionChanged(isGranted, context)
+        } ?: locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
     }
 
     // Request location permission when entering the map screen.
     LaunchedEffect(Unit) {
         if (!locationPermissionGranted) {
-            locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            requestLocationPermission()
         }
     }
 
@@ -297,80 +314,109 @@ fun MapScreen(
             }
         },
     ) { paddingValues ->
-        Box(modifier = Modifier.padding(paddingValues)) {
-            if (!locationPermissionGranted) {
-                LocationPermissionRequired()
+        Box(
+            modifier = Modifier
+                .padding(paddingValues)
+                .fillMaxSize()
+                .testTag("map_screen"),
+        ) {
+            // The map is the persistent application surface. Permission controls only
+            // self-location; it never removes the basemap or other participants' markers.
+            if (LocalInspectionMode.current) {
+                NoMapView(modifier = modifier.testTag("persistent_map_surface"))
             } else {
-                // Do not show the map in previews.
-                if (LocalInspectionMode.current) {
-                    NoMapView()
-                } else {
-                    MapLibreView(
-                        styleUrl = viewModel.mapStyleConfig.styleUrl,
-                        isActivityOngoing = ongoingActivityId != null,
-                        organizerId = organizerId,
-                        currentUserId = currentUser?.id,
-                        participantLocations = participantLocations,
-                        modifier = modifier.fillMaxSize(),
-                        onMapReady = { map ->
-                            mapLibreMap = map
-                        },
-                    )
-                }
+                MapLibreView(
+                    styleUrl = viewModel.mapStyleConfig.styleUrl,
+                    isActivityOngoing = ongoingActivityId != null,
+                    locationPermissionGranted = locationPermissionGranted,
+                    organizerId = organizerId,
+                    currentUserId = currentUser?.id,
+                    participantLocations = participantLocations,
+                    modifier = modifier
+                        .fillMaxSize()
+                        .testTag("persistent_map_surface"),
+                    onMapReady = { map ->
+                        mapLibreMap = map
+                    },
+                )
+            }
 
-                when (uiState) {
-                    is MapUiState.Loading -> IturProgressIndicator(label = "Preparing activity...")
-                    is MapUiState.Error,
-                    is MapUiState.Idle,
-                    is MapUiState.RecoverableError,
-                    -> {
-                        IdleState(
-                            onStartRequested = { viewModel.startActivity(context) },
-                            onSignInRequested = { viewModel.signIn(context) },
-                            onSignOutRequested = { viewModel.signOut() },
-                            onQRRequested = { showQRScanSheet = true },
-                            modifier = modifier,
-                            isSignedIn = currentUser is User.RegisteredUser,
-                        )
-                    }
+            when (uiState) {
+                is MapUiState.Loading -> IturProgressIndicator(
+                    label = "Preparing activity...",
+                    modifier = modifier.testTag("map_state_loading"),
+                )
+                is MapUiState.Error -> IdleState(
+                    onStartRequested = { viewModel.startActivity(context) },
+                    onSignInRequested = { viewModel.signIn(context) },
+                    onSignOutRequested = { viewModel.signOut() },
+                    onQRRequested = { showQRScanSheet = true },
+                    modifier = modifier.testTag("map_state_error"),
+                    isSignedIn = currentUser is User.RegisteredUser,
+                )
+                is MapUiState.Idle -> IdleState(
+                    onStartRequested = { viewModel.startActivity(context) },
+                    onSignInRequested = { viewModel.signIn(context) },
+                    onSignOutRequested = { viewModel.signOut() },
+                    onQRRequested = { showQRScanSheet = true },
+                    modifier = modifier.testTag("map_state_idle"),
+                    isSignedIn = currentUser is User.RegisteredUser,
+                )
+                is MapUiState.RecoverableError -> IdleState(
+                    onStartRequested = { viewModel.startActivity(context) },
+                    onSignInRequested = { viewModel.signIn(context) },
+                    onSignOutRequested = { viewModel.signOut() },
+                    onQRRequested = { showQRScanSheet = true },
+                    modifier = modifier.testTag("map_state_recoverable_error"),
+                    isSignedIn = currentUser is User.RegisteredUser,
+                )
 
-                    is MapUiState.Ongoing -> {
-                        // Set the current activity.
-                        val ongoingUiState = (uiState as MapUiState.Ongoing)
-                        OngoingState(
-                            activity = ongoingUiState.activity,
-                            organizer = ongoingUiState.organizer,
-                            participantIds = ongoingUiState.participantIds,
-                            locations = ongoingUiState.locations,
-                            onStopRequested = viewModel::leaveActivity,
-                            onQRRequested = { showQRDisplaySheet = true },
-                            onTrackUserRequested = {
-                                Log.d("MapScreen", "Requested zoom on user")
-                                mapLibreMap?.let { map ->
-                                    lastLocation?.let {
-                                        zoomOnUser(
-                                            map = map,
-                                            location = it,
-                                        )
-                                    }
-                                }
-                            },
-                            onTrackGroupRequested = {
-                                Log.d("MapScreen", "Requested zoom on group")
-                                mapLibreMap?.let {
-                                    zoomOnGroup(
-                                        map = it,
-                                        participantLocations = participantLocations,
-                                        currentLocation = lastLocation,
+                is MapUiState.Ongoing -> {
+                    val ongoingUiState = (uiState as MapUiState.Ongoing)
+                    OngoingState(
+                        activity = ongoingUiState.activity,
+                        organizer = ongoingUiState.organizer,
+                        participantIds = ongoingUiState.participantIds,
+                        locations = ongoingUiState.locations,
+                        onStopRequested = viewModel::leaveActivity,
+                        onQRRequested = { showQRDisplaySheet = true },
+                        onTrackUserRequested = {
+                            Log.d("MapScreen", "Requested zoom on user")
+                            mapLibreMap?.let { map ->
+                                lastLocation?.let {
+                                    zoomOnUser(
+                                        map = map,
+                                        location = it,
                                     )
                                 }
-                            },
-                            onAttentionRequest = viewModel::requestAttention,
-                            onHelpRequested = { showHelpSheet = true },
-                            isOrganizer = ongoingUiState.organizer.id == currentUser?.id,
-                        )
-                    }
+                            }
+                        },
+                        onTrackGroupRequested = {
+                            Log.d("MapScreen", "Requested zoom on group")
+                            mapLibreMap?.let {
+                                zoomOnGroup(
+                                    map = it,
+                                    participantLocations = participantLocations,
+                                    currentLocation = lastLocation,
+                                )
+                            }
+                        },
+                        onAttentionRequest = viewModel::requestAttention,
+                        onHelpRequested = { showHelpSheet = true },
+                        isOrganizer = ongoingUiState.organizer.id == currentUser?.id,
+                        selfLocationAvailable = locationPermissionGranted,
+                        modifier = modifier.testTag("map_state_ongoing"),
+                    )
                 }
+            }
+
+            if (!locationPermissionGranted) {
+                LocationPermissionNotice(
+                    onRequestPermission = requestLocationPermission,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 72.dp),
+                )
             }
         }
     }
@@ -382,15 +428,30 @@ private fun hasFineLocationPermission(context: Context): Boolean = ContextCompat
 ) == PackageManager.PERMISSION_GRANTED
 
 @Composable
-private fun LocationPermissionRequired() {
-    Box(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
-        contentAlignment = Alignment.Center,
+private fun LocationPermissionNotice(
+    onRequestPermission: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier
+            .padding(16.dp)
+            .testTag("location_permission_notice"),
+        shape = MaterialTheme.shapes.medium,
+        tonalElevation = 4.dp,
     ) {
-        Text(
-            text = "Location permission is required before the map can be shown.",
-            style = MaterialTheme.typography.bodyLarge,
-        )
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Location access is off. The map and group locations remain " +
+                    "available, but your location is not shared.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            TextButton(
+                onClick = onRequestPermission,
+                modifier = Modifier.align(Alignment.End),
+            ) {
+                Text("Enable location")
+            }
+        }
     }
 }
 
@@ -410,7 +471,8 @@ fun BackendUnavailableDialog(
         Surface(
             modifier = Modifier
                 .wrapContentWidth()
-                .wrapContentHeight(),
+                .wrapContentHeight()
+                .testTag("backend_unavailable_overlay"),
             shape = MaterialTheme.shapes.large,
             tonalElevation = AlertDialogDefaults.TonalElevation,
         ) {
@@ -473,7 +535,8 @@ fun RecoverableErrorDialog(message: String, onRetry: () -> Unit, onCancel: () ->
         Surface(
             modifier = Modifier
                 .wrapContentWidth()
-                .wrapContentHeight(),
+                .wrapContentHeight()
+                .testTag("recoverable_error_overlay"),
             shape = MaterialTheme.shapes.large,
             tonalElevation = AlertDialogDefaults.TonalElevation,
         ) {

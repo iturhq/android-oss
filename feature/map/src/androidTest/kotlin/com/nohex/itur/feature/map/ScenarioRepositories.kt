@@ -12,6 +12,8 @@ import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.data.repository.DataResult
 import com.nohex.itur.core.data.repository.LocationRepository
 import com.nohex.itur.core.data.repository.UserRepository
+import com.nohex.itur.core.data.health.BackendHealthCheck
+import com.nohex.itur.core.data.health.BackendService
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.domain.model.User
@@ -23,6 +25,18 @@ import com.nohex.itur.core.model.ParticipantLocation
 import java.util.Date
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CompletableDeferred
+
+class ScenarioBackendHealthCheck : BackendHealthCheck {
+    override val service = BackendService("scenario-backend", "Scenario backend")
+    var failure: Throwable? = null
+
+    override suspend fun probe() {
+        failure?.let { throw it }
+    }
+
+    override fun recognizes(cause: Throwable): Boolean = cause === failure
+}
 
 class ScenarioUserRepository : UserRepository {
     val anonymous = User.AnonymousUser(TestFixtures.PARTICIPANT_1_ID)
@@ -65,6 +79,7 @@ class ScenarioActivityRepository : ActivityRepository {
     }.toMutableList()
 
     var createFailure: String? = null
+    var createGate: CompletableDeferred<Unit>? = null
     var addFailure: String? = null
     var removeFailure: Throwable? = null
     var updateFailure: Throwable? = null
@@ -108,6 +123,7 @@ class ScenarioActivityRepository : ActivityRepository {
     }
 
     override suspend fun createActivity(organizerId: UserId): DataResult<IturActivity> {
+        createGate?.await()
         createFailure?.let { return DataResult.Error(it) }
         val activity = IturActivity(
             id = IturActivityId("createdActivity00001"),

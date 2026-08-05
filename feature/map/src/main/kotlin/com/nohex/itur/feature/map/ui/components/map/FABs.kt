@@ -79,6 +79,7 @@ internal fun UserFABs(
 @Composable
 internal fun TrackingFABs(
     onTrackUserRequested: () -> Unit,
+    selfLocationAvailable: Boolean,
     content: @Composable () -> Unit,
 ) {
     Column(
@@ -86,11 +87,13 @@ internal fun TrackingFABs(
     ) {
         content()
 
-        FloatingActionButton(
-            onClick = onTrackUserRequested,
-            modifier = Modifier.testTag("recenter_fab"),
-        ) {
-            Icon(IturIcons.ZoomSelf, contentDescription = "Recenter")
+        if (selfLocationAvailable) {
+            FloatingActionButton(
+                onClick = onTrackUserRequested,
+                modifier = Modifier.testTag("recenter_fab"),
+            ) {
+                Icon(IturIcons.ZoomSelf, contentDescription = "Recenter")
+            }
         }
     }
 }

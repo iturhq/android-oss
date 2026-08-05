@@ -103,6 +103,7 @@ constructor(
     private var backendCadenceJob: Job? = null
     private var backendMonitoringActive = false
     private var initialRestorePending = true
+    private var locationUpdatesActive = false
 
     // The most recent operator broadcast (UC-ACTIVITY-007), for an in-app banner alongside
     // the system notification posted by [broadcastNotifier]. Polling itself is driven by the UI
@@ -612,7 +613,8 @@ constructor(
         if (ActivityCompat.checkSelfPermission(
                 context,
                 Manifest.permission.ACCESS_FINE_LOCATION,
-            ) == PackageManager.PERMISSION_GRANTED
+            ) == PackageManager.PERMISSION_GRANTED &&
+            !locationUpdatesActive
         ) {
             Log.d("MapScreen", "Requesting location updates")
             locationClient.requestUpdates(
@@ -620,6 +622,7 @@ constructor(
                 locationCallback,
                 Looper.getMainLooper(),
             )
+            locationUpdatesActive = true
             Log.d("MapScreen", "Location updates requested successfully")
         } else {
             Log.d("MapScreen", "No location permission...")
@@ -631,6 +634,16 @@ constructor(
      */
     private fun stopLocationUpdates() {
         locationClient.removeUpdates(locationCallback)
+        locationUpdatesActive = false
+    }
+
+    /** Applies a runtime permission change without recreating the map or activity shell. */
+    fun onLocationPermissionChanged(granted: Boolean, context: Context) {
+        if (granted && _ongoingActivityId.value != null) {
+            startLocationUpdates(context)
+        } else if (!granted) {
+            stopLocationUpdates()
+        }
     }
 }
 

@@ -36,6 +36,7 @@ import org.junit.Test
 import org.maplibre.android.MapLibre
 import org.maplibre.android.WellKnownTileServer
 import javax.inject.Inject
+import kotlinx.coroutines.CompletableDeferred
 
 /**
  * Executable scenarios for UC-03 through UC-24. Permission-dialog scenarios UC-01/02 live in
@@ -107,6 +108,7 @@ class CanonicalUseCasesTest {
             activities.initialLookupComplete.get()
         }
         waitForTag(initialTag)
+        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
     }
 
     private fun waitForTag(tag: String) {
@@ -206,6 +208,8 @@ class CanonicalUseCasesTest {
         composeRule.onNodeWithTag("start_activity_fab").performClick()
 
         composeRule.onNodeWithText("Activity creation failed").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_state_error").assertIsDisplayed()
+        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
         composeRule.onNodeWithTag("start_activity_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("show_qr_fab").assertDoesNotExist()
     }
@@ -390,6 +394,9 @@ class CanonicalUseCasesTest {
 
         composeRule.onNodeWithText("The ongoing activity could not be resumed.")
             .assertIsDisplayed()
+        composeRule.onNodeWithTag("map_state_recoverable_error").assertIsDisplayed()
+        composeRule.onNodeWithTag("recoverable_error_overlay").assertIsDisplayed()
+        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
         composeRule.onNodeWithText("Try again").performClick()
 
         waitForTag("show_qr_fab")
@@ -409,5 +416,26 @@ class CanonicalUseCasesTest {
         composeRule.onNodeWithTag("show_qr_fab").assertDoesNotExist()
         composeRule.onNodeWithText("The ongoing activity could not be resumed.")
             .assertDoesNotExist()
+    }
+
+    @Test
+    fun persistentMapSurvivesIdleLoadingAndOngoingStates() {
+        launch()
+        composeRule.onNodeWithTag("map_state_idle").assertIsDisplayed()
+
+        signIn()
+        val createGate = CompletableDeferred<Unit>()
+        activities.createGate = createGate
+        composeRule.onNodeWithTag("start_activity_fab").performClick()
+        waitForTag("map_state_loading")
+        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+
+        createGate.complete(Unit)
+        waitForTag("map_state_ongoing")
+        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("stop_activity_fab").performClick()
+        waitForTag("map_state_idle")
+        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
     }
 }

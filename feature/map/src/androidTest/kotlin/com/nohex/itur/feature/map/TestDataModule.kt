@@ -8,10 +8,12 @@ package com.nohex.itur.feature.map
 import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.data.repository.LocationRepository
 import com.nohex.itur.core.data.repository.UserRepository
+import com.nohex.itur.core.data.health.BackendHealthCheck
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import dagger.multibindings.IntoSet
 import javax.inject.Singleton
 
 /**
@@ -21,6 +23,17 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object TestDataModule {
+
+    @Provides
+    @Singleton
+    fun provideScenarioBackendHealthCheck(): ScenarioBackendHealthCheck =
+        ScenarioBackendHealthCheck()
+
+    @Provides
+    @IntoSet
+    fun provideBackendHealthCheck(
+        healthCheck: ScenarioBackendHealthCheck,
+    ): BackendHealthCheck = healthCheck
 
     @Provides
     @Singleton

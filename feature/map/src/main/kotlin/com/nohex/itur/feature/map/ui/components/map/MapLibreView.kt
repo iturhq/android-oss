@@ -22,6 +22,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.nohex.itur.core.domain.id.UserId
@@ -50,6 +51,7 @@ private const val PARTICIPANT_LAYER = "participants-layer"
 private const val PARTICIPANT_SOURCE = "participants-source"
 private const val MARKER_OTHER = "marker-other"
 private const val MARKER_ORGANIZER = "marker-organizer"
+const val PERSISTENT_MAP_NATIVE_VIEW_TAG = "itur-persistent-map-native-view"
 
 /**
  * An implementation of the map view provided by MapLibre.
@@ -58,6 +60,7 @@ private const val MARKER_ORGANIZER = "marker-organizer"
 fun MapLibreView(
     styleUrl: String,
     isActivityOngoing: Boolean,
+    locationPermissionGranted: Boolean,
     currentUserId: UserId?,
     organizerId: UserId?,
     participantLocations: List<ParticipantLocation>,
@@ -75,7 +78,10 @@ fun MapLibreView(
     //   so the NativeMapView is initialised before the render thread starts.
     val mapView = remember {
         val options = MapLibreMapOptions.createFromAttributes(context).textureMode(true)
-        MapView(context, options).also { it.onCreate(null) }
+        MapView(context, options).also {
+            it.tag = PERSISTENT_MAP_NATIVE_VIEW_TAG
+            it.onCreate(null)
+        }
     }
     var mapLibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
     var styleLoaded by remember { mutableStateOf(false) }
@@ -92,15 +98,31 @@ fun MapLibreView(
         }
 
         lifecycle.addObserver(observer)
+        // This composable is normally added after the Activity has already reached RESUMED.
+        // Lifecycle observers do not replay past events, so bring MapView to the host's current
+        // state before a permission dialog (or any other overlay) can pause it again.
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            mapView.onStart()
+        }
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            mapView.onResume()
+        }
         onDispose {
             lifecycle.removeObserver(observer)
         }
     }
 
     @SuppressLint("MissingPermission")
-    LaunchedEffect(isActivityOngoing) {
-        locationComponent?.apply {
-            isLocationComponentEnabled = isActivityOngoing
+    LaunchedEffect(isActivityOngoing, locationPermissionGranted, styleLoaded, mapLibreMap) {
+        val map = mapLibreMap
+        val style = map?.style
+        if (locationPermissionGranted && styleLoaded && map != null && style != null) {
+            val component = locationComponent ?: createLocationComponent(map, context, style).also {
+                locationComponent = it
+            }
+            component.isLocationComponentEnabled = isActivityOngoing
+        } else {
+            locationComponent?.isLocationComponentEnabled = false
         }
     }
 
@@ -146,8 +168,6 @@ fun MapLibreView(
                         iconImage(MARKER_OTHER),
                     ),
                 )
-
-                locationComponent = createLocationComponent(map, context, style)
 
                 map.uiSettings.apply {
                     isScrollGesturesEnabled = true

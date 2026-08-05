@@ -23,6 +23,8 @@
 == Expected result
 
 * Map tiles load and the `MapLibreView` is visible.
+* The persistent map surface remains mounted while the permission dialog closes and the Idle
+  overlay appears.
 * Idle overlay is displayed.
 * *Join an activity* FAB is visible.
 * *Sign in* FAB is visible (anonymous user).
@@ -38,6 +40,10 @@
 | Permission dialog — allow button
 | UIAutomator text: `While using the app` or `Allow`
 | UIAutomator
+
+| Persistent map surface
+| `testTag = "persistent_map_surface"`
+| Compose
 
 | "Join an activity" FAB
 | `contentDescription = "Join activity"`, text = `Join an activity`

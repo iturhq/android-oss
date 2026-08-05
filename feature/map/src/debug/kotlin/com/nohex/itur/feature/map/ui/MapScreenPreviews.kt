@@ -53,6 +53,7 @@ fun OngoingStatePreview() {
         onTrackGroupRequested = {},
         onAttentionRequest = {},
         onHelpRequested = {},
+        selfLocationAvailable = true,
     )
 }
 
