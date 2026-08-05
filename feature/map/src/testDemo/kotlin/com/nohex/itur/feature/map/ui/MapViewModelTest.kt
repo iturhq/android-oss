@@ -8,6 +8,8 @@ package com.nohex.itur.feature.map.ui
 import android.content.Context
 import android.os.Looper
 import com.nohex.itur.core.data.TestFixtures
+import com.nohex.itur.core.data.health.BackendHealthCheck
+import com.nohex.itur.core.data.health.BackendService
 import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.data.repository.DataResult
 import com.nohex.itur.core.data.repository.FakeActivityRepository
@@ -30,6 +32,7 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import io.mockk.verify
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
@@ -44,6 +47,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.test.fail
 
 // An activity where the organiser is a user that is NOT in FakeUserRepository's registered user
@@ -84,6 +88,7 @@ class MapViewModelTest {
     private fun viewModel(
         activityRepo: ActivityRepository = activityRepo(),
         userRepo: UserRepository = userRepo(),
+        healthChecks: Set<BackendHealthCheck> = emptySet(),
     ) = MapViewModel(
         activityRepository = activityRepo,
         userRepository = userRepo,
@@ -92,6 +97,7 @@ class MapViewModelTest {
         broadcastNotifier = broadcastNotifier,
         mapStyleConfig = MapStyleConfig(styleUrl = "https://example.invalid/style.json"),
         locationUpdateConfig = LocationUpdateConfig(updateIntervalMillis = 2_000L),
+        backendHealthChecks = healthChecks,
     )
 
     /** Asserts the state is [MapUiState.Ongoing], showing the error message on failure. */
@@ -382,57 +388,203 @@ class MapViewModelTest {
         }
     }
 
-    // --- initialize / retry backoff ---
+    // --- service-aware availability / retry backoff ---
 
     @Test
-    fun `GIVEN the backend is unreachable WHEN the ViewModel is created THEN uiState becomes BackendUnavailable with the first backoff countdown`() {
-        runTest {
-            val activityRepo = mockk<ActivityRepository>()
-            // Bounded (recovers on the 2nd attempt): an unbounded `throws` here would leave
-            // MapViewModel's own infinite-retry-until-reachable loop running against a
-            // never-advanced TestDispatcher scheduler for the rest of this test's lifetime.
-            coEvery { activityRepo.getActivities(any()) } throws RuntimeException("offline") andThen
-                DataResult.Success(emptyList())
+    fun `GIVEN a service is unreachable at startup THEN availability names it with the first countdown`() = runTest {
+        val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore", available = false)
+        val vm = viewModel(healthChecks = setOf(firestore))
 
-            val vm = viewModel(activityRepo = activityRepo)
+        vm.startBackendMonitoring()
 
-            assertEquals(MapUiState.BackendUnavailable(countdown = 5), vm.uiState.value)
-
-            // Drain the pending retry so no coroutine is left running past this test.
-            mainDispatcherRule.testDispatcher.scheduler.advanceUntilIdle()
-        }
+        assertEquals(
+            BackendAvailabilityUiState(
+                failingServices = listOf(firestore.service),
+                retryCountdown = 5,
+            ),
+            vm.backendAvailability.value,
+        )
+        vm.stopBackendMonitoring()
     }
 
     @Test
-    fun `GIVEN the backend recovers WHEN retryNow is called THEN uiState becomes Idle without waiting for the countdown`() {
-        runTest {
-            val activityRepo = mockk<ActivityRepository>()
-            coEvery { activityRepo.getActivities(any()) } throws RuntimeException("offline") andThen
-                DataResult.Success(emptyList())
+    fun `GIVEN a service probe times out THEN availability names it as failed`() = runTest {
+        val hangingService = object : BackendHealthCheck {
+            override val service = BackendService("hanging", "Hanging service")
 
-            val vm = viewModel(activityRepo = activityRepo)
-            assertIs<MapUiState.BackendUnavailable>(vm.uiState.value)
-
-            vm.retryNow()
-
-            assertIs<MapUiState.Idle>(vm.uiState.value)
+            override suspend fun probe() {
+                kotlinx.coroutines.awaitCancellation()
+            }
         }
+        val vm = viewModel(healthChecks = setOf(hangingService))
+
+        vm.startBackendMonitoring()
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(5_001L)
+        runCurrent()
+
+        assertEquals(
+            listOf(hangingService.service),
+            vm.backendAvailability.value.failingServices,
+        )
+        vm.stopBackendMonitoring()
     }
 
     @Test
-    fun `GIVEN the backend recovers during the first backoff wait WHEN the countdown elapses THEN it retries automatically and uiState becomes Idle`() {
-        runTest {
-            val activityRepo = mockk<ActivityRepository>()
-            coEvery { activityRepo.getActivities(any()) } throws RuntimeException("offline") andThen
-                DataResult.Success(emptyList())
+    fun `GIVEN an in-flight probe WHEN monitoring stops THEN genuine cancellation propagates`() = runTest {
+        var cancellationObserved = false
+        val hangingService = object : BackendHealthCheck {
+            override val service = BackendService("hanging", "Hanging service")
 
-            val vm = viewModel(activityRepo = activityRepo)
-            assertEquals(MapUiState.BackendUnavailable(countdown = 5), vm.uiState.value)
-
-            mainDispatcherRule.testDispatcher.scheduler.advanceUntilIdle()
-
-            assertIs<MapUiState.Idle>(vm.uiState.value)
+            override suspend fun probe() {
+                try {
+                    kotlinx.coroutines.awaitCancellation()
+                } finally {
+                    cancellationObserved = true
+                }
+            }
         }
+        val vm = viewModel(healthChecks = setOf(hangingService))
+        vm.startBackendMonitoring()
+        runCurrent()
+
+        vm.stopBackendMonitoring()
+        runCurrent()
+
+        assertTrue(cancellationObserved)
+        assertEquals(BackendAvailabilityUiState(), vm.backendAvailability.value)
+    }
+
+    @Test
+    fun `GIVEN multiple services fail THEN all independently named failures are aggregated`() = runTest {
+        val auth = FakeBackendHealthCheck("auth", "Firebase Authentication", false)
+        val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore", false)
+
+        val vm = viewModel(healthChecks = setOf(firestore, auth))
+
+        assertEquals(
+            listOf(auth.service, firestore.service),
+            vm.backendAvailability.value.failingServices,
+        )
+    }
+
+    @Test
+    fun `GIVEN one failed service recovers THEN retry keeps only the remaining failure`() = runTest {
+        val auth = FakeBackendHealthCheck("auth", "Firebase Authentication", false)
+        val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore", false)
+        val vm = viewModel(healthChecks = setOf(auth, firestore))
+        auth.available = true
+
+        vm.retryNow()
+
+        assertEquals(
+            listOf(firestore.service),
+            vm.backendAvailability.value.failingServices,
+        )
+    }
+
+    @Test
+    fun `GIVEN the backend recovers WHEN retryNow is called THEN overlay clears immediately`() = runTest {
+        val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore", false)
+        val vm = viewModel(healthChecks = setOf(firestore))
+        firestore.available = true
+
+        vm.retryNow()
+
+        assertEquals(BackendAvailabilityUiState(), vm.backendAvailability.value)
+        assertIs<MapUiState.Idle>(vm.uiState.value)
+    }
+
+    @Test
+    fun `GIVEN a failed service recovers during backoff THEN automatic retry clears the overlay`() = runTest {
+        val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore", false)
+        val vm = viewModel(healthChecks = setOf(firestore))
+        vm.startBackendMonitoring()
+        firestore.available = true
+
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(5_001L)
+        runCurrent()
+
+        assertEquals(BackendAvailabilityUiState(), vm.backendAvailability.value)
+        assertIs<User.AnonymousUser>(vm.currentUser.value)
+        vm.stopBackendMonitoring()
+    }
+
+    @Test
+    fun `GIVEN an ongoing activity WHEN a service fails THEN the operation state is preserved and resumes`() = runTest {
+        val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore")
+        val userRepo = userRepo().also { it.signIn(context) }
+        val activityRepo = activityRepo(TestFixtures.ongoingActivity)
+        val vm = viewModel(
+            activityRepo = activityRepo,
+            userRepo = userRepo,
+            healthChecks = setOf(firestore),
+        )
+        vm.joinActivity(TestFixtures.ONGOING_ACTIVITY_ID, context)
+        val ongoing = assertIs<MapUiState.Ongoing>(vm.uiState.value)
+        firestore.available = false
+
+        vm.retryNow()
+
+        assertEquals(listOf(firestore.service), vm.backendAvailability.value.failingServices)
+        assertEquals(ongoing, vm.uiState.value)
+        firestore.available = true
+        vm.retryNow()
+        assertEquals(BackendAvailabilityUiState(), vm.backendAvailability.value)
+        assertEquals(ongoing, vm.uiState.value)
+    }
+
+    @Test
+    fun `GIVEN ongoing activity WHEN operation reports recognized failure THEN overlay updates immediately`() = runTest {
+        val firestore = FakeBackendHealthCheck(
+            id = "firestore",
+            displayName = "Cloud Firestore",
+            recognizesCause = true,
+        )
+        val activityRepo = mockk<ActivityRepository>()
+        coEvery { activityRepo.getActivities(any()) } returns DataResult.Success(emptyList())
+        coEvery {
+            activityRepo.addParticipant(
+                TestFixtures.ONGOING_ACTIVITY_ID,
+                TestFixtures.ORGANIZER_ID,
+            )
+        } returns DataResult.Success(TestFixtures.ongoingActivity)
+        coEvery { activityRepo.getActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns
+            DataResult.Success(TestFixtures.ongoingActivity)
+        coEvery {
+            activityRepo.requestAttention(
+                TestFixtures.ONGOING_ACTIVITY_ID,
+                TestFixtures.ORGANIZER_ID,
+            )
+        } throws IllegalStateException("offline")
+        val userRepo = userRepo().also { it.signIn(context) }
+        val vm = viewModel(
+            activityRepo = activityRepo,
+            userRepo = userRepo,
+            healthChecks = setOf(firestore),
+        )
+        vm.joinActivity(TestFixtures.ONGOING_ACTIVITY_ID, context)
+        val ongoing = assertIs<MapUiState.Ongoing>(vm.uiState.value)
+
+        vm.requestAttention()
+
+        assertEquals(listOf(firestore.service), vm.backendAvailability.value.failingServices)
+        assertEquals(ongoing, vm.uiState.value)
+    }
+
+    @Test
+    fun `WHEN monitoring stops THEN retry and cadence work are cancelled`() = runTest {
+        val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore", false)
+        val vm = viewModel(healthChecks = setOf(firestore))
+        vm.startBackendMonitoring()
+        val probesBeforeExit = firestore.probeCount
+
+        vm.stopBackendMonitoring()
+        firestore.available = true
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(60_000L)
+        runCurrent()
+
+        assertEquals(probesBeforeExit, firestore.probeCount)
+        assertEquals(listOf(firestore.service), vm.backendAvailability.value.failingServices)
     }
 
     // --- triggerOngoingState(activityId, context) recoverable errors ---
@@ -504,4 +656,22 @@ class MapViewModelTest {
             assertEquals("quota exceeded", state.message)
         }
     }
+}
+
+private class FakeBackendHealthCheck(
+    id: String,
+    displayName: String,
+    var available: Boolean = true,
+    private val recognizesCause: Boolean = false,
+) : BackendHealthCheck {
+    override val service = BackendService(id, displayName)
+    var probeCount: Int = 0
+        private set
+
+    override suspend fun probe() {
+        probeCount++
+        if (!available) throw IllegalStateException("${service.id} unavailable")
+    }
+
+    override fun recognizes(cause: Throwable): Boolean = recognizesCause
 }

@@ -14,7 +14,10 @@ import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
+import com.nohex.itur.core.domain.model.User
 import com.nohex.itur.core.model.Location
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -40,12 +43,13 @@ class FirebaseLocationRepositoryTest {
     private val firestore = mockk<FirebaseFirestore> {
         every { collection(FirestoreCollections.LOCATIONS) } returns locationsCollection
     }
-    private val repository = FirebaseLocationRepository(firestore)
+    private val userRepository = mockk<UserRepository>()
+    private val repository = FirebaseLocationRepository(firestore, userRepository)
 
     // --- getForActivity ---
 
     @Test
-    fun `GIVEN matching locations WHEN getting them for an activity THEN maps them to domain objects`() = runBlocking {
+    fun `GIVEN matching locations WHEN getting them for an activity THEN resolves the participant's real name`() = runBlocking {
         val query = mockk<Query>()
         every { locationsCollection.whereEqualTo("activityId", ACTIVITY_ID.value) } returns query
         val dto = ParticipantLocationDTO(
@@ -55,23 +59,46 @@ class FirebaseLocationRepositoryTest {
         )
         val querySnapshot = mockk<QuerySnapshot> { every { toObjects(ParticipantLocationDTO::class.java) } returns listOf(dto) }
         every { query.get() } returns successfulTask(querySnapshot)
+        coEvery { userRepository.getAll(listOf(USER_ID)) } returns listOf(
+            User.RegisteredUser(id = USER_ID, name = "Ada Lovelace", email = "ada@example.com"),
+        )
 
         val result = repository.getForActivity(ACTIVITY_ID)
 
         assertEquals(1, result.size)
         assertEquals(USER_ID, result[0].userId)
+        assertEquals("Ada Lovelace", result[0].userName)
         assertEquals(51.4, result[0].location.latitude)
         assertEquals(-0.2, result[0].location.longitude)
     }
 
     @Test
-    fun `GIVEN no matching locations WHEN getting them for an activity THEN returns an empty list`() = runBlocking {
+    fun `GIVEN a participant's user record is not found WHEN getting locations for an activity THEN the name falls back to the placeholder`() = runBlocking {
+        val query = mockk<Query>()
+        every { locationsCollection.whereEqualTo("activityId", ACTIVITY_ID.value) } returns query
+        val dto = ParticipantLocationDTO(
+            activityId = ACTIVITY_ID.value,
+            userId = USER_ID.value,
+            location = GeoPoint(51.4, -0.2),
+        )
+        val querySnapshot = mockk<QuerySnapshot> { every { toObjects(ParticipantLocationDTO::class.java) } returns listOf(dto) }
+        every { query.get() } returns successfulTask(querySnapshot)
+        coEvery { userRepository.getAll(listOf(USER_ID)) } returns emptyList()
+
+        val result = repository.getForActivity(ACTIVITY_ID)
+
+        assertEquals("<Not available>", result[0].userName)
+    }
+
+    @Test
+    fun `GIVEN no matching locations WHEN getting them for an activity THEN returns an empty list without querying users`() = runBlocking {
         val query = mockk<Query>()
         every { locationsCollection.whereEqualTo("activityId", ACTIVITY_ID.value) } returns query
         val querySnapshot = mockk<QuerySnapshot> { every { toObjects(ParticipantLocationDTO::class.java) } returns emptyList() }
         every { query.get() } returns successfulTask(querySnapshot)
 
         assertTrue(repository.getForActivity(ACTIVITY_ID).isEmpty())
+        coVerify(exactly = 0) { userRepository.getAll(any()) }
     }
 
     @Test

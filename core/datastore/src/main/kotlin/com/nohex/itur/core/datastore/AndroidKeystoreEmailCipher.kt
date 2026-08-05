@@ -8,11 +8,15 @@ package com.nohex.itur.core.datastore
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.util.Log
+import java.security.GeneralSecurityException
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+
+private const val TAG = "AndroidKeystoreEmailCipher"
 
 private const val ANDROID_KEYSTORE = "AndroidKeyStore"
 private const val KEY_ALIAS = "itur_datastore_email_key"
@@ -58,14 +62,29 @@ internal class AndroidKeystoreEmailCipher : EmailCipher {
         return Base64.encodeToString(cipher.iv + ciphertext, Base64.NO_WRAP)
     }
 
+    /**
+     * Returns "" if [storedValue] can't be decrypted with this device's current Keystore key.
+     * The key is device-bound and deliberately excluded from Android backup/device-transfer
+     * (see `AOSS-E65B`), so a value restored from another device's backup is undecryptable by
+     * design, not corrupt -- there is no key to recover it with. Treating that the same as "no
+     * email set" is the only recoverable outcome; the alternative is crashing on first read.
+     */
     override fun decrypt(storedValue: String): String {
         if (storedValue.isEmpty()) return ""
-        val combined = Base64.decode(storedValue, Base64.NO_WRAP)
-        val iv = combined.copyOfRange(0, GCM_IV_LENGTH_BYTES)
-        val ciphertext = combined.copyOfRange(GCM_IV_LENGTH_BYTES, combined.size)
-        val cipher = Cipher.getInstance(TRANSFORMATION).apply {
-            init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv))
+        return try {
+            val combined = Base64.decode(storedValue, Base64.NO_WRAP)
+            val iv = combined.copyOfRange(0, GCM_IV_LENGTH_BYTES)
+            val ciphertext = combined.copyOfRange(GCM_IV_LENGTH_BYTES, combined.size)
+            val cipher = Cipher.getInstance(TRANSFORMATION).apply {
+                init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv))
+            }
+            String(cipher.doFinal(ciphertext), Charsets.UTF_8)
+        } catch (exception: GeneralSecurityException) {
+            Log.w(TAG, "Stored email is undecryptable with this device's Keystore key; treating as unset.", exception)
+            ""
+        } catch (exception: IllegalArgumentException) {
+            Log.w(TAG, "Stored email is not valid base64; treating as unset.", exception)
+            ""
         }
-        return String(cipher.doFinal(ciphertext), Charsets.UTF_8)
     }
 }

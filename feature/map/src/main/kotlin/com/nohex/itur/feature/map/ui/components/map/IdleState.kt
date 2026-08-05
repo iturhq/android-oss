@@ -52,12 +52,7 @@ fun IdleState(
                 .padding(8.dp),
         )
 
-        // TODO: Rearrange and encapsulate FABs.
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
+        FabSideColumn(horizontalAlignment = Alignment.End) {
             // User actions, top right.
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp),

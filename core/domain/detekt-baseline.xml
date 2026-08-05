@@ -1,0 +1,9 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MagicNumber:IturActivityId.kt$IturActivityId$20</ID>
+    <ID>MaxLineLength:IturActivityId.kt$IturActivityId.Companion$fun</ID>
+    <ID>MaxLineLength:IturActivityIdTest.kt$IturActivityIdTest$fun</ID>
+  </CurrentIssues>
+</SmellBaseline>

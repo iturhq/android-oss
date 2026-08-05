@@ -1,0 +1,11 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>FunctionNaming:IturApp.kt$@Composable fun IturApp( appState: IturAppState, modifier: Modifier = Modifier, )</ID>
+    <ID>FunctionNaming:IturApp.kt$@Composable internal fun IturApp( appState: IturAppState, snackbarHostState: SnackbarHostState, modifier: Modifier = Modifier, )</ID>
+    <ID>FunctionNaming:IturNavHost.kt$@Composable fun IturNavHost( appState: IturAppState, modifier: Modifier = Modifier, )</ID>
+    <ID>FunctionNaming:MainActivity.kt$@Preview(showBackground = true) @Composable fun MainActivityPreview()</ID>
+    <ID>MatchingDeclarationName:IturNavHost.kt$IturDestinations</ID>
+  </CurrentIssues>
+</SmellBaseline>

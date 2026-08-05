@@ -138,6 +138,30 @@ class FirebaseActivityRepositoryTest {
     }
 
     @Test
+    fun `GIVEN OngoingByParticipant filter WHEN getting activities THEN queries membership and status`() = runBlocking {
+        val byParticipant = mockk<Query>()
+        val ongoingQuery = mockk<Query>()
+        every {
+            activitiesCollection.whereArrayContains(
+                "participantIds",
+                PARTICIPANT_ID.value,
+            )
+        } returns byParticipant
+        every { byParticipant.whereEqualTo("status", "ONGOING") } returns ongoingQuery
+        val querySnapshot = mockk<QuerySnapshot> {
+            every { toObjects(IturActivityDTO::class.java) } returns listOf(ACTIVITY_DTO)
+        }
+        every { ongoingQuery.get() } returns successfulTask(querySnapshot)
+
+        val result = repository.getActivities(
+            ActivityFilter.OngoingByParticipant(PARTICIPANT_ID),
+        )
+
+        assertIs<DataResult.Success<List<IturActivity>>>(result)
+        assertEquals(1, result.data.size)
+    }
+
+    @Test
     fun `GIVEN documents with a blank ID WHEN getting activities THEN they are filtered out`() = runBlocking {
         val query = mockk<Query>()
         every { activitiesCollection.whereEqualTo("organizerId", ORGANIZER_ID.value) } returns query
@@ -424,7 +448,7 @@ class FirebaseActivityRepositoryTest {
     }
 
     @Test
-    fun `GIVEN Firestore throws WHEN getting broadcasts THEN returns an empty list rather than propagating`() = runBlocking {
+    fun `GIVEN Firestore throws WHEN getting broadcasts THEN propagates for availability reporting`() = runBlocking {
         val docRef = mockk<DocumentReference>()
         every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
         val broadcasts = mockk<CollectionReference>()
@@ -433,8 +457,9 @@ class FirebaseActivityRepositoryTest {
         every { broadcasts.orderBy("sentOn") } returns ordered
         every { ordered.get() } returns failedTask(RuntimeException("offline"))
 
-        val result = repository.getBroadcastsSince(ACTIVITY_ID, since = null)
-
-        assertTrue(result.isEmpty())
+        val exception = assertFailsWith<RuntimeException> {
+            repository.getBroadcastsSince(ACTIVITY_ID, since = null)
+        }
+        assertEquals("offline", exception.message)
     }
 }

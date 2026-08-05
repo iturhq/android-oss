@@ -14,6 +14,53 @@ Each use case covers a single user scenario and specifies preconditions, steps, 
 * *Test activity ID:* `AAAABBBBCCCCDDDDEEEE` (20-char alphanumeric, satisfies `IturActivityId` validation).
 * *Invalid activity ID:* `ZZZZZZZZZZZZZZZZZZZZ` (does not correspond to an existing activity).
 
+== Executable coverage
+
+The demo-flavor instrumented suite implements these IDs through the real
+`MapScreen`/`MapViewModel` Hilt graph. Compose Test drives application UI;
+UIAutomator is restricted to the Android-owned permission dialog in UC-01
+and UC-02. Scenario repositories replace network services deterministically,
+and the hosted emulator runs the suite on every change.
+
+[cols="1,4"]
+|===
+| Use case | Instrumented scenario
+
+| UC-01 | `PermissionUseCasesTest.uc01_grantingLocationPermissionShowsIdleMapControls`
+| UC-02 | `PermissionUseCasesTest.uc02_denyingLocationPermissionShowsGuidanceWithoutMapControls`
+| UC-03 | `CanonicalUseCasesTest.uc03_signInHappyPath`
+| UC-04 | `CanonicalUseCasesTest.uc04_signInFailureStaysAnonymousAndShowsError`
+| UC-05 | `CanonicalUseCasesTest.uc05_signOutReturnsToAnonymousIdleState`
+| UC-06 | `CanonicalUseCasesTest.uc06_startActivityHappyPath`
+| UC-07 | `CanonicalUseCasesTest.uc07_anonymousUserMustSignInBeforeStartIsOffered`
+| UC-08 | `CanonicalUseCasesTest.uc08_activityCreationFailureReturnsToIdleWithError`
+| UC-09 | `CanonicalUseCasesTest.uc09_joinActivityFromValidQr`
+| UC-10 | `CameraPermissionUseCaseTest.uc10_deniedCameraPermissionKeepsIdleState`
+| UC-11 | `CanonicalUseCasesTest.uc11_invalidQrIsIgnoredAndScannerStaysOpen`
+| UC-12 | `CanonicalUseCasesTest.uc12_missingActivityReturnsToIdleWithSpecificError`
+| UC-13 | `CanonicalUseCasesTest.uc13_organizerDisplaysGeneratedQr`
+| UC-14 | `CanonicalUseCasesTest.uc14_organizerStopsActivityForEveryone`
+| UC-15 | `CanonicalUseCasesTest.uc15_participantExitsWithoutFinishingActivity`
+| UC-16 | `CanonicalUseCasesTest.uc16_leaveFailureIsVisibleAndDoesNotCrash`
+| UC-17 | `CanonicalUseCasesTest.uc17_recenterAfterLocationFixKeepsOngoingState`
+| UC-18 | `CanonicalUseCasesTest.uc18_trackGroupWithKnownLocationsKeepsOngoingState`
+| UC-19 | `CanonicalUseCasesTest.uc19_participantHailsOrganizerExactlyOnce`
+| UC-20 | `CanonicalUseCasesTest.uc20_organizerActivityAutoResumesOnColdStart` and `uc20_participantActivityAutoResumesOnColdStart`
+| UC-21 | `CanonicalUseCasesTest.uc21_zeroParticipantActivityCanTrackGroup`
+| UC-22 | `CanonicalUseCasesTest.uc22_pendingHailsDoNotExposeParticipantActionToOrganizer`
+| UC-23 | `CanonicalUseCasesTest.uc23_autoResumeFailureCanRetry`
+| UC-24 | `CanonicalUseCasesTest.uc24_finishedActivityReturnsSilentlyToIdle`
+|===
+
+UC-07 is reconciled with the current accepted UX: anonymous users see
+*Sign in*, while *Start an activity* is offered only after sign-in. UC-19
+tests the canonical one-shot, idempotent attention request from
+`UC-ACTIVITY-005`; cancellation is not part of that contract. UC-22's
+organiser acknowledgement controls remain deliberately deferred: the
+canonical system use case says organiser-facing UI is future work, so the
+Android boundary scenario verifies that pending backend state is preserved
+and no participant-only hail action leaks into the organiser UI.
+
 include::UC-01.adoc[leveloffset=+1]
 include::UC-02.adoc[leveloffset=+1]
 include::UC-03.adoc[leveloffset=+1]

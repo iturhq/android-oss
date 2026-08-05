@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.domain.model.User
 import com.nohex.itur.core.model.IturActivity
@@ -41,18 +42,12 @@ internal fun OngoingState(
     onTrackUserRequested: () -> Unit,
     onTrackGroupRequested: () -> Unit,
     onAttentionRequest: () -> Unit,
+    onHelpRequested: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
-        // TODO: Rearrange and encapsulate FABs.
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.Start,
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            HelpFABs()
+        FabSideColumn(horizontalAlignment = Alignment.Start, modifier = Modifier.padding(16.dp)) {
+            HelpFABs(onHelpRequested = onHelpRequested)
             TrackingFABs(
                 onTrackUserRequested = onTrackUserRequested,
             ) {
@@ -65,13 +60,7 @@ internal fun OngoingState(
             }
         }
         // End FABs
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
+        FabSideColumn(horizontalAlignment = Alignment.End, modifier = Modifier.padding(16.dp)) {
             // User actions not available during an activity.
             // Column left for layout.
             Column { }
@@ -121,7 +110,10 @@ private fun OngoingActivityFABs(
         onClick = onStopRequested,
         modifier = Modifier.testTag("stop_activity_fab"),
     ) {
-        Icon(IturIcons.Stop, contentDescription = "Stop activity")
+        Icon(
+            IturIcons.Stop,
+            contentDescription = if (isOrganizer) "Stop activity" else "Exit activity",
+        )
     }
 }
 
@@ -129,7 +121,11 @@ private fun OngoingActivityFABs(
 @Composable
 private fun OrganizerOngoingStatePreview() {
     OngoingState(
-        activity = TODO(),
+        activity = IturActivity(
+            id = IturActivityId("previewActivity00001"),
+            organizerId = UserId("preview-user"),
+            participantIds = listOf(),
+        ),
         organizer = User.AnonymousUser(UserId("preview-user")),
         participantIds = listOf(),
         locations = listOf(),
@@ -139,5 +135,6 @@ private fun OrganizerOngoingStatePreview() {
         onTrackUserRequested = {},
         onTrackGroupRequested = {},
         onAttentionRequest = {},
+        onHelpRequested = {},
     )
 }

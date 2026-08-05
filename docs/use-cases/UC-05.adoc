@@ -11,7 +11,7 @@
 == Preconditions
 
 * App is in the Idle state with a registered (signed-in) user.
-* Sign-out FAB (light orange background) and user info FAB are visible.
+* Sign-out FAB (light orange background) is visible.
 * *Start an activity* FAB is visible.
 
 == Steps
@@ -21,9 +21,9 @@
 
 == Expected result
 
-* Sign-out FAB and user info FAB disappear.
+* Sign-out FAB disappears.
 * *Sign in* FAB reappears.
-* *Start an activity* FAB remains visible (always shown in the Idle state).
+* *Start an activity* FAB disappears with the registered session.
 * *Join an activity* FAB remains visible.
 * No activity is ongoing.
 * No error appears.
@@ -42,11 +42,7 @@
 | `contentDescription = "Sign in"`, text = `Sign in`
 | Espresso / Compose
 
-| User info FAB (absent after)
-| `contentDescription = "User info"` (TBC) — assert `doesNotExist()`
-| Espresso / Compose
-
-| "Start an activity" FAB (still visible)
-| text = `Start an activity`
+| "Start an activity" FAB (absent after)
+| text = `Start an activity` — assert `doesNotExist()`
 | Espresso / Compose
 |===

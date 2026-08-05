@@ -6,10 +6,13 @@
 package com.nohex.itur.core.auth.di
 
 import com.google.firebase.auth.FirebaseAuth
+import com.nohex.itur.core.auth.health.FirebaseAuthBackendHealthCheck
+import com.nohex.itur.core.data.health.BackendHealthCheck
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import dagger.multibindings.IntoSet
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -23,4 +26,10 @@ object FirebaseAuthModule {
     fun provideFirebaseAuth(): FirebaseAuth = FirebaseAuth.getInstance().also {
         it.useEmulator(EMULATOR_HOST, AUTH_EMULATOR_PORT)
     }
+
+    @Provides
+    @IntoSet
+    fun provideFirebaseAuthHealthCheck(
+        healthCheck: FirebaseAuthBackendHealthCheck,
+    ): BackendHealthCheck = healthCheck
 }

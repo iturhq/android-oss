@@ -11,15 +11,13 @@
 == Preconditions
 
 * App is in the Idle state (any user — anonymous or registered).
-* Camera permission not yet granted.
+* Camera permission is already granted; denial behavior is covered by UC-10.
 * An ongoing activity with ID `AAAABBBBCCCCDDDDEEEE` exists and is joinable.
 * A QR code encoding `https://itur.cat/activity/AAAABBBBCCCCDDDDEEEE` is available for scanning.
 
 == Steps
 
 . Tap *Join an activity* FAB.
-. Observe the system camera permission dialog.
-. Tap *Allow* (grant camera permission).
 . Observe the QR Scan bottom sheet appearing.
 . Verify the instructions text is visible.
 . Present the test QR image to the camera (or inject via `ImageAnalysis` in an instrumented test).
@@ -46,10 +44,6 @@
 | "Join an activity" FAB
 | text = `Join an activity`
 | Espresso / Compose
-
-| Camera permission dialog
-| UIAutomator text: `While using the app` or `Allow`
-| UIAutomator
 
 | QR Scan sheet instructions
 | text = `Scan an activity QR to join`

@@ -22,6 +22,7 @@ class FirebaseLocationRepository
 @Inject
 constructor(
     firestore: FirebaseFirestore,
+    private val userRepository: UserRepository,
 ) : LocationRepository {
     private val locationsCollection = firestore.collection(FirestoreCollections.LOCATIONS)
     override suspend fun getForActivity(activityId: IturActivityId): List<ParticipantLocation> = withContext(Dispatchers.IO) {
@@ -32,11 +33,19 @@ constructor(
 
         val dtoList = querySnapshot.toObjects(ParticipantLocationDTO::class.java)
 
+        val userIds = dtoList.map { UserId(it.userId) }.distinct()
+        val namesById = if (userIds.isEmpty()) {
+            emptyMap()
+        } else {
+            userRepository.getAll(userIds).associateBy { it.id }
+        }
+
         return@withContext dtoList.map {
+            val userId = UserId(it.userId)
             ParticipantLocation(
                 activityId = IturActivityId(it.activityId),
-                userId = UserId(it.userId),
-                userName = "<Not available>",
+                userId = userId,
+                userName = namesById[userId]?.name ?: "<Not available>",
                 location = Location(
                     latitude = it.location.latitude,
                     longitude = it.location.longitude,

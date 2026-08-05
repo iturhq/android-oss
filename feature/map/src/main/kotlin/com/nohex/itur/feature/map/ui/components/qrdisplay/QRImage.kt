@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -67,6 +68,7 @@ fun QRImage(qrURL: String, size: Dp = 300.dp) {
                 Image(
                     painter = remember(result.bitmap) { BitmapPainter(result.bitmap.asImageBitmap()) },
                     contentDescription = qrURL,
+                    modifier = Modifier.testTag("activity_qr_image"),
                 )
 
             QrGenerationResult.Failed ->

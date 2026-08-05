@@ -44,8 +44,8 @@
 | Espresso / Compose
 
 | QR image
-| `QRImage` composable (no testTag currently — see TODO MD10)
-| Espresso / Compose (after MD10 resolved)
+| `testTag = "activity_qr_image"`
+| Espresso / Compose
 
 | Sheet dismissed — title gone
 | text = `Scan this QR to join the activity` — assert `doesNotExist()`

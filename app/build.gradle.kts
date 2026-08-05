@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 // Read properties from `local.properties`.
+import com.google.gms.googleservices.GoogleServicesTask
+import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
+import com.google.firebase.perf.plugin.FirebasePerfExtension
 import java.util.Properties
 
 val localProperties = Properties().apply {
@@ -26,6 +29,8 @@ plugins {
     // Observability (prod/local only; see ObservabilityModule)
     alias(libs.plugins.firebase.crashlytics)
     alias(libs.plugins.firebase.perf)
+    // Generates the third-party license data OssLicensesMenuActivity displays (AOSS-386B).
+    alias(libs.plugins.oss.licenses)
 }
 
 android {
@@ -88,6 +93,16 @@ android {
             // Force credential-free regardless of local.properties, matching this flavor's
             // existing MAPTILER_API_KEY/no-Firebase-config posture (see AOSS-0238).
             buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"\"")
+            // The Performance plugin is project-wide, but its runtime library is deliberately
+            // absent from demo. Do not weave FirebasePerf calls into this flavor's bytecode.
+            configure<FirebasePerfExtension> {
+                setInstrumentationEnabled(false)
+            }
+            // No Crashlytics runtime or Firebase app exists in demo, so there is no mapping
+            // destination. Prod/local keep their default upload behavior.
+            configure<CrashlyticsExtension> {
+                mappingFileUploadEnabled = false
+            }
         }
     }
 }
@@ -119,6 +134,9 @@ dependencies {
     // Maps
     implementation(libs.android.maplibre)
 
+    // Third-party license attribution screen (AOSS-386B).
+    implementation(libs.play.services.oss.licenses)
+
     // Observability: crash reporting + performance monitoring, prod/local only.
     // The demo flavor stays credential-free and never links these (see
     // ObservabilityModule and AOSS-96EE's task write-up).
@@ -139,4 +157,12 @@ dependencies {
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+}
+
+// The demo flavor deliberately has no Firebase application or google-services.json. Disable only
+// its generated-resource tasks; prod/local retain the plugin's fail-closed credential check.
+tasks.withType<GoogleServicesTask>().configureEach {
+    if (name.startsWith("processDemo")) {
+        enabled = false
+    }
 }

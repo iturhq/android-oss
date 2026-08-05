@@ -38,7 +38,7 @@
 | UIAutomator
 
 | Location-required guidance message
-| text contains `location` (exact copy TBD once implemented)
+| text = `Location permission is required before the map can be shown.`
 | Espresso / Compose
 
 | Map / Idle overlay (absent)

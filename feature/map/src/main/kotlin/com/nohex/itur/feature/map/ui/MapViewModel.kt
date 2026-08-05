@@ -20,6 +20,8 @@ import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY
+import com.nohex.itur.core.data.health.BackendHealthCheck
+import com.nohex.itur.core.data.health.BackendService
 import com.nohex.itur.core.data.repository.ActivityFilter
 import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.data.repository.DataResult
@@ -39,13 +41,19 @@ import com.nohex.itur.feature.map.config.MapStyleConfig
 import com.nohex.itur.feature.map.notifications.BroadcastNotifier
 import com.nohex.itur.feature.map.ui.MapUiState.Ongoing
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import java.util.Date
 import javax.inject.Inject
 import com.nohex.itur.core.model.Location as IturLocation
@@ -60,6 +68,7 @@ constructor(
     private val broadcastNotifier: BroadcastNotifier,
     val mapStyleConfig: MapStyleConfig,
     private val locationUpdateConfig: LocationUpdateConfig,
+    private val backendHealthChecks: Set<@JvmSuppressWildcards BackendHealthCheck>,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<MapUiState>(MapUiState.Idle())
     val uiState = _uiState.asStateFlow()
@@ -86,9 +95,14 @@ constructor(
     private val _lastLocation = MutableLiveData<Location?>()
     val lastLocation: LiveData<Location?> = _lastLocation
 
-    // Tracks how many consecutive backend failures have occurred, for backoff calculation.
-    private var retryAttempt = 0
-    private var retryJob: Job? = null
+    private val _backendAvailability = MutableStateFlow(BackendAvailabilityUiState())
+    val backendAvailability = _backendAvailability.asStateFlow()
+    private var backendRetryAttempt = 0
+    private var backendRetryJob: Job? = null
+    private var backendCheckJob: Job? = null
+    private var backendCadenceJob: Job? = null
+    private var backendMonitoringActive = false
+    private var initialRestorePending = true
 
     // The most recent operator broadcast (UC-ACTIVITY-007), for an in-app banner alongside
     // the system notification posted by [broadcastNotifier]. Polling itself is driven by the UI
@@ -100,68 +114,187 @@ constructor(
     private var lastBroadcastSeen: Date? = null
 
     init {
-        initialize()
+        requestHealthCheck()
     }
 
     /**
-     * Attempts to reach the backend and restore any in-progress state.
-     * Called on start-up and automatically on each retry.
+     * Restores any in-progress state after all required services are known to be healthy.
      */
-    private fun initialize() {
-        viewModelScope.launch {
-            try {
-                _currentUser.value = userRepository.getCurrentUser()
+    private suspend fun restoreInitialState() {
+        try {
+            _currentUser.value = userRepository.getCurrentUser()
+            _ongoingActivityId.value = findOngoingActivity()?.id
 
-                // If there is an ongoing activity organised by the current user, join it.
-                _currentUser.value?.let {
-                    when (
-                        val result =
-                            activityRepository.getActivities(ActivityFilter.OngoingByOrganizer(it.id))
-                    ) {
-                        is DataResult.Success -> result.data.firstOrNull()?.let { ongoingActivity ->
-                            _ongoingActivityId.value = ongoingActivity.id
-                        }
-                        // Any error during start-up is treated as the backend being unavailable.
-                        is DataResult.Error -> throw Exception(result.message)
-                        is DataResult.NotFound -> Unit
+            initialRestorePending = false
+            _uiState.value = MapUiState.Idle()
+        } catch (e: Exception) {
+            Log.e("MapViewModel", "Backend unavailable: ${e.message}", e)
+            reportBackendFailure(e, assumeAllServices = true)
+        }
+    }
+
+    private suspend fun findOngoingActivity(): IturActivity? {
+        val user = _currentUser.value ?: return null
+        val organized = when (
+            val result = activityRepository.getActivities(
+                ActivityFilter.OngoingByOrganizer(user.id),
+            )
+        ) {
+            is DataResult.Success -> result.data.firstOrNull()
+            is DataResult.Error -> throw BackendInitializationException(result.message)
+            is DataResult.NotFound -> null
+        }
+        return organized ?: when (
+            val result = activityRepository.getActivities(
+                ActivityFilter.OngoingByParticipant(user.id),
+            )
+        ) {
+            is DataResult.Success -> result.data.firstOrNull()
+            is DataResult.Error -> throw BackendInitializationException(result.message)
+            is DataResult.NotFound -> null
+        }
+    }
+
+    /**
+     * Starts lifecycle-aware periodic monitoring. The Compose screen calls this on `ON_START`.
+     */
+    fun startBackendMonitoring() {
+        backendMonitoringActive = true
+        if (initialRestorePending) {
+            requestHealthCheck()
+        } else if (_backendAvailability.value.failingServices.isEmpty()) {
+            scheduleNextCadenceCheck()
+        } else {
+            scheduleBackendRetry()
+        }
+    }
+
+    /**
+     * Stops cadence, retries, and in-flight probes while the screen is inactive or exiting.
+     */
+    fun stopBackendMonitoring() {
+        backendMonitoringActive = false
+        backendCadenceJob?.cancel()
+        backendRetryJob?.cancel()
+        backendCheckJob?.cancel()
+    }
+
+    private fun scheduleNextCadenceCheck() {
+        backendCadenceJob?.cancel()
+        if (!backendMonitoringActive) return
+        backendCadenceJob = viewModelScope.launch {
+            delay(BACKEND_MONITOR_INTERVAL_MILLIS)
+            performHealthCheck()
+        }
+    }
+
+    private fun requestHealthCheck(resetBackoff: Boolean = false) {
+        if (resetBackoff) backendRetryAttempt = 0
+        backendRetryJob?.cancel()
+        backendCadenceJob?.cancel()
+        backendCheckJob?.cancel()
+        backendCheckJob = viewModelScope.launch {
+            performHealthCheck()
+        }
+    }
+
+    private suspend fun performHealthCheck() {
+        val failingServices = coroutineScope {
+            backendHealthChecks.map { check ->
+                async {
+                    try {
+                        withTimeout(BACKEND_PROBE_TIMEOUT_MILLIS) { check.probe() }
+                        null
+                    } catch (e: TimeoutCancellationException) {
+                        Log.w(
+                            "MapViewModel",
+                            "Backend probe timed out for ${check.service.id}",
+                            e,
+                        )
+                        check.service
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(
+                            "MapViewModel",
+                            "Backend probe failed for ${check.service.id}: ${e.message}",
+                            e,
+                        )
+                        check.service
                     }
                 }
+            }.awaitAll().filterNotNull().sortedBy { it.id }
+        }
 
-                // Reached the backend successfully — reset state and backoff counter.
-                retryAttempt = 0
-                _uiState.value = MapUiState.Idle()
-            } catch (e: Exception) {
-                Log.e("MapViewModel", "Backend unavailable: ${e.message}", e)
-                scheduleRetry()
+        if (failingServices.isEmpty()) {
+            backendRetryJob?.cancel()
+            backendRetryAttempt = 0
+            _backendAvailability.value = BackendAvailabilityUiState()
+            if (initialRestorePending) restoreInitialState()
+            if (_backendAvailability.value.failingServices.isEmpty()) {
+                scheduleNextCadenceCheck()
             }
+        } else {
+            _backendAvailability.value = BackendAvailabilityUiState(failingServices)
+            scheduleBackendRetry()
         }
     }
 
     /**
-     * Starts a countdown and then retries [initialize], applying exponential backoff.
+     * Starts a countdown and then probes every service, preserving bounded exponential backoff.
      */
-    private fun scheduleRetry() {
-        retryJob?.cancel()
-        val delaySeconds = RETRY_DELAYS_SECONDS.getOrElse(retryAttempt) { RETRY_DELAYS_SECONDS.last() }
-        retryJob = viewModelScope.launch {
+    private fun scheduleBackendRetry() {
+        backendRetryJob?.cancel()
+        val failingServices = _backendAvailability.value.failingServices
+        if (failingServices.isEmpty() || !backendMonitoringActive) return
+        val delaySeconds =
+            RETRY_DELAYS_SECONDS.getOrElse(backendRetryAttempt) { RETRY_DELAYS_SECONDS.last() }
+        backendRetryJob = viewModelScope.launch {
             for (remaining in delaySeconds downTo 1) {
-                _uiState.value = MapUiState.BackendUnavailable(countdown = remaining)
+                _backendAvailability.value = BackendAvailabilityUiState(
+                    failingServices = _backendAvailability.value.failingServices,
+                    retryCountdown = remaining,
+                )
                 delay(1_000L)
             }
-            _uiState.value = MapUiState.Loading
-            retryAttempt++
-            initialize()
+            backendRetryAttempt++
+            // The retry job is now the caller of performHealthCheck. Clear the field so a
+            // success or partial-failure transition does not cancel its own coroutine before
+            // restoration/probe work finishes.
+            backendRetryJob = null
+            performHealthCheck()
         }
     }
 
     /**
-     * Cancels the pending retry countdown and retries immediately, resetting the backoff.
+     * Cancels the pending countdown and probes every service immediately.
      */
     fun retryNow() {
-        retryAttempt = 0
-        retryJob?.cancel()
-        _uiState.value = MapUiState.Loading
-        initialize()
+        requestHealthCheck(resetBackoff = true)
+    }
+
+    private fun reportBackendFailure(
+        cause: Throwable,
+        assumeAllServices: Boolean = false,
+    ): Boolean {
+        val recognized = backendHealthChecks.filter { it.recognizes(cause) }
+        val failedChecks = when {
+            recognized.isNotEmpty() -> recognized
+            assumeAllServices -> backendHealthChecks.toList()
+            else -> {
+                requestHealthCheck()
+                return false
+            }
+        }
+        val failingById = _backendAvailability.value.failingServices
+            .associateBy { it.id }
+            .toMutableMap()
+        failedChecks.forEach { failingById[it.service.id] = it.service }
+        _backendAvailability.value = BackendAvailabilityUiState(
+            failingServices = failingById.values.sortedBy { it.id },
+        )
+        scheduleBackendRetry()
+        return failedChecks.isNotEmpty()
     }
 
     /**
@@ -169,6 +302,7 @@ constructor(
      */
     fun startActivity(context: Context) {
         viewModelScope.launch {
+            val previousState = _uiState.value
             _uiState.value = MapUiState.Loading
             try {
                 // Organisers must be signed in; trigger sign-in automatically if needed.
@@ -179,14 +313,21 @@ constructor(
                 val result = activityRepository.createActivity(organizerId = organizer.id)
                 when (result) {
                     is DataResult.Success -> triggerOngoingState(result.data, context)
-                    is DataResult.Error -> _uiState.value = MapUiState.Error(result.message)
+                    is DataResult.Error -> {
+                        requestHealthCheck()
+                        _uiState.value = MapUiState.Error(result.message)
+                    }
                     is DataResult.NotFound ->
                         _uiState.value = MapUiState.Error("Activity ${result.id} not found")
                 }
             } catch (e: Exception) {
                 val message = e.message ?: "Failed to start an activity"
                 Log.e("MapViewModel", message, e)
-                _uiState.value = MapUiState.Error(message)
+                _uiState.value = if (reportBackendFailure(e)) {
+                    previousState
+                } else {
+                    MapUiState.Error(message)
+                }
             }
         }
     }
@@ -201,7 +342,7 @@ constructor(
             } catch (e: Exception) {
                 val message = e.message ?: "Sign-in failed"
                 Log.e("MapViewModel", message, e)
-                _uiState.value = MapUiState.Error(message)
+                if (!reportBackendFailure(e)) _uiState.value = MapUiState.Error(message)
             }
         }
     }
@@ -211,9 +352,14 @@ constructor(
      */
     fun signOut() {
         viewModelScope.launch {
-            userRepository.signOut()
-            _currentUser.value = userRepository.getCurrentUser()
-            triggerIdleState()
+            try {
+                userRepository.signOut()
+                _currentUser.value = userRepository.getCurrentUser()
+                triggerIdleState()
+            } catch (e: Exception) {
+                Log.e("MapViewModel", "Sign-out failed", e)
+                reportBackendFailure(e)
+            }
         }
     }
 
@@ -222,6 +368,7 @@ constructor(
      */
     fun joinActivity(activityId: IturActivityId, context: Context) {
         viewModelScope.launch {
+            val previousState = _uiState.value
             _uiState.value = MapUiState.Loading
             try {
                 currentUser.value?.let {
@@ -230,7 +377,10 @@ constructor(
                     // Change the UI state.
                     when (result) {
                         is DataResult.Success -> triggerOngoingState(result.data, context)
-                        is DataResult.Error -> _uiState.value = MapUiState.Error(result.message)
+                        is DataResult.Error -> {
+                            requestHealthCheck()
+                            _uiState.value = MapUiState.Error(result.message)
+                        }
                         is DataResult.NotFound ->
                             _uiState.value =
                                 MapUiState.Error("Activity ${result.id} not found")
@@ -239,7 +389,11 @@ constructor(
             } catch (e: Exception) {
                 val message = "Failed to join activity $activityId"
                 Log.e("MapViewModel", message, e)
-                _uiState.value = MapUiState.Error(message)
+                _uiState.value = if (reportBackendFailure(e)) {
+                    previousState
+                } else {
+                    MapUiState.Error(message)
+                }
             }
         }
     }
@@ -263,20 +417,27 @@ constructor(
                     currentUser.value?.let {
                         if (_organizerId.value == it.id) {
                             // If it's the organiser, finish the activity for everyone.
-                            activityRepository.updateActivityStatus(
-                                activityId,
-                                IturActivityStatus.FINISHED,
+                            requireSuccessfulBackendWrite(
+                                activityRepository.updateActivityStatus(
+                                    activityId,
+                                    IturActivityStatus.FINISHED,
+                                ),
                             )
                         }
                         // Remove the participants from the activity.
-                        activityRepository.removeParticipant(activityId, it.id)
+                        requireSuccessfulBackendWrite(
+                            activityRepository.removeParticipant(activityId, it.id),
+                        )
                     }
 
                     // Set the next state.
                     triggerIdleState("You are no longer participating in an activity")
                 } catch (e: Exception) {
-                    Log.e("MapViewModel", "Failed to leave activity $activityId", e)
-                    _uiState.value = MapUiState.Error("Activity $activityId not found")
+                    val message = "Failed to leave activity $activityId"
+                    Log.e("MapViewModel", message, e)
+                    if (!reportBackendFailure(e)) {
+                        _uiState.value = MapUiState.Error(message)
+                    }
                 }
             }
         }
@@ -288,6 +449,16 @@ constructor(
         stopLocationUpdates()
         lastBroadcastSeen = null
         _latestBroadcast.value = null
+    }
+
+    private fun requireSuccessfulBackendWrite(result: DataResult<*>) {
+        when (result) {
+            is DataResult.Success -> Unit
+            is DataResult.Error -> throw BackendOperationException(result.message)
+            is DataResult.NotFound -> throw BackendOperationException(
+                "Backend record ${result.id} was not found",
+            )
+        }
     }
 
     suspend fun triggerOngoingState(activityId: IturActivityId, context: Context) {
@@ -310,6 +481,7 @@ constructor(
 
             is DataResult.Error -> {
                 Log.e("MapViewModel", "Could not trigger the ongoing state: ${result.message}")
+                requestHealthCheck()
                 _uiState.value = MapUiState.RecoverableError(
                     message = "The ongoing activity could not be resumed.",
                     onRetry = { viewModelScope.launch { triggerOngoingState(activityId, context) } },
@@ -356,10 +528,15 @@ constructor(
      */
     suspend fun pollBroadcastsOnce() {
         val activityId = _ongoingActivityId.value ?: return
-        activityRepository.getBroadcastsSince(activityId, lastBroadcastSeen).forEach { broadcast ->
-            broadcastNotifier.notify(broadcast)
-            _latestBroadcast.value = broadcast
-            lastBroadcastSeen = broadcast.sentOn
+        try {
+            activityRepository.getBroadcastsSince(activityId, lastBroadcastSeen).forEach { broadcast ->
+                broadcastNotifier.notify(broadcast)
+                _latestBroadcast.value = broadcast
+                lastBroadcastSeen = broadcast.sentOn
+            }
+        } catch (e: Exception) {
+            Log.e("MapViewModel", "Failed to poll broadcasts for $activityId", e)
+            reportBackendFailure(e)
         }
     }
 
@@ -385,6 +562,7 @@ constructor(
                 "Failed to update the location of user ${userId.value} in activity ${activityId.value}",
                 e,
             )
+            reportBackendFailure(e)
         }
     }
 
@@ -399,6 +577,7 @@ constructor(
                 activityRepository.requestAttention(activityId, userId)
             } catch (e: Exception) {
                 Log.e("MapViewModel", "Failed to request attention for activity $activityId", e)
+                reportBackendFailure(e)
             }
         }
     }
@@ -458,9 +637,6 @@ constructor(
 sealed interface MapUiState {
     data object Loading : MapUiState
 
-    /** The backend could not be reached. Auto-retry fires when [countdown] reaches zero. */
-    data class BackendUnavailable(val countdown: Int) : MapUiState
-
     data class Idle(
         val message: String? = null,
     ) : MapUiState
@@ -483,4 +659,14 @@ sealed interface MapUiState {
     ) : MapUiState
 }
 
+data class BackendAvailabilityUiState(
+    val failingServices: List<BackendService> = emptyList(),
+    val retryCountdown: Int? = null,
+)
+
+private class BackendInitializationException(message: String) : Exception(message)
+private class BackendOperationException(message: String) : Exception(message)
+
 private val RETRY_DELAYS_SECONDS = listOf(5, 10, 20, 40, 60)
+private const val BACKEND_PROBE_TIMEOUT_MILLIS = 5_000L
+private const val BACKEND_MONITOR_INTERVAL_MILLIS = 30_000L

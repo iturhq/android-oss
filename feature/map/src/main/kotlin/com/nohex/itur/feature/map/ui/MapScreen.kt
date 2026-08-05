@@ -7,6 +7,7 @@ package com.nohex.itur.feature.map.ui
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
@@ -33,6 +34,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -48,9 +50,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.model.User
 import com.nohex.itur.core.ui.components.IturProgressIndicator
+import com.nohex.itur.feature.map.ui.components.help.HelpSheet
 import com.nohex.itur.feature.map.ui.components.map.IdleState
 import com.nohex.itur.feature.map.ui.components.map.MapLibreView
 import com.nohex.itur.feature.map.ui.components.map.NoMapView
@@ -69,10 +75,22 @@ import org.maplibre.android.maps.MapLibreMap
 fun MapScreen(
     modifier: Modifier = Modifier,
     viewModel: MapViewModel = hiltViewModel(),
+    locationPermissionCheck: (Context) -> Boolean = ::hasFineLocationPermission,
+    qrScanSheet: @Composable (
+        onDismissRequest: () -> Unit,
+        onScanSuccess: (String) -> Unit,
+    ) -> Unit = { onDismissRequest, onScanSuccess ->
+        QRScanSheet(
+            onDismissRequest = onDismissRequest,
+            onScanSuccess = onScanSuccess,
+        )
+    },
 ) {
     val context = LocalContext.current
 
     val uiState by viewModel.uiState.collectAsState()
+    val backendAvailability by viewModel.backendAvailability.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
     // The current user.
     val currentUser by viewModel.currentUser.collectAsState()
     // The identifier of the activity displayed on the map, when there is one.
@@ -90,22 +108,46 @@ fun MapScreen(
     // Whether the QR sheet is showing.
     var showQRDisplaySheet by remember { mutableStateOf(false) }
     var showQRScanSheet by remember { mutableStateOf(false) }
+    var showHelpSheet by remember { mutableStateOf(false) }
+    var localMessage by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Show a snackbar when any state carries a user-facing message.
     val displayMessage = when (val state = uiState) {
         is MapUiState.Idle -> state.message
         is MapUiState.Error -> state.message
-        else -> null
+        else -> localMessage
+    } ?: localMessage
+
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> viewModel.startBackendMonitoring()
+                Lifecycle.Event.ON_STOP -> viewModel.stopBackendMonitoring()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            viewModel.startBackendMonitoring()
+        }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.stopBackendMonitoring()
+        }
     }
 
-    // Show a blocking dialog when the backend cannot be reached on start-up.
-    if (uiState is MapUiState.BackendUnavailable) {
+    // Availability is independent of the map state, so the operation underneath is preserved.
+    if (backendAvailability.failingServices.isNotEmpty()) {
         val activity = LocalContext.current as Activity
         BackendUnavailableDialog(
-            countdown = (uiState as MapUiState.BackendUnavailable).countdown,
+            failingServiceNames = backendAvailability.failingServices.map { it.displayName },
+            countdown = backendAvailability.retryCountdown,
             onRetryNow = viewModel::retryNow,
-            onExit = { activity.finish() },
+            onExit = {
+                viewModel.stopBackendMonitoring()
+                activity.finish()
+            },
         )
     }
 
@@ -119,7 +161,10 @@ fun MapScreen(
         )
     }
     LaunchedEffect(displayMessage) {
-        displayMessage?.let { snackbarHostState.showSnackbar(it) }
+        displayMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            if (localMessage == it) localMessage = null
+        }
     }
     LaunchedEffect(latestBroadcast) {
         latestBroadcast?.let { snackbarHostState.showSnackbar("Alert: ${it.message}") }
@@ -133,9 +178,15 @@ fun MapScreen(
         ActivityResultContracts.RequestPermission(),
     ) { isGranted ->
         cameraPermissionGranted = isGranted
+        if (!isGranted) {
+            showQRScanSheet = false
+            localMessage = "Camera access is required to scan an activity QR code"
+        }
     }
     // Request location permissions, if needed.
-    var locationPermissionGranted by remember { mutableStateOf(false) }
+    var locationPermissionGranted by remember {
+        mutableStateOf(locationPermissionCheck(context))
+    }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { isGranted ->
@@ -144,14 +195,7 @@ fun MapScreen(
 
     // Request location permission when entering the map screen.
     LaunchedEffect(Unit) {
-        val hasLocationPermission = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (hasLocationPermission) {
-            locationPermissionGranted = true
-        } else {
+        if (!locationPermissionGranted) {
             locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
     }
@@ -217,15 +261,26 @@ fun MapScreen(
             }
         }
 
-        QRScanSheet(
-            onDismissRequest = { showQRScanSheet = false },
-            onScanSuccess = { code ->
-                IturActivityId.from(code)?.let {
-                    viewModel.joinActivity(activityId = it, context = context)
-                    showQRScanSheet = false
-                }
-            },
-        )
+        if (cameraPermissionGranted) {
+            qrScanSheet(
+                { showQRScanSheet = false },
+                { code ->
+                    IturActivityId.from(code)?.let {
+                        viewModel.joinActivity(activityId = it, context = context)
+                        showQRScanSheet = false
+                    }
+                },
+            )
+        }
+    }
+
+    if (showHelpSheet) {
+        (uiState as? MapUiState.Ongoing)?.let { ongoingUiState ->
+            HelpSheet(
+                onDismissRequest = { showHelpSheet = false },
+                isOrganizer = ongoingUiState.organizer.id == currentUser?.id,
+            )
+        }
     }
 
     // The scaffold provides a snackbar host; the box inside holds the map and state overlays.
@@ -237,88 +292,110 @@ fun MapScreen(
         },
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
-            // Do not show the map in previews.
-            if (LocalInspectionMode.current) {
-                NoMapView()
+            if (!locationPermissionGranted) {
+                LocationPermissionRequired()
             } else {
-                MapLibreView(
-                    styleUrl = viewModel.mapStyleConfig.styleUrl,
-                    isActivityOngoing = ongoingActivityId != null,
-                    organizerId = organizerId,
-                    currentUserId = currentUser?.id,
-                    participantLocations = participantLocations,
-                    modifier = modifier.fillMaxSize(),
-                    onMapReady = { map ->
-                        mapLibreMap = map
-                    },
-                )
-            }
-
-            when (uiState) {
-                is MapUiState.Loading -> IturProgressIndicator(label = "Preparing activity...")
-                is MapUiState.BackendUnavailable -> IturProgressIndicator(label = "Connecting…")
-                is MapUiState.Error,
-                is MapUiState.Idle,
-                is MapUiState.RecoverableError,
-                -> {
-                    IdleState(
-                        onStartRequested = { viewModel.startActivity(context) },
-                        onSignInRequested = { viewModel.signIn(context) },
-                        onSignOutRequested = { viewModel.signOut() },
-                        onQRRequested = { showQRScanSheet = true },
-                        modifier = modifier,
-                        isSignedIn = currentUser is User.RegisteredUser,
+                // Do not show the map in previews.
+                if (LocalInspectionMode.current) {
+                    NoMapView()
+                } else {
+                    MapLibreView(
+                        styleUrl = viewModel.mapStyleConfig.styleUrl,
+                        isActivityOngoing = ongoingActivityId != null,
+                        organizerId = organizerId,
+                        currentUserId = currentUser?.id,
+                        participantLocations = participantLocations,
+                        modifier = modifier.fillMaxSize(),
+                        onMapReady = { map ->
+                            mapLibreMap = map
+                        },
                     )
                 }
 
-                is MapUiState.Ongoing -> {
-                    // Set the current activity.
-                    val ongoingUiState = (uiState as MapUiState.Ongoing)
-                    OngoingState(
-                        activity = ongoingUiState.activity,
-                        organizer = ongoingUiState.organizer,
-                        participantIds = ongoingUiState.participantIds,
-                        locations = ongoingUiState.locations,
-                        onStopRequested = viewModel::leaveActivity,
-                        onQRRequested = { showQRDisplaySheet = true },
-                        onTrackUserRequested = {
-                            Log.d("MapScreen", "Requested zoom on user")
-                            mapLibreMap?.let { map ->
-                                lastLocation?.let {
-                                    zoomOnUser(
-                                        map = map,
-                                        location = it,
+                when (uiState) {
+                    is MapUiState.Loading -> IturProgressIndicator(label = "Preparing activity...")
+                    is MapUiState.Error,
+                    is MapUiState.Idle,
+                    is MapUiState.RecoverableError,
+                    -> {
+                        IdleState(
+                            onStartRequested = { viewModel.startActivity(context) },
+                            onSignInRequested = { viewModel.signIn(context) },
+                            onSignOutRequested = { viewModel.signOut() },
+                            onQRRequested = { showQRScanSheet = true },
+                            modifier = modifier,
+                            isSignedIn = currentUser is User.RegisteredUser,
+                        )
+                    }
+
+                    is MapUiState.Ongoing -> {
+                        // Set the current activity.
+                        val ongoingUiState = (uiState as MapUiState.Ongoing)
+                        OngoingState(
+                            activity = ongoingUiState.activity,
+                            organizer = ongoingUiState.organizer,
+                            participantIds = ongoingUiState.participantIds,
+                            locations = ongoingUiState.locations,
+                            onStopRequested = viewModel::leaveActivity,
+                            onQRRequested = { showQRDisplaySheet = true },
+                            onTrackUserRequested = {
+                                Log.d("MapScreen", "Requested zoom on user")
+                                mapLibreMap?.let { map ->
+                                    lastLocation?.let {
+                                        zoomOnUser(
+                                            map = map,
+                                            location = it,
+                                        )
+                                    }
+                                }
+                            },
+                            onTrackGroupRequested = {
+                                Log.d("MapScreen", "Requested zoom on group")
+                                mapLibreMap?.let {
+                                    zoomOnGroup(
+                                        map = it,
+                                        participantLocations = participantLocations,
+                                        currentLocation = lastLocation,
                                     )
                                 }
-                            }
-                        },
-                        onTrackGroupRequested = {
-                            Log.d("MapScreen", "Requested zoom on group")
-                            mapLibreMap?.let {
-                                zoomOnGroup(
-                                    map = it,
-                                    participantLocations = participantLocations,
-                                    currentLocation = lastLocation,
-                                )
-                            }
-                        },
-                        onAttentionRequest = viewModel::requestAttention,
-                        isOrganizer = ongoingUiState.organizer.id == currentUser?.id,
-                    )
+                            },
+                            onAttentionRequest = viewModel::requestAttention,
+                            onHelpRequested = { showHelpSheet = true },
+                            isOrganizer = ongoingUiState.organizer.id == currentUser?.id,
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+private fun hasFineLocationPermission(context: Context): Boolean = ContextCompat.checkSelfPermission(
+    context,
+    Manifest.permission.ACCESS_FINE_LOCATION,
+) == PackageManager.PERMISSION_GRANTED
+
+@Composable
+private fun LocationPermissionRequired() {
+    Box(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "Location permission is required before the map can be shown.",
+            style = MaterialTheme.typography.bodyLarge,
+        )
+    }
+}
+
 /**
- * A non-dismissible dialog shown when the backend cannot be reached on start-up.
- * It counts down to an automatic retry and lets the user retry immediately or exit.
+ * A non-dismissible overlay shown whenever one or more required services are unavailable.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BackendUnavailableDialog(
-    countdown: Int,
+    failingServiceNames: List<String>,
+    countdown: Int?,
     onRetryNow: () -> Unit,
     onExit: () -> Unit,
 ) {
@@ -333,14 +410,14 @@ fun BackendUnavailableDialog(
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
                 Text(
-                    text = "Server unavailable",
+                    text = "Service unavailable",
                     style = MaterialTheme.typography.headlineSmall,
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(text = "The server could not be reached. Check that the network is available and the backend is running.")
+                Text(text = "Failed connection to ${failingServiceNames.joinToString()}.")
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Retrying in ${countdown}s\u2026",
+                    text = countdown?.let { "Retrying in ${it}s\u2026" } ?: "Checking\u2026",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

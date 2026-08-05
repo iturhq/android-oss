@@ -32,6 +32,14 @@ class FakeActivityRepository(
 
         is ActivityFilter.OngoingByOrganizer ->
             DataResult.Success(activities.filter { it.organizerId == filter.organizerId && it.status == IturActivityStatus.ONGOING })
+
+        is ActivityFilter.OngoingByParticipant ->
+            DataResult.Success(
+                activities.filter {
+                    filter.participantId in it.participantIds &&
+                        it.status == IturActivityStatus.ONGOING
+                },
+            )
     }
 
     override suspend fun updateActivityStatus(
