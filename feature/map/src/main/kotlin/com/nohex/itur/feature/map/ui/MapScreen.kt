@@ -6,7 +6,6 @@
 package com.nohex.itur.feature.map.ui
 
 import android.Manifest
-import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -137,19 +136,9 @@ fun MapScreen(
         }
     }
 
-    // Availability is independent of the map state, so the operation underneath is preserved.
-    if (backendAvailability.failingServices.isNotEmpty()) {
-        val activity = LocalContext.current as Activity
-        BackendUnavailableDialog(
-            failingServiceNames = backendAvailability.failingServices.map { it.displayName },
-            countdown = backendAvailability.retryCountdown,
-            onRetryNow = viewModel::retryNow,
-            onExit = {
-                viewModel.stopBackendMonitoring()
-                activity.finish()
-            },
-        )
-    }
+    // Preserve the map and local controls during outages. Operations that require a backend are
+    // disabled below; the host application owns the persistent route to service diagnostics.
+    val externalActionsEnabled = backendAvailability.failingServices.isEmpty()
 
     // Show a dialog when an activity cannot be resumed.
     if (uiState is MapUiState.RecoverableError) {
@@ -325,6 +314,7 @@ fun MapScreen(
                             onQRRequested = { showQRScanSheet = true },
                             modifier = modifier,
                             isSignedIn = currentUser is User.RegisteredUser,
+                            externalActionsEnabled = externalActionsEnabled,
                         )
                     }
 
@@ -362,6 +352,7 @@ fun MapScreen(
                             onAttentionRequest = viewModel::requestAttention,
                             onHelpRequested = { showHelpSheet = true },
                             isOrganizer = ongoingUiState.organizer.id == currentUser?.id,
+                            externalActionsEnabled = externalActionsEnabled,
                         )
                     }
                 }

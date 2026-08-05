@@ -17,8 +17,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -39,6 +42,7 @@ fun IdleState(
     onQRRequested: () -> Unit,
     modifier: Modifier = Modifier,
     isSignedIn: Boolean,
+    externalActionsEnabled: Boolean = true,
 ) {
     Box(
         modifier = modifier.fillMaxSize(),
@@ -58,7 +62,12 @@ fun IdleState(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.padding(16.dp),
             ) {
-                UserFABs(onSignInRequested, onSignOutRequested, isSignedIn)
+                UserFABs(
+                    onSignInRequested,
+                    onSignOutRequested,
+                    isSignedIn,
+                    externalActionsEnabled,
+                )
             }
 
             // Activity actions.
@@ -70,6 +79,7 @@ fun IdleState(
                     onStartRequested = onStartRequested,
                     isSignedIn = isSignedIn,
                     onQRRequested = onQRRequested,
+                    externalActionsEnabled = externalActionsEnabled,
                 )
             }
         }
@@ -84,12 +94,14 @@ private fun ActivityFABs(
     onQRRequested: () -> Unit,
     // Whether the user is registered or anonymous.
     isSignedIn: Boolean,
+    externalActionsEnabled: Boolean,
 ) {
     // The QR button shows the QR sheet for scanning for organisers,
     // or the QR scanner for potential participants.
     ExtendedFloatingActionButton(
-        onClick = onQRRequested,
-        modifier = Modifier.testTag("join_activity_fab"),
+        onClick = { if (externalActionsEnabled) onQRRequested() },
+        modifier = Modifier.testTag("join_activity_fab")
+            .serviceAvailability(externalActionsEnabled),
         text = {
             Text(text = "Join an activity")
         },
@@ -101,8 +113,9 @@ private fun ActivityFABs(
     // Only signed-in users can start activities.
     if (isSignedIn) {
         ExtendedFloatingActionButton(
-            onClick = onStartRequested,
-            modifier = Modifier.testTag("start_activity_fab"),
+            onClick = { if (externalActionsEnabled) onStartRequested() },
+            modifier = Modifier.testTag("start_activity_fab")
+                .serviceAvailability(externalActionsEnabled),
             text = {
                 Text(text = "Start an activity")
             },
@@ -112,6 +125,9 @@ private fun ActivityFABs(
         )
     }
 }
+
+internal fun Modifier.serviceAvailability(enabled: Boolean): Modifier =
+    if (enabled) this else alpha(0.38f).semantics { disabled() }
 
 @Preview(showBackground = true)
 @Composable

@@ -44,6 +44,7 @@ internal fun OngoingState(
     onAttentionRequest: () -> Unit,
     onHelpRequested: () -> Unit,
     modifier: Modifier = Modifier,
+    externalActionsEnabled: Boolean = true,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         FabSideColumn(horizontalAlignment = Alignment.Start, modifier = Modifier.padding(16.dp)) {
@@ -74,6 +75,7 @@ internal fun OngoingState(
                     onQRRequested = onQRRequested,
                     isOrganizer = isOrganizer,
                     onAttentionRequest = onAttentionRequest,
+                    externalActionsEnabled = externalActionsEnabled,
                 )
             }
         }
@@ -87,6 +89,7 @@ private fun OngoingActivityFABs(
     onQRRequested: () -> Unit,
     // Whether the user is the organiser.
     isOrganizer: Boolean,
+    externalActionsEnabled: Boolean,
 ) {
     // The QR button shows the QR sheet for scanning for organisers,
     // or the QR scanner for potential participants.
@@ -99,16 +102,18 @@ private fun OngoingActivityFABs(
         }
     } else {
         FloatingActionButton(
-            onClick = onAttentionRequest,
-            modifier = Modifier.testTag("hail_organiser_fab"),
+            onClick = { if (externalActionsEnabled) onAttentionRequest() },
+            modifier = Modifier.testTag("hail_organiser_fab")
+                .serviceAvailability(externalActionsEnabled),
         ) {
             Icon(IturIcons.Warning, contentDescription = "Hail organiser")
         }
     }
 
     FloatingActionButton(
-        onClick = onStopRequested,
-        modifier = Modifier.testTag("stop_activity_fab"),
+        onClick = { if (externalActionsEnabled) onStopRequested() },
+        modifier = Modifier.testTag("stop_activity_fab")
+            .serviceAvailability(externalActionsEnabled),
     ) {
         Icon(
             IturIcons.Stop,
