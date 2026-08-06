@@ -56,6 +56,7 @@ import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.model.User
 import com.nohex.itur.core.ui.components.IturProgressIndicator
 import com.nohex.itur.feature.map.ui.components.help.HelpSheet
+import com.nohex.itur.feature.map.ui.components.map.ErrorState
 import com.nohex.itur.feature.map.ui.components.map.IdleState
 import com.nohex.itur.feature.map.ui.components.map.MapLibreView
 import com.nohex.itur.feature.map.ui.components.map.NoMapView
@@ -75,6 +76,7 @@ fun MapScreen(
     modifier: Modifier = Modifier,
     viewModel: MapViewModel = hiltViewModel(),
     locationPermissionCheck: (Context) -> Boolean = ::hasFineLocationPermission,
+    openGlEsSupportCheck: (Context) -> OpenGlEsSupport = ::checkOpenGlEsSupport,
     qrScanSheet: @Composable (
         onDismissRequest: () -> Unit,
         onScanSuccess: (String) -> Unit,
@@ -86,6 +88,10 @@ fun MapScreen(
     },
 ) {
     val context = LocalContext.current
+    val isInspection = LocalInspectionMode.current
+    val openGlEsSupport = remember(context, openGlEsSupportCheck) {
+        openGlEsSupportCheck(context)
+    }
 
     val uiState by viewModel.uiState.collectAsState()
     val backendAvailability by viewModel.backendAvailability.collectAsState()
@@ -184,7 +190,7 @@ fun MapScreen(
 
     // Request location permission when entering the map screen.
     LaunchedEffect(Unit) {
-        if (!locationPermissionGranted) {
+        if (openGlEsSupport.isSupported && !locationPermissionGranted) {
             locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
     }
@@ -281,11 +287,17 @@ fun MapScreen(
         },
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
-            if (!locationPermissionGranted) {
+            if (!openGlEsSupport.isSupported && !isInspection) {
+                ErrorState(
+                    guidance = "This device does not provide the graphics support required by the map.",
+                    message = "OpenGL ES 3.0 or newer is required; this device reports ${openGlEsSupport.reportedVersion}.",
+                    modifier = modifier,
+                )
+            } else if (!locationPermissionGranted) {
                 LocationPermissionRequired()
             } else {
                 // Do not show the map in previews.
-                if (LocalInspectionMode.current) {
+                if (isInspection) {
                     NoMapView()
                 } else {
                     MapLibreView(

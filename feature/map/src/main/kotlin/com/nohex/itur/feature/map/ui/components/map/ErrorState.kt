@@ -22,6 +22,7 @@ import com.nohex.itur.core.ui.R
 @Composable
 fun ErrorState(
     modifier: Modifier = Modifier,
+    guidance: String = "Please contact the manufacturer",
     message: String? = null,
 ) {
     Column(
@@ -39,7 +40,7 @@ fun ErrorState(
         )
         Text(text = "The map cannot be shown", style = MaterialTheme.typography.titleLarge)
         Text(
-            text = "Please contact the manufacturer",
+            text = guidance,
             style = MaterialTheme.typography.labelLarge,
         )
         message?.let {
