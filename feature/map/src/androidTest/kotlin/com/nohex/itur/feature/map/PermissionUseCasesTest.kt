@@ -93,12 +93,11 @@ class PermissionUseCasesTest {
         composeRule.waitUntil(timeoutMillis = 10_000) {
             runCatching {
                 composeRule.onAllNodesWithText(
-                    "Location permission is required",
-                    substring = true,
+                    "Location permission required",
                 ).fetchSemanticsNodes().isNotEmpty()
             }.getOrDefault(false)
         }
-        composeRule.onNodeWithText("Location permission is required", substring = true)
+        composeRule.onNodeWithText("Location permission required")
             .assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Itur").assertIsDisplayed()
         composeRule.onNodeWithText(
