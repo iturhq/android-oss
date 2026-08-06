@@ -446,6 +446,7 @@ constructor(
 
     fun triggerIdleState(message: String? = null) {
         _ongoingActivityId.value = null
+        _participantLocations.value = emptyList()
         _uiState.value = MapUiState.Idle(message)
         stopLocationUpdates()
         lastBroadcastSeen = null
@@ -493,6 +494,7 @@ constructor(
     }
 
     private suspend fun triggerOngoingState(activity: IturActivity, context: Context) {
+        val locations = locationsRepository.getForActivity(activity.id)
         // Keep a record of activity's organiser ID.
         _organizerId.value = activity.organizerId
         // Select the joined activity as the current one.
@@ -503,8 +505,9 @@ constructor(
             organizer = userRepository.getAll(listOf(activity.organizerId))
                 .firstOrNull() ?: AnonymousUser(activity.organizerId),
             participantIds = activity.participantIds,
-            locations = locationsRepository.getForActivity(activity.id),
+            locations = locations,
         )
+        _participantLocations.value = locations
 
         // Start updating the location.
         startLocationUpdates(context)

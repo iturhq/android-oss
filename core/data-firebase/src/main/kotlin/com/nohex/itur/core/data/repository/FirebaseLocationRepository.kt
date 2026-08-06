@@ -50,6 +50,7 @@ constructor(
                     latitude = it.location.latitude,
                     longitude = it.location.longitude,
                 ),
+                recordedAt = it.updatedOn.toDate(),
             )
         }
     }

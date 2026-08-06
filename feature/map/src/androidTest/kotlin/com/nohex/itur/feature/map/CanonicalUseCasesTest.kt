@@ -9,9 +9,11 @@ import android.Manifest
 import android.content.Context
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -26,8 +28,11 @@ import com.nohex.itur.core.domain.id.url
 import com.nohex.itur.core.model.IturActivityStatus
 import com.nohex.itur.core.ui.theme.IturTheme
 import com.nohex.itur.feature.map.ui.MapScreen
+import com.nohex.itur.feature.map.ui.components.map.LocalLocationRecencyThresholds
+import com.nohex.itur.feature.map.ui.components.map.LocationRecencyThresholds
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -35,8 +40,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.maplibre.android.MapLibre
 import org.maplibre.android.WellKnownTileServer
+import java.util.Date
 import javax.inject.Inject
-import kotlinx.coroutines.CompletableDeferred
 
 /**
  * Executable scenarios for UC-03 through UC-24. Permission-dialog scenarios UC-01/02 live in
@@ -87,21 +92,24 @@ class CanonicalUseCasesTest {
     private fun launch(
         scanCode: String? = null,
         initialTag: String = "join_activity_fab",
+        recencyThresholds: LocationRecencyThresholds = LocationRecencyThresholds(),
     ) {
         injectedScanCode = scanCode
         composeRule.setContent {
-            IturTheme {
-                MapScreen(
-                    locationPermissionCheck = { true },
-                    qrScanSheet = { _, onScanSuccess ->
-                        SideEffect {
-                            scanCallback = onScanSuccess
-                        }
-                        Column {
-                            Text("Scan an activity QR to join")
-                        }
-                    },
-                )
+            CompositionLocalProvider(LocalLocationRecencyThresholds provides recencyThresholds) {
+                IturTheme {
+                    MapScreen(
+                        locationPermissionCheck = { true },
+                        qrScanSheet = { _, onScanSuccess ->
+                            SideEffect {
+                                scanCallback = onScanSuccess
+                            }
+                            Column {
+                                Text("Scan an activity QR to join")
+                            }
+                        },
+                    )
+                }
             }
         }
         composeRule.waitUntil(timeoutMillis = 10_000) {
@@ -437,5 +445,29 @@ class CanonicalUseCasesTest {
         composeRule.onNodeWithTag("stop_activity_fab").performClick()
         waitForTag("map_state_idle")
         composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+    }
+
+    @Test
+    fun participantMarkerTransitionsToAccessibleStalePresentation() {
+        users.current = users.participant
+        locations.recordedAt = Date()
+        launch(
+            initialTag = "hail_organiser_fab",
+            recencyThresholds = LocationRecencyThresholds(
+                agingAfterMillis = 3_000L,
+                staleAfterMillis = 5_000L,
+            ),
+        )
+
+        composeRule.onNodeWithContentDescription("location is current", substring = true)
+            .assertExists()
+        composeRule.waitUntil(timeoutMillis = 8_000L) {
+            composeRule.onAllNodesWithContentDescription(
+                "location is stale",
+                substring = true,
+            ).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithContentDescription("location is stale", substring = true)
+            .assertExists()
     }
 }

@@ -12,12 +12,15 @@ import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.drawable.toBitmap
@@ -28,6 +31,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.model.ParticipantLocation
 import com.nohex.itur.feature.map.R
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import org.maplibre.android.location.LocationComponent
 import org.maplibre.android.location.LocationComponentActivationOptions.builder
 import org.maplibre.android.location.LocationComponentOptions
@@ -38,7 +43,9 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.PropertyFactory.iconImage
+import org.maplibre.android.style.layers.PropertyFactory.iconOpacity
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
@@ -51,7 +58,27 @@ private const val PARTICIPANT_LAYER = "participants-layer"
 private const val PARTICIPANT_SOURCE = "participants-source"
 private const val MARKER_OTHER = "marker-other"
 private const val MARKER_ORGANIZER = "marker-organizer"
+private const val RECENCY_REFRESH_INTERVAL_MILLIS = 1_000L
+private const val MILLIS_PER_SECOND = 1_000L
+private const val CURRENT_MARKER_OPACITY = 1f
+private const val AGING_MARKER_OPACITY = 0.6f
+private const val STALE_MARKER_OPACITY = 0.3f
+private const val UNKNOWN_AGE_MARKER_OPACITY = 0.45f
 const val PERSISTENT_MAP_NATIVE_VIEW_TAG = "itur-persistent-map-native-view"
+
+internal data class LocationRecencyThresholds(
+    val agingAfterMillis: Long = 15_000L,
+    val staleAfterMillis: Long = 30_000L,
+)
+
+internal val LocalLocationRecencyThresholds = compositionLocalOf { LocationRecencyThresholds() }
+
+internal enum class LocationRecency {
+    CURRENT,
+    AGING,
+    STALE,
+    UNKNOWN,
+}
 
 /**
  * An implementation of the map view provided by MapLibre.
@@ -69,6 +96,8 @@ fun MapLibreView(
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val recencyThresholds = LocalLocationRecencyThresholds.current
+    var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
 
     // Keep a reference to the MapView and the map itself.
     // - TextureView mode avoids a SIGSEGV in MapLibre's native RenderThread on
@@ -86,6 +115,18 @@ fun MapLibreView(
     var mapLibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
     var styleLoaded by remember { mutableStateOf(false) }
     var locationComponent by remember { mutableStateOf<LocationComponent?>(null) }
+    val accessibilityDescription = participantLocations
+        .filter { it.userId != currentUserId }
+        .joinToString(", ", prefix = "Participant locations. ") {
+            it.accessibleAge(nowMillis, recencyThresholds)
+        }
+
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            nowMillis = System.currentTimeMillis()
+            delay(RECENCY_REFRESH_INTERVAL_MILLIS)
+        }
+    }
 
     // Forward lifecycle events to the map
     DisposableEffect(lifecycle) {
@@ -152,7 +193,8 @@ fun MapLibreView(
                 )
                 style.addLayer(
                     SymbolLayer(ORGANIZER_LAYER, ORGANIZER_SOURCE).withProperties(
-                        iconImage(MARKER_ORGANIZER),
+                        iconImage(Expression.get("marker")),
+                        iconOpacity(Expression.get("opacity")),
                     ),
                 )
 
@@ -165,7 +207,8 @@ fun MapLibreView(
                 )
                 style.addLayer(
                     SymbolLayer(PARTICIPANT_LAYER, PARTICIPANT_SOURCE).withProperties(
-                        iconImage(MARKER_OTHER),
+                        iconImage(Expression.get("marker")),
+                        iconOpacity(Expression.get("opacity")),
                     ),
                 )
 
@@ -187,7 +230,7 @@ fun MapLibreView(
     }
 
     // Update the GeoJsonSource when featureCollection changes
-    LaunchedEffect(participantLocations, styleLoaded, mapLibreMap) {
+    LaunchedEffect(participantLocations, styleLoaded, mapLibreMap, nowMillis, recencyThresholds) {
         val style = mapLibreMap?.style
         if (styleLoaded && style != null) {
             style.getSourceAs<GeoJsonSource>(ORGANIZER_SOURCE)?.let { geoJsonSource ->
@@ -205,6 +248,11 @@ fun MapLibreView(
                                     ),
                                 ).apply {
                                     addStringProperty("id", organizerLocation.userId.value)
+                                    addStringProperty("marker", MARKER_ORGANIZER)
+                                    addNumberProperty(
+                                        "opacity",
+                                        organizerLocation.markerOpacity(nowMillis, recencyThresholds),
+                                    )
                                 },
                             ),
                         )
@@ -229,6 +277,11 @@ fun MapLibreView(
                                     ).apply {
                                         addStringProperty("label", it.userName)
                                         addStringProperty("id", it.userId.value)
+                                        addStringProperty("marker", MARKER_OTHER)
+                                        addNumberProperty(
+                                            "opacity",
+                                            it.markerOpacity(nowMillis, recencyThresholds),
+                                        )
                                     }
                                 },
                         ),
@@ -236,12 +289,53 @@ fun MapLibreView(
                 }
             }
         }
+        mapView.contentDescription = accessibilityDescription
     }
 
     AndroidView(
-        modifier = modifier,
+        modifier = modifier.semantics {
+            contentDescription = accessibilityDescription
+        },
         factory = { mapView },
     )
+}
+
+internal fun ParticipantLocation.recency(
+    nowMillis: Long,
+    thresholds: LocationRecencyThresholds = LocationRecencyThresholds(),
+): LocationRecency {
+    val ageMillis = recordedAt?.let { (nowMillis - it.time).coerceAtLeast(0L) }
+        ?: return LocationRecency.UNKNOWN
+    return when {
+        ageMillis >= thresholds.staleAfterMillis -> LocationRecency.STALE
+        ageMillis >= thresholds.agingAfterMillis -> LocationRecency.AGING
+        else -> LocationRecency.CURRENT
+    }
+}
+
+internal fun ParticipantLocation.accessibleAge(
+    nowMillis: Long,
+    thresholds: LocationRecencyThresholds = LocationRecencyThresholds(),
+): String {
+    val seconds = recordedAt?.let {
+        ((nowMillis - it.time).coerceAtLeast(0L) / MILLIS_PER_SECOND)
+    }
+    return when (recency(nowMillis, thresholds)) {
+        LocationRecency.CURRENT -> "$userName location is current"
+        LocationRecency.AGING -> "$userName location updated about $seconds seconds ago"
+        LocationRecency.STALE -> "$userName location is stale, updated about $seconds seconds ago"
+        LocationRecency.UNKNOWN -> "$userName location age is unknown"
+    }
+}
+
+private fun ParticipantLocation.markerOpacity(
+    nowMillis: Long,
+    thresholds: LocationRecencyThresholds,
+): Float = when (recency(nowMillis, thresholds)) {
+    LocationRecency.CURRENT -> CURRENT_MARKER_OPACITY
+    LocationRecency.AGING -> AGING_MARKER_OPACITY
+    LocationRecency.STALE -> STALE_MARKER_OPACITY
+    LocationRecency.UNKNOWN -> UNKNOWN_AGE_MARKER_OPACITY
 }
 
 private fun vectorToBitmap(context: Context, drawableId: Int): Bitmap? = ResourcesCompat.getDrawable(

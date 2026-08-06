@@ -23,6 +23,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
+import java.util.Date
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -56,6 +57,7 @@ class FirebaseLocationRepositoryTest {
             activityId = ACTIVITY_ID.value,
             userId = USER_ID.value,
             location = GeoPoint(51.4, -0.2),
+            updatedOn = com.google.firebase.Timestamp(Date(1_234_567L)),
         )
         val querySnapshot = mockk<QuerySnapshot> { every { toObjects(ParticipantLocationDTO::class.java) } returns listOf(dto) }
         every { query.get() } returns successfulTask(querySnapshot)
@@ -70,6 +72,7 @@ class FirebaseLocationRepositoryTest {
         assertEquals("Ada Lovelace", result[0].userName)
         assertEquals(51.4, result[0].location.latitude)
         assertEquals(-0.2, result[0].location.longitude)
+        assertEquals(Date(1_234_567L), result[0].recordedAt)
     }
 
     @Test

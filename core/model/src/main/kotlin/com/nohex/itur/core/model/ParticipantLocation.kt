@@ -7,6 +7,7 @@ package com.nohex.itur.core.model
 
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
+import java.util.Date
 
 /**
  * The location of an activity's participant.
@@ -16,4 +17,5 @@ data class ParticipantLocation(
     val userId: UserId,
     val userName: String,
     val location: Location,
+    val recordedAt: Date? = null,
 )

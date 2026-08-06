@@ -7,13 +7,13 @@ package com.nohex.itur.feature.map
 
 import android.content.Context
 import com.nohex.itur.core.data.TestFixtures
+import com.nohex.itur.core.data.health.BackendHealthCheck
+import com.nohex.itur.core.data.health.BackendService
 import com.nohex.itur.core.data.repository.ActivityFilter
 import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.data.repository.DataResult
 import com.nohex.itur.core.data.repository.LocationRepository
 import com.nohex.itur.core.data.repository.UserRepository
-import com.nohex.itur.core.data.health.BackendHealthCheck
-import com.nohex.itur.core.data.health.BackendService
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.domain.model.User
@@ -22,10 +22,10 @@ import com.nohex.itur.core.model.IturActivity
 import com.nohex.itur.core.model.IturActivityStatus
 import com.nohex.itur.core.model.Location
 import com.nohex.itur.core.model.ParticipantLocation
+import kotlinx.coroutines.CompletableDeferred
 import java.util.Date
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import kotlinx.coroutines.CompletableDeferred
 
 class ScenarioBackendHealthCheck : BackendHealthCheck {
     override val service = BackendService("scenario-backend", "Scenario backend")
@@ -204,6 +204,7 @@ class ScenarioLocationRepository(
     )
 
     var removeFailure: Throwable? = null
+    var recordedAt: Date? = Date()
     val updateCount = AtomicInteger()
     val removeCount = AtomicInteger()
 
@@ -218,6 +219,7 @@ class ScenarioLocationRepository(
                     userId = userId,
                     userName = "User ${userId.value}",
                     location = location,
+                    recordedAt = recordedAt,
                 )
             }
         }
