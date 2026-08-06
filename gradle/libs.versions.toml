@@ -84,7 +84,7 @@ firebase-auth = { group = "com.google.firebase", name = "firebase-auth-ktx", ver
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 wire-runtime = { group = "com.squareup.wire", name = "wire-runtime", version.ref = "wire" }
 junit-junit = { group = "junit", name = "junit", version.ref = "junitJunit" }
-android-maplibre = { module = "org.maplibre.gl:android-sdk", version.ref = "maplibre" }
+android-maplibre = { module = "org.maplibre.gl:android-sdk-opengl", version.ref = "maplibre" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 androidx-ui-tooling-preview-android = { group = "androidx.compose.ui", name = "ui-tooling-preview-android", version.ref = "uiToolingPreviewAndroid" }
 play-services-maps = { group = "com.google.android.gms", name = "play-services-maps", version.ref = "playServicesMaps" }
