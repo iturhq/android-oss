@@ -57,6 +57,7 @@ import com.nohex.itur.core.domain.model.User
 import com.nohex.itur.core.ui.components.IturProgressIndicator
 import com.nohex.itur.feature.map.ui.components.help.HelpSheet
 import com.nohex.itur.feature.map.ui.components.map.ErrorState
+import com.nohex.itur.feature.map.ui.components.map.BlockingState
 import com.nohex.itur.feature.map.ui.components.map.IdleState
 import com.nohex.itur.feature.map.ui.components.map.MapLibreView
 import com.nohex.itur.feature.map.ui.components.map.NoMapView
@@ -380,15 +381,10 @@ private fun hasFineLocationPermission(context: Context): Boolean = ContextCompat
 
 @Composable
 private fun LocationPermissionRequired() {
-    Box(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "Location permission is required before the map can be shown.",
-            style = MaterialTheme.typography.bodyLarge,
-        )
-    }
+    BlockingState(
+        title = "Location permission required",
+        message = "Allow location access to show the map and share your position during an activity.",
+    )
 }
 
 /**

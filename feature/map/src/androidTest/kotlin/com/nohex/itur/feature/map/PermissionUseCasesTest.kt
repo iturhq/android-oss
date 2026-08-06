@@ -10,6 +10,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ApplicationProvider
@@ -99,6 +100,10 @@ class PermissionUseCasesTest {
         }
         composeRule.onNodeWithText("Location permission is required", substring = true)
             .assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Itur").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            "Allow location access to show the map and share your position during an activity.",
+        ).assertIsDisplayed()
         composeRule.onNodeWithTag("join_activity_fab").assertDoesNotExist()
     }
 

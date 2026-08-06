@@ -5,19 +5,9 @@
 
 package com.nohex.itur.feature.map.ui.components.map
 
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
-import com.nohex.itur.core.ui.R
 
 @Composable
 fun ErrorState(
@@ -25,31 +15,11 @@ fun ErrorState(
     guidance: String = "Please contact the manufacturer",
     message: String? = null,
 ) {
-    Column(
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier
-            .fillMaxSize(),
-    ) {
-        Image(
-            painter = painterResource(R.drawable.core_ui_itur_overlay),
-            contentDescription = "Map placeholder",
-            modifier = Modifier
-                .alpha(.3f)
-                .fillMaxSize(.6f),
-        )
-        Text(text = "The map cannot be shown", style = MaterialTheme.typography.titleLarge)
-        Text(
-            text = guidance,
-            style = MaterialTheme.typography.labelLarge,
-        )
-        message?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-    }
+    BlockingState(
+        title = "The map cannot be shown",
+        message = listOfNotNull(guidance, message).joinToString("\n\n"),
+        modifier = modifier,
+    )
 }
 
 @Preview(showBackground = true, showSystemUi = true)

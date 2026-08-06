@@ -66,7 +66,6 @@ fun IdleState(
                     onSignInRequested,
                     onSignOutRequested,
                     isSignedIn,
-                    externalActionsEnabled,
                 )
             }
 
@@ -99,9 +98,8 @@ private fun ActivityFABs(
     // The QR button shows the QR sheet for scanning for organisers,
     // or the QR scanner for potential participants.
     ExtendedFloatingActionButton(
-        onClick = { if (externalActionsEnabled) onQRRequested() },
-        modifier = Modifier.testTag("join_activity_fab")
-            .serviceAvailability(externalActionsEnabled),
+        onClick = onQRRequested,
+        modifier = Modifier.testTag("join_activity_fab"),
         text = {
             Text(text = "Join an activity")
         },
