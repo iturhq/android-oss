@@ -103,6 +103,7 @@ constructor(
     private var backendCadenceJob: Job? = null
     private var backendMonitoringActive = false
     private var initialRestorePending = true
+    private var locationUpdatesActive = false
 
     // The most recent operator broadcast (UC-ACTIVITY-007), for an in-app banner alongside
     // the system notification posted by [broadcastNotifier]. Polling itself is driven by the UI
@@ -406,9 +407,6 @@ constructor(
             // If there is an ongoing activity...
             _ongoingActivityId.value?.let { activityId ->
                 try {
-                    // Stop requesting the location.
-                    stopLocationUpdates()
-
                     // Clean up location data for the activity.
                     // CAUTION: it needs to happen before removing the participant,
                     // thus revoking write access.
@@ -446,7 +444,6 @@ constructor(
     fun triggerIdleState(message: String? = null) {
         _ongoingActivityId.value = null
         _uiState.value = MapUiState.Idle(message)
-        stopLocationUpdates()
         lastBroadcastSeen = null
         _latestBroadcast.value = null
     }
@@ -607,7 +604,8 @@ constructor(
     /**
      * Starts collecting the device's location.
      */
-    private fun startLocationUpdates(context: Context) {
+    fun startLocationUpdates(context: Context) {
+        if (locationUpdatesActive) return
         Log.d("MapScreen", "Checking location permissions")
         if (ActivityCompat.checkSelfPermission(
                 context,
@@ -620,6 +618,7 @@ constructor(
                 locationCallback,
                 Looper.getMainLooper(),
             )
+            locationUpdatesActive = true
             Log.d("MapScreen", "Location updates requested successfully")
         } else {
             Log.d("MapScreen", "No location permission...")
@@ -629,8 +628,10 @@ constructor(
     /**
      * Stops collecting the device's location.
      */
-    private fun stopLocationUpdates() {
+    fun stopLocationUpdates() {
+        if (!locationUpdatesActive) return
         locationClient.removeUpdates(locationCallback)
+        locationUpdatesActive = false
     }
 }
 

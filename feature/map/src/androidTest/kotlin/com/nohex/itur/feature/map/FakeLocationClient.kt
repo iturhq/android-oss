@@ -21,6 +21,8 @@ import com.nohex.itur.core.location.LocationClient
 class FakeLocationClient : LocationClient {
 
     private var activeCallback: LocationCallback? = null
+    val hasActiveRequest: Boolean
+        get() = activeCallback != null
 
     override fun requestUpdates(
         request: LocationRequest,

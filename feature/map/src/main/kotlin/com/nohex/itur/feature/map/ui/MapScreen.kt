@@ -40,7 +40,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -105,6 +107,9 @@ fun MapScreen(
     val organizerId by viewModel.organizerId.collectAsState()
     // A reference to the MapLibre map.
     var mapLibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
+    // Initial positioning is a one-shot action. Keep it across configuration changes so a user
+    // who has panned the map is not pulled back to their position after rotation.
+    var centeredOnInitialLocation by rememberSaveable { mutableStateOf(false) }
     // The positions of the participants.
     val participantLocations by viewModel.participantLocations.collectAsState()
     // The last location of the device.
@@ -189,11 +194,50 @@ fun MapScreen(
         locationPermissionGranted = isGranted
     }
 
+    // Location collection follows the visible screen, including the idle state. The ViewModel
+    // only publishes fixes while an activity is ongoing, so acquiring the startup fix does not
+    // expose an idle participant's position to a backend.
+    DisposableEffect(lifecycleOwner, viewModel, locationPermissionGranted) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> if (locationPermissionGranted) {
+                    viewModel.startLocationUpdates(context)
+                }
+                Lifecycle.Event.ON_STOP -> viewModel.stopLocationUpdates()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        if (locationPermissionGranted &&
+            lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        ) {
+            viewModel.startLocationUpdates(context)
+        }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.stopLocationUpdates()
+        }
+    }
+
     // Request location permission when entering the map screen.
     LaunchedEffect(Unit) {
         if (openGlEsSupport.isSupported && !locationPermissionGranted) {
+            // Commit the branded blocking state before Android places its permission dialog over
+            // the activity. Two frames make this deterministic even on slower Android 10 devices.
+            withFrameNanos { }
+            withFrameNanos { }
             locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
+    }
+
+    // Zoom once when both the rendered map and the first device fix are available. Subsequent
+    // fixes deliberately leave the camera alone so normal pan/zoom gestures remain respected.
+    LaunchedEffect(mapLibreMap, lastLocation, centeredOnInitialLocation) {
+        centeredOnInitialLocation = centerOnInitialLocationIfReady(
+            map = mapLibreMap,
+            location = lastLocation,
+            alreadyCentered = centeredOnInitialLocation,
+        )
     }
 
     // Request notification permission (Android 13+) so operator broadcasts (UC-ACTIVITY-007)
@@ -201,8 +245,9 @@ fun MapScreen(
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) {}
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+    LaunchedEffect(locationPermissionGranted) {
+        if (locationPermissionGranted &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED
         ) {

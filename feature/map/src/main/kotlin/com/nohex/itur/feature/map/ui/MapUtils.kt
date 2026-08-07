@@ -16,6 +16,22 @@ import org.maplibre.android.maps.MapLibreMap
 private const val PADDING: Int = 100
 
 /**
+ * Applies the startup camera move once both prerequisites exist and returns the new one-shot
+ * state. Keeping this transition separate makes the first-fix contract deterministic to test
+ * without constructing a MapView in a local unit test.
+ */
+internal fun centerOnInitialLocationIfReady(
+    map: MapLibreMap?,
+    location: Location?,
+    alreadyCentered: Boolean,
+    center: (MapLibreMap, Location) -> Unit = ::zoomOnUser,
+): Boolean {
+    if (alreadyCentered || map == null || location == null) return alreadyCentered
+    center(map, location)
+    return true
+}
+
+/**
  * Zoom in on the current device's location.
  */
 internal fun zoomOnUser(

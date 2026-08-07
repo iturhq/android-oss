@@ -24,6 +24,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.maplibre.android.MapLibre
 import org.maplibre.android.WellKnownTileServer
+import javax.inject.Inject
 
 /**
  * Instrumented tests for [MapScreen], exercising it through the demo flavor's real Hilt graph
@@ -33,6 +34,9 @@ import org.maplibre.android.WellKnownTileServer
  */
 @HiltAndroidTest
 class MapScreenTest {
+
+    @Inject
+    lateinit var locationClient: FakeLocationClient
 
     @get:Rule(order = 0)
     val hiltRule = HiltAndroidRule(this)
@@ -75,6 +79,11 @@ class MapScreenTest {
         composeRule.onNodeWithTag("join_activity_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("sign_in_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("start_activity_fab").assertDoesNotExist()
+    }
+
+    @Test
+    fun idleMapRequestsADeviceLocationForInitialCentering() {
+        composeRule.waitUntil(timeoutMillis = 10_000) { locationClient.hasActiveRequest }
     }
 
     @Test
