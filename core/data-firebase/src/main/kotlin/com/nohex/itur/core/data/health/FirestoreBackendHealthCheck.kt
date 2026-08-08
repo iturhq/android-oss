@@ -19,7 +19,7 @@ class FirestoreBackendHealthCheck @Inject constructor(
     private val firestore: FirebaseFirestore,
 ) : BackendHealthCheck {
     override val service = BackendService(
-        id = "firebase-firestore",
+        id = BackendServiceIds.FIREBASE_FIRESTORE,
         displayName = "Cloud Firestore",
     )
 

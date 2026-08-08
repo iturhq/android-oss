@@ -9,6 +9,8 @@ import android.app.ActivityManager
 import android.content.Context
 
 internal const val REQUIRED_OPEN_GL_ES_VERSION = 0x00030000
+private const val OPEN_GL_ES_MAJOR_SHIFT = 16
+private const val OPEN_GL_ES_COMPONENT_MASK = 0xffff
 
 data class OpenGlEsSupport(
     val isSupported: Boolean,
@@ -21,8 +23,8 @@ internal fun checkOpenGlEsSupport(context: Context): OpenGlEsSupport {
 }
 
 internal fun openGlEsSupport(reportedVersion: Int): OpenGlEsSupport {
-    val major = reportedVersion shr 16 and 0xffff
-    val minor = reportedVersion and 0xffff
+    val major = reportedVersion shr OPEN_GL_ES_MAJOR_SHIFT and OPEN_GL_ES_COMPONENT_MASK
+    val minor = reportedVersion and OPEN_GL_ES_COMPONENT_MASK
     return OpenGlEsSupport(
         isSupported = reportedVersion >= REQUIRED_OPEN_GL_ES_VERSION,
         reportedVersion = "$major.$minor",

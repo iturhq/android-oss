@@ -49,6 +49,7 @@ internal fun UserFABs(
     onSignInRequested: () -> Unit,
     onSignOutRequested: () -> Unit,
     isSignedIn: Boolean,
+    authenticationActionsEnabled: Boolean,
 ) {
     if (isSignedIn) {
         ExtendedFloatingActionButton(
@@ -64,8 +65,9 @@ internal fun UserFABs(
         )
     } else {
         ExtendedFloatingActionButton(
-            onClick = onSignInRequested,
-            modifier = Modifier.testTag("sign_in_fab"),
+            onClick = { if (authenticationActionsEnabled) onSignInRequested() },
+            modifier = Modifier.testTag("sign_in_fab")
+                .serviceAvailability(authenticationActionsEnabled),
             icon = {
                 Icon(IturIcons.SignIn, contentDescription = "Sign in")
             },

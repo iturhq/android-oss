@@ -6,11 +6,17 @@
 package com.nohex.itur.feature.map
 
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import com.nohex.itur.core.data.TestFixtures
+import com.nohex.itur.core.domain.id.UserId
+import com.nohex.itur.core.domain.model.User
 import com.nohex.itur.core.ui.theme.IturTheme
 import com.nohex.itur.feature.map.ui.components.map.IdleState
+import com.nohex.itur.feature.map.ui.components.map.OngoingState
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -20,7 +26,7 @@ class ServiceAwareControlsTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun localEntryActionsRemainAvailableDuringAnOutage() {
+    fun firebaseFailureDisablesOnlyAuthenticationAction() {
         var signedIn = false
         var joined = false
         composeRule.setContent {
@@ -31,15 +37,71 @@ class ServiceAwareControlsTest {
                     onSignOutRequested = {},
                     onQRRequested = { joined = true },
                     isSignedIn = false,
-                    externalActionsEnabled = false,
+                    authenticationActionsEnabled = false,
+                    activityActionsEnabled = true,
                 )
             }
         }
 
-        composeRule.onNodeWithTag("sign_in_fab").assertIsEnabled().performClick()
+        composeRule.onNodeWithTag("sign_in_fab").assertIsNotEnabled().performClick()
         composeRule.onNodeWithTag("join_activity_fab").assertIsEnabled().performClick()
 
-        assertTrue(signedIn)
+        assertFalse(signedIn)
         assertTrue(joined)
+    }
+
+    @Test
+    fun firestoreFailureDisablesOnlyActivityActions() {
+        var started = false
+        var joined = false
+        composeRule.setContent {
+            IturTheme {
+                IdleState(
+                    onStartRequested = { started = true },
+                    onSignInRequested = {},
+                    onSignOutRequested = {},
+                    onQRRequested = { joined = true },
+                    isSignedIn = true,
+                    authenticationActionsEnabled = true,
+                    activityActionsEnabled = false,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("start_activity_fab").assertIsNotEnabled().performClick()
+        composeRule.onNodeWithTag("join_activity_fab").assertIsEnabled().performClick()
+
+        assertFalse(started)
+        assertTrue(joined)
+    }
+
+    @Test
+    fun firestoreFailureKeepsLocalOngoingControlsUsable() {
+        var stopped = false
+        var tracked = false
+        composeRule.setContent {
+            IturTheme {
+                OngoingState(
+                    activity = TestFixtures.ongoingActivity,
+                    organizer = User.RegisteredUser(UserId("other"), "Organizer", null),
+                    participantIds = emptyList(),
+                    locations = emptyList(),
+                    isOrganizer = false,
+                    onStopRequested = { stopped = true },
+                    onQRRequested = {},
+                    onTrackUserRequested = { tracked = true },
+                    onTrackGroupRequested = {},
+                    onAttentionRequest = {},
+                    onHelpRequested = {},
+                    activityActionsEnabled = false,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("stop_activity_fab").assertIsNotEnabled().performClick()
+        composeRule.onNodeWithTag("recenter_fab").assertIsEnabled().performClick()
+
+        assertFalse(stopped)
+        assertTrue(tracked)
     }
 }

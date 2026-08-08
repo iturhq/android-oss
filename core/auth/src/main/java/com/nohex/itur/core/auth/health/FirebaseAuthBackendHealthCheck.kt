@@ -9,6 +9,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
 import com.nohex.itur.core.data.health.BackendHealthCheck
 import com.nohex.itur.core.data.health.BackendService
+import com.nohex.itur.core.data.health.BackendServiceIds
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
@@ -23,7 +24,7 @@ class FirebaseAuthBackendHealthCheck @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
 ) : BackendHealthCheck {
     override val service = BackendService(
-        id = "firebase-auth",
+        id = BackendServiceIds.FIREBASE_AUTH,
         displayName = "Firebase Authentication",
     )
 

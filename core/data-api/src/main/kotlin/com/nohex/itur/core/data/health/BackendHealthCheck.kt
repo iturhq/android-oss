@@ -13,6 +13,12 @@ data class BackendService(
     val displayName: String,
 )
 
+/** Stable service identifiers used when mapping failures to dependent UI actions. */
+object BackendServiceIds {
+    const val FIREBASE_AUTH = "firebase-auth"
+    const val FIREBASE_FIRESTORE = "firebase-firestore"
+}
+
 /**
  * Side-effect-free connectivity probe contributed to the application's Hilt set.
  *

@@ -54,12 +54,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.nohex.itur.core.data.health.BackendServiceIds
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.model.User
 import com.nohex.itur.core.ui.components.IturProgressIndicator
 import com.nohex.itur.feature.map.ui.components.help.HelpSheet
-import com.nohex.itur.feature.map.ui.components.map.ErrorState
 import com.nohex.itur.feature.map.ui.components.map.BlockingState
+import com.nohex.itur.feature.map.ui.components.map.ErrorState
 import com.nohex.itur.feature.map.ui.components.map.IdleState
 import com.nohex.itur.feature.map.ui.components.map.MapLibreView
 import com.nohex.itur.feature.map.ui.components.map.NoMapView
@@ -148,9 +149,11 @@ fun MapScreen(
         }
     }
 
-    // Preserve the map and local controls during outages. Operations that require a backend are
-    // disabled below; the host application owns the persistent route to service diagnostics.
-    val externalActionsEnabled = backendAvailability.failingServices.isEmpty()
+    // Preserve the map and local controls during outages. Each operation is disabled only by a
+    // service it actually requires; the host owns the persistent route to service diagnostics.
+    val failingServiceIds = backendAvailability.failingServices.mapTo(mutableSetOf()) { it.id }
+    val authenticationActionsEnabled = BackendServiceIds.FIREBASE_AUTH !in failingServiceIds
+    val activityActionsEnabled = BackendServiceIds.FIREBASE_FIRESTORE !in failingServiceIds
 
     // Show a dialog when an activity cannot be resumed.
     if (uiState is MapUiState.RecoverableError) {
@@ -336,7 +339,8 @@ fun MapScreen(
             if (!openGlEsSupport.isSupported && !isInspection) {
                 ErrorState(
                     guidance = "This device does not provide the graphics support required by the map.",
-                    message = "OpenGL ES 3.0 or newer is required; this device reports ${openGlEsSupport.reportedVersion}.",
+                    message = "OpenGL ES 3.0 or newer is required; this device reports " +
+                        "${openGlEsSupport.reportedVersion}.",
                     modifier = modifier,
                 )
             } else if (!locationPermissionGranted) {
@@ -372,7 +376,8 @@ fun MapScreen(
                             onQRRequested = { showQRScanSheet = true },
                             modifier = modifier,
                             isSignedIn = currentUser is User.RegisteredUser,
-                            externalActionsEnabled = externalActionsEnabled,
+                            authenticationActionsEnabled = authenticationActionsEnabled,
+                            activityActionsEnabled = activityActionsEnabled,
                         )
                     }
 
@@ -410,7 +415,7 @@ fun MapScreen(
                             onAttentionRequest = viewModel::requestAttention,
                             onHelpRequested = { showHelpSheet = true },
                             isOrganizer = ongoingUiState.organizer.id == currentUser?.id,
-                            externalActionsEnabled = externalActionsEnabled,
+                            activityActionsEnabled = activityActionsEnabled,
                         )
                     }
                 }

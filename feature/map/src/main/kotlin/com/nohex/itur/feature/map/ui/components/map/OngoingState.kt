@@ -44,7 +44,7 @@ internal fun OngoingState(
     onAttentionRequest: () -> Unit,
     onHelpRequested: () -> Unit,
     modifier: Modifier = Modifier,
-    externalActionsEnabled: Boolean = true,
+    activityActionsEnabled: Boolean = true,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         FabSideColumn(horizontalAlignment = Alignment.Start, modifier = Modifier.padding(16.dp)) {
@@ -75,7 +75,7 @@ internal fun OngoingState(
                     onQRRequested = onQRRequested,
                     isOrganizer = isOrganizer,
                     onAttentionRequest = onAttentionRequest,
-                    externalActionsEnabled = externalActionsEnabled,
+                    activityActionsEnabled = activityActionsEnabled,
                 )
             }
         }
@@ -89,7 +89,7 @@ private fun OngoingActivityFABs(
     onQRRequested: () -> Unit,
     // Whether the user is the organiser.
     isOrganizer: Boolean,
-    externalActionsEnabled: Boolean,
+    activityActionsEnabled: Boolean,
 ) {
     // The QR button shows the QR sheet for scanning for organisers,
     // or the QR scanner for potential participants.
@@ -102,18 +102,18 @@ private fun OngoingActivityFABs(
         }
     } else {
         FloatingActionButton(
-            onClick = { if (externalActionsEnabled) onAttentionRequest() },
+            onClick = { if (activityActionsEnabled) onAttentionRequest() },
             modifier = Modifier.testTag("hail_organiser_fab")
-                .serviceAvailability(externalActionsEnabled),
+                .serviceAvailability(activityActionsEnabled),
         ) {
             Icon(IturIcons.Warning, contentDescription = "Hail organiser")
         }
     }
 
     FloatingActionButton(
-        onClick = { if (externalActionsEnabled) onStopRequested() },
+        onClick = { if (activityActionsEnabled) onStopRequested() },
         modifier = Modifier.testTag("stop_activity_fab")
-            .serviceAvailability(externalActionsEnabled),
+            .serviceAvailability(activityActionsEnabled),
     ) {
         Icon(
             IturIcons.Stop,
