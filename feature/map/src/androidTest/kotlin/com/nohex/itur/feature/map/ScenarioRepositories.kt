@@ -68,6 +68,7 @@ class ScenarioActivityRepository : ActivityRepository {
     var removeFailure: Throwable? = null
     var updateFailure: Throwable? = null
     var getActivityFailuresRemaining = 0
+    val addParticipantCount = AtomicInteger()
     val attentionRequestCount = AtomicInteger()
 
     fun replaceActivities(replacement: List<IturActivity>) {
@@ -139,6 +140,7 @@ class ScenarioActivityRepository : ActivityRepository {
         activityId: IturActivityId,
         userId: UserId,
     ): DataResult<IturActivity> {
+        addParticipantCount.incrementAndGet()
         addFailure?.let { return DataResult.Error(it) }
         val index = activities.indexOfFirst { it.id == activityId }
         if (index < 0) return DataResult.NotFound(activityId.value)

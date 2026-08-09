@@ -32,6 +32,7 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -228,6 +229,36 @@ class MapViewModelTest {
             val vm = viewModel(activityRepo = activityRepo(), userRepo = userRepo)
             vm.joinActivity(TestFixtures.ONGOING_ACTIVITY_ID, context)
             assertIs<MapUiState.Error>(vm.uiState.value)
+        }
+    }
+
+    @Test
+    fun `GIVEN session restoration is pending WHEN joining THEN current user is resolved`() {
+        runTest {
+            val healthGate = CompletableDeferred<Unit>()
+            val delayedHealthCheck = object : BackendHealthCheck {
+                override val service = BackendService("delayed", "Delayed test service")
+
+                override suspend fun probe() {
+                    healthGate.await()
+                }
+
+                override fun recognizes(cause: Throwable): Boolean = false
+            }
+            val activityRepo = activityRepo(TestFixtures.ongoingActivity)
+            val vm = viewModel(
+                activityRepo = activityRepo,
+                healthChecks = setOf(delayedHealthCheck),
+            )
+            runCurrent()
+            assertNull(vm.currentUser.value)
+
+            vm.joinActivity(TestFixtures.ONGOING_ACTIVITY_ID, context)
+            runCurrent()
+
+            assertOngoing(vm)
+            healthGate.complete(Unit)
+            runCurrent()
         }
     }
 

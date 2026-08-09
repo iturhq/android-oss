@@ -363,11 +363,13 @@ fun MapScreen(
                     )
                 }
 
-                when (uiState) {
-                    is MapUiState.Loading -> IturProgressIndicator(label = "Preparing activity...")
-                    is MapUiState.Error,
-                    is MapUiState.Idle,
-                    is MapUiState.RecoverableError,
+                when {
+                    currentUser == null -> IturProgressIndicator(label = "Preparing map...")
+                    uiState is MapUiState.Loading ->
+                        IturProgressIndicator(label = "Preparing activity...")
+                    uiState is MapUiState.Error ||
+                        uiState is MapUiState.Idle ||
+                        uiState is MapUiState.RecoverableError
                     -> {
                         IdleState(
                             onStartRequested = { viewModel.startActivity(context) },
@@ -381,7 +383,7 @@ fun MapScreen(
                         )
                     }
 
-                    is MapUiState.Ongoing -> {
+                    uiState is MapUiState.Ongoing -> {
                         // Set the current activity.
                         val ongoingUiState = (uiState as MapUiState.Ongoing)
                         OngoingState(
