@@ -437,49 +437,6 @@ private fun LocationPermissionRequired() {
     )
 }
 
-/**
- * A non-dismissible overlay shown whenever one or more required services are unavailable.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun BackendUnavailableDialog(
-    failingServiceNames: List<String>,
-    countdown: Int?,
-    onRetryNow: () -> Unit,
-    onExit: () -> Unit,
-) {
-    // Empty lambda: tapping outside or pressing back does nothing.
-    BasicAlertDialog(onDismissRequest = {}) {
-        Surface(
-            modifier = Modifier
-                .wrapContentWidth()
-                .wrapContentHeight(),
-            shape = MaterialTheme.shapes.large,
-            tonalElevation = AlertDialogDefaults.TonalElevation,
-        ) {
-            Column(modifier = Modifier.padding(24.dp)) {
-                Text(
-                    text = "Service unavailable",
-                    style = MaterialTheme.typography.headlineSmall,
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(text = "Failed connection to ${failingServiceNames.joinToString()}.")
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = countdown?.let { "Retrying in ${it}s\u2026" } ?: "Checking\u2026",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-                Row(modifier = Modifier.align(Alignment.End)) {
-                    TextButton(onClick = onExit) { Text("Exit") }
-                    TextButton(onClick = onRetryNow) { Text("Retry now") }
-                }
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModalAlert(text: String, onDismissRequest: () -> Unit) {
