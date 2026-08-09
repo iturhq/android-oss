@@ -26,7 +26,7 @@ class ServiceAwareControlsTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun firebaseFailureDisablesOnlyAuthenticationAction() {
+    fun disabledAuthenticationActionsKeepJoinUsable() {
         var signedIn = false
         var joined = false
         composeRule.setContent {
@@ -51,7 +51,7 @@ class ServiceAwareControlsTest {
     }
 
     @Test
-    fun firestoreFailureDisablesOnlyActivityActions() {
+    fun disabledActivityActionsKeepJoinUsable() {
         var started = false
         var joined = false
         composeRule.setContent {
@@ -76,7 +76,7 @@ class ServiceAwareControlsTest {
     }
 
     @Test
-    fun firestoreFailureKeepsLocalOngoingControlsUsable() {
+    fun disabledActivityActionsKeepLocalOngoingControlsUsable() {
         var stopped = false
         var tracked = false
         composeRule.setContent {
