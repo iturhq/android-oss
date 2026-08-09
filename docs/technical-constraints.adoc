@@ -87,8 +87,8 @@ Tapping *Join an activity* again repeats the toast until the permission is grant
 | Required on test device; Emulator must have Google Play
 
 | Google Play Services (Location)
-| `FusedLocationProviderClient` — 2-second location polling
-| Requires GPS/Location enabled on emulator, or a fake client (see TODO MD13)
+| `core:location`'s `GmsLocationClient` — high-accuracy, 2-second location updates
+| Requires GPS/Location enabled on device; feature tests replace the GMS-free `LocationClient`
 
 | ML Kit Barcode Scanning
 | QR code decoding (bundled with APK)
@@ -125,8 +125,8 @@ Tapping *Join an activity* again repeats the toast until the permission is grant
 | Race condition possible before first composition; use `ComposeTestRule.waitForIdle()`
 
 | Location polling
-| `FusedLocationProviderClient` callback on `Looper.getMainLooper()`, 2-second interval
-| Stopped on `leaveActivity()`; a fake client is needed for deterministic tests (TODO MD13)
+| `LocationClient` callback; the GMS adapter uses `Looper.getMainLooper()` and a 2-second interval
+| Stopped with the map lifecycle; instrumented tests use `FakeLocationClient`
 
 | Location write to Firestore
 | `CoroutineScope(Dispatchers.IO).launch` (not `viewModelScope`)
@@ -148,4 +148,3 @@ Tapping *Join an activity* again repeats the toast until the permission is grant
 | `viewModelScope.launch` → Firestore write
 | Silent; no UI feedback on success or failure
 |===
-

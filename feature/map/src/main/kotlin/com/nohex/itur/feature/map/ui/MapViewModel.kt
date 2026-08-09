@@ -9,17 +9,12 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
-import android.os.Looper
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY
 import com.nohex.itur.core.data.health.BackendHealthCheck
 import com.nohex.itur.core.data.health.BackendService
 import com.nohex.itur.core.data.repository.ActivityFilter
@@ -580,22 +575,18 @@ constructor(
     }
 
     // The callback to use when the device's location is received.
-    private val locationCallback = object : LocationCallback() {
-        override fun onLocationResult(locationResult: LocationResult) {
-            locationResult.locations.lastOrNull()?.let { location ->
-                _lastLocation.postValue(location)
-                // If there's an activity ID and a user,
-                // update the user's location for that activity.
-                ongoingActivityId.value?.let { activityId ->
-                    currentUser.value?.let { participant ->
-                        // Tied to viewModelScope (instead of an unmanaged CoroutineScope) so this
-                        // work is cancelled along with the rest of the ViewModel's work, rather
-                        // than continuing to run -- and potentially update now-stale state --
-                        // after the ViewModel is cleared.
-                        viewModelScope.launch(Dispatchers.IO) {
-                            updateUserLocation(participant.id, activityId, location)
-                        }
-                    }
+    private val locationCallback: (Location) -> Unit = { location ->
+        _lastLocation.postValue(location)
+        // If there's an activity ID and a user,
+        // update the user's location for that activity.
+        ongoingActivityId.value?.let { activityId ->
+            currentUser.value?.let { participant ->
+                // Tied to viewModelScope (instead of an unmanaged CoroutineScope) so this
+                // work is cancelled along with the rest of the ViewModel's work, rather
+                // than continuing to run -- and potentially update now-stale state --
+                // after the ViewModel is cleared.
+                viewModelScope.launch(Dispatchers.IO) {
+                    updateUserLocation(participant.id, activityId, location)
                 }
             }
         }
@@ -614,9 +605,8 @@ constructor(
         ) {
             Log.d("MapScreen", "Requesting location updates")
             locationClient.requestUpdates(
-                LocationRequest.Builder(PRIORITY_HIGH_ACCURACY, locationUpdateConfig.updateIntervalMillis).build(),
+                locationUpdateConfig.updateIntervalMillis,
                 locationCallback,
-                Looper.getMainLooper(),
             )
             locationUpdatesActive = true
             Log.d("MapScreen", "Location updates requested successfully")

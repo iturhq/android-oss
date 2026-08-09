@@ -70,8 +70,6 @@ dependencies {
 
     // Hilt
     implementation(libs.hilt.android)
-    implementation(libs.play.services.maps)
-    implementation(libs.play.services.location)
     implementation(libs.androidx.runtime.livedata)
     implementation(libs.androidx.camera.core)
     implementation(libs.androidx.core.ktx)

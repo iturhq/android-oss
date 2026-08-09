@@ -6,10 +6,6 @@
 package com.nohex.itur.feature.map
 
 import android.location.Location
-import android.os.Looper
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
 import com.nohex.itur.core.location.LocationClient
 
 /**
@@ -20,25 +16,24 @@ import com.nohex.itur.core.location.LocationClient
  */
 class FakeLocationClient : LocationClient {
 
-    private var activeCallback: LocationCallback? = null
+    private var activeCallback: ((Location) -> Unit)? = null
     val hasActiveRequest: Boolean
         get() = activeCallback != null
 
     override fun requestUpdates(
-        request: LocationRequest,
-        callback: LocationCallback,
-        looper: Looper,
+        intervalMillis: Long,
+        onLocation: (Location) -> Unit,
     ) {
-        activeCallback = callback
+        activeCallback = onLocation
     }
 
-    override fun removeUpdates(callback: LocationCallback) {
-        if (activeCallback === callback) activeCallback = null
+    override fun removeUpdates(onLocation: (Location) -> Unit) {
+        if (activeCallback === onLocation) activeCallback = null
     }
 
     /** Push a [location] to the registered callback immediately. */
     fun emit(location: Location) {
-        activeCallback?.onLocationResult(LocationResult.create(listOf(location)))
+        activeCallback?.invoke(location)
     }
 
     /** Push a location at the given [latitude]/[longitude]. */
