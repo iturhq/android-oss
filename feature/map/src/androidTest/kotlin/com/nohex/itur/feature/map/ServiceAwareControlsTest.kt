@@ -10,12 +10,10 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
-import com.nohex.itur.core.data.TestFixtures
-import com.nohex.itur.core.domain.id.UserId
-import com.nohex.itur.core.domain.model.User
 import com.nohex.itur.core.ui.theme.IturTheme
 import com.nohex.itur.feature.map.ui.components.map.IdleState
 import com.nohex.itur.feature.map.ui.components.map.OngoingState
+import com.nohex.itur.feature.map.ui.components.map.OngoingStateActions
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -82,17 +80,15 @@ class ServiceAwareControlsTest {
         composeRule.setContent {
             IturTheme {
                 OngoingState(
-                    activity = TestFixtures.ongoingActivity,
-                    organizer = User.RegisteredUser(UserId("other"), "Organizer", null),
-                    participantIds = emptyList(),
-                    locations = emptyList(),
+                    actions = OngoingStateActions(
+                        onStopRequested = { stopped = true },
+                        onQrRequested = {},
+                        onTrackUserRequested = { tracked = true },
+                        onTrackGroupRequested = {},
+                        onAttentionRequest = {},
+                        onHelpRequested = {},
+                    ),
                     isOrganizer = false,
-                    onStopRequested = { stopped = true },
-                    onQRRequested = {},
-                    onTrackUserRequested = { tracked = true },
-                    onTrackGroupRequested = {},
-                    onAttentionRequest = {},
-                    onHelpRequested = {},
                     activityActionsEnabled = false,
                 )
             }

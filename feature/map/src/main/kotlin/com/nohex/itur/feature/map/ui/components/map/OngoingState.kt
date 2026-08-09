@@ -18,11 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.nohex.itur.core.domain.id.IturActivityId
-import com.nohex.itur.core.domain.id.UserId
-import com.nohex.itur.core.domain.model.User
-import com.nohex.itur.core.model.IturActivity
-import com.nohex.itur.core.model.ParticipantLocation
 import com.nohex.itur.core.ui.IturIcons
 
 /**
@@ -32,28 +27,19 @@ import com.nohex.itur.core.ui.IturIcons
  */
 @Composable
 internal fun OngoingState(
-    activity: IturActivity,
-    organizer: User,
-    participantIds: List<UserId>,
-    locations: List<ParticipantLocation>,
+    actions: OngoingStateActions,
     isOrganizer: Boolean,
-    onStopRequested: () -> Unit,
-    onQRRequested: () -> Unit,
-    onTrackUserRequested: () -> Unit,
-    onTrackGroupRequested: () -> Unit,
-    onAttentionRequest: () -> Unit,
-    onHelpRequested: () -> Unit,
     modifier: Modifier = Modifier,
     activityActionsEnabled: Boolean = true,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         FabSideColumn(horizontalAlignment = Alignment.Start, modifier = Modifier.padding(16.dp)) {
-            HelpFABs(onHelpRequested = onHelpRequested)
+            HelpFABs(onHelpRequested = actions.onHelpRequested)
             TrackingFABs(
-                onTrackUserRequested = onTrackUserRequested,
+                onTrackUserRequested = actions.onTrackUserRequested,
             ) {
                 FloatingActionButton(
-                    onClick = onTrackGroupRequested,
+                    onClick = actions.onTrackGroupRequested,
                     modifier = Modifier.testTag("zoom_group_fab"),
                 ) {
                     Icon(IturIcons.ZoomAll, contentDescription = "Track group")
@@ -71,10 +57,10 @@ internal fun OngoingState(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 OngoingActivityFABs(
-                    onStopRequested = onStopRequested,
-                    onQRRequested = onQRRequested,
+                    onStopRequested = actions.onStopRequested,
+                    onQRRequested = actions.onQrRequested,
                     isOrganizer = isOrganizer,
-                    onAttentionRequest = onAttentionRequest,
+                    onAttentionRequest = actions.onAttentionRequest,
                     activityActionsEnabled = activityActionsEnabled,
                 )
             }
@@ -126,20 +112,14 @@ private fun OngoingActivityFABs(
 @Composable
 private fun OrganizerOngoingStatePreview() {
     OngoingState(
-        activity = IturActivity(
-            id = IturActivityId("previewActivity00001"),
-            organizerId = UserId("preview-user"),
-            participantIds = listOf(),
+        actions = OngoingStateActions(
+            onStopRequested = {},
+            onQrRequested = {},
+            onTrackUserRequested = {},
+            onTrackGroupRequested = {},
+            onAttentionRequest = {},
+            onHelpRequested = {},
         ),
-        organizer = User.AnonymousUser(UserId("preview-user")),
-        participantIds = listOf(),
-        locations = listOf(),
         isOrganizer = true,
-        onStopRequested = {},
-        onQRRequested = {},
-        onTrackUserRequested = {},
-        onTrackGroupRequested = {},
-        onAttentionRequest = {},
-        onHelpRequested = {},
     )
 }
