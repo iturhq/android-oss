@@ -137,10 +137,7 @@ constructor(
                 if (
                     generation > 0L &&
                     initialRestorePending &&
-                    !initialRestoreRunning &&
-                    backendHealthCoordinator.services.value.all {
-                        it.status == BackendHealthStatus.WORKING
-                    }
+                    !initialRestoreRunning
                 ) {
                     initialRestoreRunning = true
                     try {
