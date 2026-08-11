@@ -97,6 +97,7 @@ constructor(
     private var backendCheckJob: Job? = null
     private var backendCadenceJob: Job? = null
     private var backendMonitoringActive = false
+    private var participantLocationMonitoringJob: Job? = null
     private var initialRestorePending = true
     private var locationUpdatesActive = false
 
@@ -173,6 +174,28 @@ constructor(
         backendCadenceJob?.cancel()
         backendRetryJob?.cancel()
         backendCheckJob?.cancel()
+    }
+
+    /**
+     * Refreshes participant markers independently of this device's own GPS callback while the
+     * map screen is visible. The optional interval keeps the cadence deterministic in tests.
+     */
+    fun startParticipantLocationMonitoring(
+        refreshIntervalMillis: Long = PARTICIPANT_LOCATION_REFRESH_INTERVAL_MILLIS,
+    ) {
+        if (participantLocationMonitoringJob?.isActive == true) return
+        participantLocationMonitoringJob = viewModelScope.launch {
+            while (true) {
+                delay(refreshIntervalMillis)
+                refreshParticipantLocations()
+            }
+        }
+    }
+
+    /** Stops participant-marker polling while the map screen is not visible. */
+    fun stopParticipantLocationMonitoring() {
+        participantLocationMonitoringJob?.cancel()
+        participantLocationMonitoringJob = null
     }
 
     private fun scheduleNextCadenceCheck() {
@@ -487,6 +510,7 @@ constructor(
 
     fun triggerIdleState(message: String? = null) {
         _ongoingActivityId.value = null
+        _participantLocations.value = emptyList()
         _uiState.value = MapUiState.Idle(message)
         lastBroadcastSeen = null
         _latestBroadcast.value = null
@@ -538,12 +562,14 @@ constructor(
         // Select the joined activity as the current one.
         _ongoingActivityId.value = activity.id
         // Show the ongoing activity state.
+        val locations = locationsRepository.getForActivity(activity.id)
+        _participantLocations.value = locations
         _uiState.value = Ongoing(
             activity = activity,
             organizer = userRepository.getAll(listOf(activity.organizerId))
                 .firstOrNull() ?: AnonymousUser(activity.organizerId),
             participantIds = activity.participantIds,
-            locations = locationsRepository.getForActivity(activity.id),
+            locations = locations,
         )
 
         // Start updating the location.
@@ -581,6 +607,18 @@ constructor(
         }
     }
 
+    private suspend fun refreshParticipantLocations() {
+        val activityId = _ongoingActivityId.value ?: return
+        try {
+            _participantLocations.value = locationsRepository.getForActivity(activityId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("MapViewModel", "Failed to refresh participant locations for $activityId", e)
+            reportBackendFailure(e)
+        }
+    }
+
     /**
      * Posts the location of the current user along with the activity.
      */
@@ -595,8 +633,7 @@ constructor(
                 activityId,
                 IturLocation(latitude = location.latitude, longitude = location.longitude),
             )
-            // Update the participants location list.
-            _participantLocations.value = locationsRepository.getForActivity(activityId)
+            refreshParticipantLocations()
         } catch (e: Exception) {
             Log.e(
                 "MapViewModel",
@@ -710,3 +747,4 @@ private class BackendOperationException(message: String) : Exception(message)
 private val RETRY_DELAYS_SECONDS = listOf(5, 10, 20, 40, 60)
 private const val BACKEND_PROBE_TIMEOUT_MILLIS = 5_000L
 private const val BACKEND_MONITOR_INTERVAL_MILLIS = 30_000L
+private const val PARTICIPANT_LOCATION_REFRESH_INTERVAL_MILLIS = 15_000L
