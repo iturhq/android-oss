@@ -29,7 +29,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.nohex.itur.feature.map.ui.components.qrscan.QRScanSheet
 
 /**
  * A composable with a map. The buttons displayed on the map are placed by the UI state.
@@ -40,22 +39,14 @@ fun MapScreen(
     viewModel: MapViewModel = hiltViewModel(),
     locationPermissionCheck: (Context) -> Boolean = ::hasFineLocationPermission,
     openGlEsSupportCheck: (Context) -> OpenGlEsSupport = ::checkOpenGlEsSupport,
-    qrScanSheet: @Composable (
-        onDismissRequest: () -> Unit,
-        onScanSuccess: (String) -> Unit,
-    ) -> Unit = { onDismissRequest, onScanSuccess ->
-        QRScanSheet(
-            onDismissRequest = onDismissRequest,
-            onScanSuccess = onScanSuccess,
-        )
-    },
+    qrCustomization: QrCustomization = QrCustomization(),
 ) {
     MapScreenCoordinator(
         modifier = modifier,
         viewModel = viewModel,
         locationPermissionCheck = locationPermissionCheck,
         openGlEsSupportCheck = openGlEsSupportCheck,
-        qrScanSheet = qrScanSheet,
+        qrCustomization = qrCustomization,
     )
 }
 
