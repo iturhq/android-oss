@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.nohex.itur.core.ui.IturIcons
+import com.nohex.itur.feature.map.ui.components.help.helpAnchor
 
 /**
  * A composable for ongoing activities.
@@ -40,7 +41,9 @@ internal fun OngoingState(
             ) {
                 FloatingActionButton(
                     onClick = actions.onTrackGroupRequested,
-                    modifier = Modifier.testTag("zoom_group_fab"),
+                    modifier = Modifier
+                        .testTag("zoom_group_fab")
+                        .helpAnchor("zoom_group_fab", "Zoom out to fit every participant on the map"),
                 ) {
                     Icon(IturIcons.ZoomAll, contentDescription = "Track group")
                 }
@@ -82,14 +85,18 @@ private fun OngoingActivityFABs(
     if (isOrganizer) {
         FloatingActionButton(
             onClick = onQRRequested,
-            modifier = Modifier.testTag("show_qr_fab"),
+            modifier = Modifier
+                .testTag("show_qr_fab")
+                .helpAnchor("show_qr_fab", "Show the QR code for others to join this activity"),
         ) {
             Icon(IturIcons.Join, contentDescription = "Show QR")
         }
     } else {
         FloatingActionButton(
             onClick = { if (activityActionsEnabled) onAttentionRequest() },
-            modifier = Modifier.testTag("hail_organiser_fab")
+            modifier = Modifier
+                .testTag("hail_organiser_fab")
+                .helpAnchor("hail_organiser_fab", "Ask the organiser for attention")
                 .serviceAvailability(activityActionsEnabled),
         ) {
             Icon(IturIcons.Warning, contentDescription = "Hail organiser")
@@ -98,7 +105,12 @@ private fun OngoingActivityFABs(
 
     FloatingActionButton(
         onClick = { if (activityActionsEnabled) onStopRequested() },
-        modifier = Modifier.testTag("stop_activity_fab")
+        modifier = Modifier
+            .testTag("stop_activity_fab")
+            .helpAnchor(
+                "stop_activity_fab",
+                if (isOrganizer) "Stop the activity for everyone" else "Leave the activity",
+            )
             .serviceAvailability(activityActionsEnabled),
     ) {
         Icon(

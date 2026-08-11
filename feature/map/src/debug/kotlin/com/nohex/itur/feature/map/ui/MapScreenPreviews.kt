@@ -24,6 +24,7 @@ fun IdleStatePreview() {
         onSignInRequested = {},
         onSignOutRequested = {},
         onQRRequested = {},
+        onHelpRequested = {},
         isSignedIn = false,
     )
 }

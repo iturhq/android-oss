@@ -115,9 +115,24 @@ class MapScreenTest {
 
         composeRule.onNodeWithTag("help_fab").performClick()
 
-        composeRule.onNodeWithText("What these buttons do").assertIsDisplayed()
+        composeRule.onNodeWithTag("help_overlay").assertIsDisplayed()
         composeRule.onNodeWithText("Show the QR code for others to join this activity")
             .assertIsDisplayed()
+        // The organiser doesn't see "hail organiser", so the overlay must not describe it either
+        // -- it only annotates buttons actually visible in the current state.
+        composeRule.onNodeWithTag("help_label_hail_organiser_fab").assertDoesNotExist()
+    }
+
+    @Test
+    fun helpButtonIsAvailableInIdleState() {
+        // Before signing in or starting anything -- help must not require an ongoing activity.
+        composeRule.onNodeWithTag("help_fab").assertIsDisplayed().performClick()
+
+        composeRule.onNodeWithTag("help_overlay").assertIsDisplayed()
+        composeRule.onNodeWithText("Join an activity by scanning its QR code").assertIsDisplayed()
+        // Not signed in yet, so "sign in" is visible but "sign out" isn't -- the overlay must
+        // describe only what's actually on screen.
+        composeRule.onNodeWithText("Sign in to start or manage an activity").assertIsDisplayed()
     }
 
     @Test

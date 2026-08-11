@@ -14,7 +14,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.core.content.ContextCompat
 import com.nohex.itur.core.domain.id.IturActivityId
-import com.nohex.itur.feature.map.ui.components.help.HelpSheet
+import com.nohex.itur.feature.map.ui.components.help.HelpOverlay
+import com.nohex.itur.feature.map.ui.components.help.LocalHelpAnchorRegistry
 import com.nohex.itur.feature.map.ui.components.qrdisplay.QRDisplaySheet
 
 @Composable
@@ -28,7 +29,7 @@ internal fun MapTransientSurfaces(
     RecoverableErrorSurface(presentation.uiState)
     QrDisplaySurface(presentation.ongoingActivityId, interaction)
     QrScanSurface(viewModel, environment.context, interaction, qrScanSheet)
-    HelpSurface(presentation, interaction)
+    HelpSurface(interaction)
 }
 
 @Composable
@@ -107,13 +108,12 @@ private fun joinScannedActivity(
 }
 
 @Composable
-private fun HelpSurface(presentation: MapPresentation, interaction: MapInteractionState) {
-    if (interaction.showHelpSheet) {
-        (presentation.uiState as? MapUiState.Ongoing)?.let { ongoingUiState ->
-            HelpSheet(
-                onDismissRequest = { interaction.showHelpSheet = false },
-                isOrganizer = ongoingUiState.organizer.id == presentation.currentUser?.id,
-            )
-        }
+private fun HelpSurface(interaction: MapInteractionState) {
+    if (interaction.showHelp) {
+        val registry = LocalHelpAnchorRegistry.current
+        HelpOverlay(
+            anchors = registry?.anchors.orEmpty(),
+            onDismissRequest = { interaction.showHelp = false },
+        )
     }
 }

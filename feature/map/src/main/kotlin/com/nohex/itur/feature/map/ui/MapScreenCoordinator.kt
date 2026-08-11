@@ -9,6 +9,7 @@ import android.content.Context
 import android.location.Location
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -25,6 +26,8 @@ import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.domain.model.User
 import com.nohex.itur.core.model.ParticipantLocation
+import com.nohex.itur.feature.map.ui.components.help.HelpAnchorRegistry
+import com.nohex.itur.feature.map.ui.components.help.LocalHelpAnchorRegistry
 import org.maplibre.android.maps.MapLibreMap
 
 internal data class MapEnvironment(
@@ -54,7 +57,7 @@ internal class MapInteractionState(
     var centeredOnInitialLocation by centeredOnInitialLocationState
     var showQrDisplaySheet by mutableStateOf(false)
     var showQrScanSheet by mutableStateOf(false)
-    var showHelpSheet by mutableStateOf(false)
+    var showHelp by mutableStateOf(false)
     var localMessage by mutableStateOf<String?>(null)
     var cameraPermissionGranted by mutableStateOf(false)
     var locationPermissionGranted by locationPermissionState
@@ -72,10 +75,13 @@ internal fun MapScreenCoordinator(
     val presentation = CollectMapPresentation(viewModel)
     val interaction = RememberMapInteractionState(environment.context, locationPermissionCheck)
     val snackbarHostState = remember { SnackbarHostState() }
+    val helpAnchorRegistry = remember { HelpAnchorRegistry() }
 
     MapScreenEffects(viewModel, environment, presentation, interaction, snackbarHostState)
-    MapTransientSurfaces(viewModel, environment, presentation, interaction, qrScanSheet)
-    MapScaffold(viewModel, environment, presentation, interaction, snackbarHostState)
+    CompositionLocalProvider(LocalHelpAnchorRegistry provides helpAnchorRegistry) {
+        MapTransientSurfaces(viewModel, environment, presentation, interaction, qrScanSheet)
+        MapScaffold(viewModel, environment, presentation, interaction, snackbarHostState)
+    }
 }
 
 @Composable

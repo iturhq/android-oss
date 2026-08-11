@@ -11,9 +11,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.nohex.itur.core.ui.IturIcons
 import com.nohex.itur.core.ui.R
 import com.nohex.itur.core.ui.theme.IturTheme
+import com.nohex.itur.feature.map.ui.components.help.helpAnchor
 
 /**
  * A composable to use when there is no ongoing activity.
@@ -40,6 +40,7 @@ fun IdleState(
     onSignInRequested: () -> Unit,
     onSignOutRequested: () -> Unit,
     onQRRequested: () -> Unit,
+    onHelpRequested: () -> Unit,
     modifier: Modifier = Modifier,
     isSignedIn: Boolean,
     authenticationActionsEnabled: Boolean = true,
@@ -56,6 +57,13 @@ fun IdleState(
                 .size(64.dp)
                 .padding(8.dp),
         )
+
+        FabSideColumn(
+            horizontalAlignment = Alignment.Start,
+            modifier = Modifier.padding(16.dp),
+        ) {
+            HelpFABs(onHelpRequested = onHelpRequested)
+        }
 
         FabSideColumn(horizontalAlignment = Alignment.End) {
             // User actions, top right.
@@ -99,30 +107,26 @@ private fun ActivityFABs(
 ) {
     // The QR button shows the QR sheet for scanning for organisers,
     // or the QR scanner for potential participants.
-    ExtendedFloatingActionButton(
+    FloatingActionButton(
         onClick = onQRRequested,
-        modifier = Modifier.testTag("join_activity_fab"),
-        text = {
-            Text(text = "Join an activity")
-        },
-        icon = {
-            Icon(IturIcons.Join, contentDescription = "Join activity")
-        },
-    )
+        modifier = Modifier
+            .testTag("join_activity_fab")
+            .helpAnchor("join_activity_fab", "Join an activity by scanning its QR code"),
+    ) {
+        Icon(IturIcons.Join, contentDescription = "Join activity")
+    }
 
     // Only signed-in users can start activities.
     if (isSignedIn) {
-        ExtendedFloatingActionButton(
+        FloatingActionButton(
             onClick = { if (activityActionsEnabled) onStartRequested() },
-            modifier = Modifier.testTag("start_activity_fab")
+            modifier = Modifier
+                .testTag("start_activity_fab")
+                .helpAnchor("start_activity_fab", "Start a new activity")
                 .serviceAvailability(activityActionsEnabled),
-            text = {
-                Text(text = "Start an activity")
-            },
-            icon = {
-                Icon(IturIcons.Add, contentDescription = "Start activity")
-            },
-        )
+        ) {
+            Icon(IturIcons.Add, contentDescription = "Start activity")
+        }
     }
 }
 
@@ -141,6 +145,7 @@ private fun IdleMapPreview() {
             onSignInRequested = {},
             onSignOutRequested = {},
             onQRRequested = {},
+            onHelpRequested = {},
             isSignedIn = true,
         )
     }

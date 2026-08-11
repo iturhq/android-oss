@@ -9,16 +9,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.nohex.itur.core.ui.IturIcons
+import com.nohex.itur.feature.map.ui.components.help.helpAnchor
 
 /**
  * One full-height, edge-aligned FAB column within a map state's enclosing `Box`.
@@ -52,29 +51,24 @@ internal fun UserFABs(
     authenticationActionsEnabled: Boolean,
 ) {
     if (isSignedIn) {
-        ExtendedFloatingActionButton(
-            expanded = false,
+        FloatingActionButton(
             onClick = onSignOutRequested,
-            modifier = Modifier.testTag("sign_out_fab"),
-            icon = {
-                Icon(IturIcons.SignOut, contentDescription = "Sign out")
-            },
-            text = {
-                Text(text = "Sign out")
-            },
-        )
+            modifier = Modifier
+                .testTag("sign_out_fab")
+                .helpAnchor("sign_out_fab", "Sign out of your account"),
+        ) {
+            Icon(IturIcons.SignOut, contentDescription = "Sign out")
+        }
     } else {
-        ExtendedFloatingActionButton(
+        FloatingActionButton(
             onClick = { if (authenticationActionsEnabled) onSignInRequested() },
-            modifier = Modifier.testTag("sign_in_fab")
+            modifier = Modifier
+                .testTag("sign_in_fab")
+                .helpAnchor("sign_in_fab", "Sign in to start or manage an activity")
                 .serviceAvailability(authenticationActionsEnabled),
-            icon = {
-                Icon(IturIcons.SignIn, contentDescription = "Sign in")
-            },
-            text = {
-                Text(text = "Sign in")
-            },
-        )
+        ) {
+            Icon(IturIcons.SignIn, contentDescription = "Sign in")
+        }
     }
 }
 
@@ -90,7 +84,9 @@ internal fun TrackingFABs(
 
         FloatingActionButton(
             onClick = onTrackUserRequested,
-            modifier = Modifier.testTag("recenter_fab"),
+            modifier = Modifier
+                .testTag("recenter_fab")
+                .helpAnchor("recenter_fab", "Recenter the map on your own location"),
         ) {
             Icon(IturIcons.ZoomSelf, contentDescription = "Recenter")
         }
