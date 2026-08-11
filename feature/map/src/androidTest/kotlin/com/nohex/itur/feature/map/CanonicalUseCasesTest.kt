@@ -125,6 +125,11 @@ class CanonicalUseCasesTest {
     }
 
     private fun startAsOrganizer() {
+        // The default fixture seeds an ONGOING activity already owned by this same organizer
+        // (needed by uc20's auto-resume scenario, which doesn't go through this helper) --
+        // clear it first so MEMB-4B18's single-active-activity rule doesn't block this
+        // "start a brand new activity" flow with a activity the test itself never asked for.
+        activities.replaceActivities(emptyList())
         signIn()
         composeRule.onNodeWithTag("start_activity_fab").performClick()
         waitForTag("show_qr_fab")
@@ -196,6 +201,10 @@ class CanonicalUseCasesTest {
 
     @Test
     fun uc08_activityCreationFailureReturnsToIdleWithError() {
+        // See startAsOrganizer()'s comment: the default fixture seeds an ONGOING activity
+        // already owned by this organizer, which would otherwise trip MEMB-4B18's
+        // single-active-activity rule before this test's own induced failure ever runs.
+        activities.replaceActivities(emptyList())
         launch()
         signIn()
         activities.createFailure = "Activity creation failed"
