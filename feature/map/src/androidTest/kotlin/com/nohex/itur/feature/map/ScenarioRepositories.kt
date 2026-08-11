@@ -221,4 +221,10 @@ class ScenarioLocationRepository(
         removeCount.incrementAndGet()
         locations.remove(activityId)
     }
+
+    override suspend fun removeForParticipant(userId: UserId, activityId: IturActivityId) {
+        removeFailure?.let { throw it }
+        removeCount.incrementAndGet()
+        locations[activityId]?.remove(userId)
+    }
 }

@@ -33,10 +33,10 @@ private val USER_ID = UserId("user1")
 private val NEW_LOCATION = Location(latitude = 51.5, longitude = -0.1)
 
 /**
- * `removeForActivity` and `updateForParticipant` deliberately have no try/catch of their own
- * (fixed under AOSS-355C: they used to swallow failures that `MapViewModel`'s own handling
- * never got a chance to see) -- every test here that touches Firestore also confirms an
- * exception from it propagates out uncaught, to guard that fix.
+ * `removeForActivity`, `removeForParticipant`, and `updateForParticipant` deliberately have no
+ * try/catch of their own (fixed under AOSS-355C: they used to swallow failures that
+ * `MapViewModel`'s own handling never got a chance to see) -- every test here that touches
+ * Firestore also confirms an exception from it propagates out uncaught, to guard that fix.
  */
 class FirebaseLocationRepositoryTest {
     private val locationsCollection = mockk<CollectionReference>()
@@ -158,6 +158,57 @@ class FirebaseLocationRepositoryTest {
         every { query.get() } returns failedTask(RuntimeException("offline"))
 
         assertFailsWith<RuntimeException> { repository.removeForActivity(ACTIVITY_ID) }
+        Unit
+    }
+
+    // --- removeForParticipant ---
+
+    @Test
+    fun `GIVEN a matching location WHEN removing it for a participant THEN only that document is deleted`() = runBlocking {
+        val activityQuery = mockk<Query>()
+        val fullQuery = mockk<Query>()
+        every { locationsCollection.whereEqualTo("activityId", ACTIVITY_ID.value) } returns activityQuery
+        every { activityQuery.whereEqualTo("userId", USER_ID.value) } returns fullQuery
+        val doc = mockk<DocumentSnapshot>()
+        val ref = mockk<DocumentReference>()
+        every { doc.reference } returns ref
+        every { ref.delete() } returns successfulTask(null)
+        val querySnapshot = mockk<QuerySnapshot> {
+            every { documents } returns listOf(doc)
+            every { size() } returns 1
+        }
+        every { fullQuery.get() } returns successfulTask(querySnapshot)
+
+        repository.removeForParticipant(USER_ID, ACTIVITY_ID)
+
+        verify(exactly = 1) { ref.delete() }
+    }
+
+    @Test
+    fun `GIVEN no matching location WHEN removing it for a participant THEN nothing is deleted`() = runBlocking {
+        val activityQuery = mockk<Query>()
+        val fullQuery = mockk<Query>()
+        every { locationsCollection.whereEqualTo("activityId", ACTIVITY_ID.value) } returns activityQuery
+        every { activityQuery.whereEqualTo("userId", USER_ID.value) } returns fullQuery
+        val querySnapshot = mockk<QuerySnapshot> {
+            every { documents } returns emptyList()
+            every { size() } returns 0
+        }
+        every { fullQuery.get() } returns successfulTask(querySnapshot)
+
+        repository.removeForParticipant(USER_ID, ACTIVITY_ID)
+        // No exception, no deletions attempted -- nothing further to verify.
+    }
+
+    @Test
+    fun `GIVEN Firestore throws WHEN removing a location for a participant THEN the exception propagates`() = runBlocking {
+        val activityQuery = mockk<Query>()
+        val fullQuery = mockk<Query>()
+        every { locationsCollection.whereEqualTo("activityId", ACTIVITY_ID.value) } returns activityQuery
+        every { activityQuery.whereEqualTo("userId", USER_ID.value) } returns fullQuery
+        every { fullQuery.get() } returns failedTask(RuntimeException("offline"))
+
+        assertFailsWith<RuntimeException> { repository.removeForParticipant(USER_ID, ACTIVITY_ID) }
         Unit
     }
 
