@@ -209,7 +209,7 @@ class BackendHealthRecoveryCoordinator @Inject constructor(
             BackendHealthObservation.ReachabilitySucceeded(successDetail)
         }
     } catch (timeout: TimeoutCancellationException) {
-        Log.w("BackendHealth", "Probe timed out for ${service.id}", timeout)
+        logProbeWarning("Probe timed out for ${service.id}", timeout)
         BackendHealthObservation.ReachabilityFailed(
             BackendDiagnosticEvidence.from(
                 timeout,
@@ -219,8 +219,15 @@ class BackendHealthRecoveryCoordinator @Inject constructor(
     } catch (cancellation: CancellationException) {
         throw cancellation
     } catch (failure: Exception) {
-        Log.w("BackendHealth", "Probe failed for ${service.id}: ${failure.message}", failure)
+        logProbeWarning("Probe failed for ${service.id}: ${failure.message}", failure)
         BackendHealthObservation.ReachabilityFailed(BackendDiagnosticEvidence.from(failure))
+    }
+
+    private fun logProbeWarning(message: String, failure: Throwable) {
+        // Published SDK consumers can exercise this coordinator in local JVM tests where
+        // android.util.Log is intentionally unavailable. Logging must never replace the
+        // sanitized service-health result with a platform-stub failure.
+        runCatching { Log.w("BackendHealth", message, failure) }
     }
 
     private fun scheduleForCurrentState() {
