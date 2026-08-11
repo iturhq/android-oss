@@ -24,6 +24,8 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
 import com.nohex.itur.core.data.TestFixtures
+import com.nohex.itur.core.data.repository.SignInFailureReason
+import com.nohex.itur.core.data.repository.SignInResult
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.url
 import com.nohex.itur.core.model.IturActivityStatus
@@ -159,15 +161,29 @@ class CanonicalUseCasesTest {
     }
 
     @Test
-    fun uc04_signInFailureStaysAnonymousAndShowsError() {
-        users.signInFailure = IllegalStateException("Sign-in failed: test service unavailable")
+    fun uc04_signInFailureStaysAnonymousAndShowsStableRetry() {
+        users.signInResult = SignInResult.Failure(SignInFailureReason.SERVICE_UNAVAILABLE)
         launch()
 
         composeRule.onNodeWithTag("sign_in_fab").performClick()
 
-        composeRule.onNodeWithText("Sign-in failed: test service unavailable").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            "Sign-in is temporarily unavailable. Check your connection and try again.",
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText("Try again").assertIsDisplayed()
         composeRule.onNodeWithTag("sign_in_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("start_activity_fab").assertDoesNotExist()
+        listOf(
+            "Requests from this Android client application com.nohex.itur.pro are blocked",
+            "FirebaseAuthException",
+            "api_key=provider-secret",
+            "token=provider-token",
+        ).forEach { rawDetail -> composeRule.onNodeWithText(rawDetail).assertDoesNotExist() }
+
+        users.signInResult = null
+        composeRule.onNodeWithText("Try again").performClick()
+        waitForTag("sign_out_fab")
+        assertEquals(users.registered, users.current)
     }
 
     @Test

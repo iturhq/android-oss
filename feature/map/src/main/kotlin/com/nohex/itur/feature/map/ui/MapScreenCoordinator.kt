@@ -45,6 +45,7 @@ internal data class MapPresentation(
     val participantLocations: List<ParticipantLocation>,
     val lastLocation: Location?,
     val latestBroadcastMessage: String?,
+    val signInPresentation: SignInFailurePresentation?,
     val authenticationActionsEnabled: Boolean,
     val activityActionsEnabled: Boolean,
 )
@@ -111,6 +112,7 @@ private fun CollectMapPresentation(viewModel: MapViewModel): MapPresentation {
     val participantLocations by viewModel.participantLocations.collectAsState()
     val lastLocation by viewModel.lastLocation.observeAsState()
     val latestBroadcast by viewModel.latestBroadcast.collectAsState()
+    val signInPresentation by viewModel.signInPresentation.collectAsState()
     val failingServices = backendAvailability.failingServices.mapTo(mutableSetOf()) { it.id }
 
     return MapPresentation(
@@ -121,6 +123,7 @@ private fun CollectMapPresentation(viewModel: MapViewModel): MapPresentation {
         participantLocations = participantLocations,
         lastLocation = lastLocation,
         latestBroadcastMessage = latestBroadcast?.message,
+        signInPresentation = signInPresentation,
         authenticationActionsEnabled = BackendServiceIds.FIREBASE_AUTH !in failingServices,
         activityActionsEnabled = BackendServiceIds.FIREBASE_FIRESTORE !in failingServices,
     )

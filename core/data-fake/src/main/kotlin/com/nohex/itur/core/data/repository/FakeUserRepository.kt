@@ -39,9 +39,9 @@ class FakeUserRepository : UserRepository {
 
     override suspend fun getAll(ids: List<UserId>): List<User> = users.filter { it.id in ids }
 
-    override suspend fun signIn(context: Context): User {
+    override suspend fun signIn(context: Context): SignInResult {
         currentUser = registeredUser
-        return currentUser
+        return SignInResult.Success(currentUser)
     }
 
     override suspend fun signOut() {

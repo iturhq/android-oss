@@ -27,9 +27,24 @@ internal fun MapTransientSurfaces(
     qrCustomization: QrCustomization,
 ) {
     RecoverableErrorSurface(presentation.uiState)
+    SignInFailureSurface(presentation.signInPresentation)
     QrDisplaySurface(presentation.ongoingActivityId, interaction, qrCustomization.displayUrl)
     QrScanSurface(viewModel, environment.context, interaction, qrCustomization.scanSheet)
     HelpSurface(interaction)
+}
+
+@Composable
+private fun SignInFailureSurface(failure: SignInFailurePresentation?) {
+    failure ?: return
+    if (failure.retryable) {
+        RecoverableErrorDialog(
+            message = failure.message,
+            onRetry = failure.onRetry,
+            onCancel = failure.onDismiss,
+        )
+    } else {
+        ModalAlert(text = failure.message, onDismissRequest = failure.onDismiss)
+    }
 }
 
 @Composable
