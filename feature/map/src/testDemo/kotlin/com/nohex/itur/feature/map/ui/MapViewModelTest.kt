@@ -24,6 +24,7 @@ import com.nohex.itur.core.location.LocationClient
 import com.nohex.itur.core.model.Broadcast
 import com.nohex.itur.core.model.IturActivity
 import com.nohex.itur.core.model.IturActivityStatus
+import com.nohex.itur.core.model.Location
 import com.nohex.itur.feature.map.config.LocationUpdateConfig
 import com.nohex.itur.feature.map.config.MapStyleConfig
 import com.nohex.itur.feature.map.notifications.BroadcastNotifier
@@ -43,6 +44,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import java.util.Date
+import kotlin.math.abs
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -59,6 +61,11 @@ private val PARTICIPANT_ACTIVITY = TestFixtures.ongoingActivity.copy(
     organizerId = UserId("other-organizer"),
     participantIds = emptyList(),
 )
+
+// A generous threshold (~111m) for distinguishing an unchanged stored location (which only
+// moves by FakeLocationRepository's small "GPS noise" jitter, a few meters) from a location
+// regenerated from scratch after removal (which lands near a different, unrelated fallback).
+private const val LOCATION_UNCHANGED_THRESHOLD_DEGREES = 0.001
 
 @RunWith(JUnit4::class)
 class MapViewModelTest {
@@ -91,10 +98,11 @@ class MapViewModelTest {
         activityRepo: ActivityRepository = activityRepo(),
         userRepo: UserRepository = userRepo(),
         healthChecks: Set<BackendHealthCheck> = emptySet(),
+        locationRepo: FakeLocationRepository = locationRepo(activityRepo),
     ) = MapViewModel(
         activityRepository = activityRepo,
         userRepository = userRepo,
-        locationsRepository = locationRepo(activityRepo),
+        locationsRepository = locationRepo,
         locationClient = locationClient,
         broadcastNotifier = broadcastNotifier,
         mapStyleConfig = MapStyleConfig(styleUrl = "https://example.invalid/style.json"),
@@ -406,6 +414,73 @@ class MapViewModelTest {
             // The participant is no longer in the list.
             assertFalse(signedInUser.id in result.data.participantIds)
             assertIs<MapUiState.Idle>(vm.uiState.value)
+        }
+    }
+
+    @Test
+    fun `GIVEN an ongoing activity as participant WHEN leaving THEN other participants' locations are not cleared`() {
+        runTest {
+            // A second, still-in-the-activity participant whose location must survive.
+            val otherParticipantId = TestFixtures.PARTICIPANT_2_ID
+            val otherParticipantLocation = Location(latitude = 51.0, longitude = 0.0)
+
+            val userRepo = userRepo()
+            val signedInUser = userRepo.signIn(context)
+            val activityRepo = activityRepo(PARTICIPANT_ACTIVITY.copy(participantIds = listOf(otherParticipantId)))
+            val locationRepo = locationRepo(activityRepo)
+            val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo, locationRepo = locationRepo)
+
+            vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+            assertOngoing(vm)
+
+            locationRepo.updateForParticipant(otherParticipantId, PARTICIPANT_ACTIVITY.id, otherParticipantLocation)
+            locationRepo.updateForParticipant(
+                signedInUser.id,
+                PARTICIPANT_ACTIVITY.id,
+                Location(latitude = 52.0, longitude = 1.0),
+            )
+
+            vm.leaveActivity()
+
+            // The other participant's stored location is unchanged (within the fake repo's
+            // small "GPS noise" jitter), proving it was not wiped by the leaving participant.
+            val survivingLocation = locationRepo.getForActivity(PARTICIPANT_ACTIVITY.id)
+                .first { it.userId == otherParticipantId }
+                .location
+            assertTrue(abs(survivingLocation.latitude - otherParticipantLocation.latitude) < LOCATION_UNCHANGED_THRESHOLD_DEGREES)
+            assertTrue(abs(survivingLocation.longitude - otherParticipantLocation.longitude) < LOCATION_UNCHANGED_THRESHOLD_DEGREES)
+        }
+    }
+
+    @Test
+    fun `GIVEN an ongoing activity as organizer WHEN leaving THEN all participants' locations are cleared`() {
+        runTest {
+            val activityRepo = activityRepo()
+            val locationRepo = locationRepo(activityRepo)
+            val vm = viewModel(activityRepo = activityRepo, locationRepo = locationRepo)
+            // startActivity auto-signs in and creates an activity with the current user as organizer.
+            vm.startActivity(context)
+            val activityId = vm.ongoingActivityId.value!!
+            val organizerId = vm.currentUser.value!!.id
+
+            // Add another participant to the activity and seed a location for them.
+            val otherParticipantId = UserId("other-participant")
+            activityRepo.addParticipant(activityId, otherParticipantId)
+            val otherParticipantLocation = Location(latitude = 51.0, longitude = 0.0)
+            locationRepo.updateForParticipant(otherParticipantId, activityId, otherParticipantLocation)
+            locationRepo.updateForParticipant(organizerId, activityId, Location(latitude = 52.0, longitude = 1.0))
+
+            vm.leaveActivity()
+
+            // With no stored location left, getForActivity regenerates a fresh position from
+            // scratch (near the default fallback location), which lands far away from the
+            // location that was seeded above -- proving the original record was cleared.
+            val regeneratedLocation = locationRepo.getForActivity(activityId)
+                .first { it.userId == otherParticipantId }
+                .location
+            assertTrue(
+                abs(regeneratedLocation.latitude - otherParticipantLocation.latitude) > LOCATION_UNCHANGED_THRESHOLD_DEGREES,
+            )
         }
     }
 

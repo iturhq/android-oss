@@ -447,20 +447,24 @@ constructor(
             // If there is an ongoing activity...
             _ongoingActivityId.value?.let { activityId ->
                 try {
-                    // Clean up location data for the activity.
-                    // CAUTION: it needs to happen before removing the participant,
-                    // thus revoking write access.
-                    locationsRepository.removeForActivity(activityId)
-
                     currentUser.value?.let {
                         if (_organizerId.value == it.id) {
-                            // If it's the organiser, finish the activity for everyone.
+                            // If it's the organiser, finish the activity for everyone and clean
+                            // up every participant's location data.
+                            // CAUTION: it needs to happen before removing the participant,
+                            // thus revoking write access.
+                            locationsRepository.removeForActivity(activityId)
                             requireSuccessfulBackendWrite(
                                 activityRepository.updateActivityStatus(
                                     activityId,
                                     IturActivityStatus.FINISHED,
                                 ),
                             )
+                        } else {
+                            // Otherwise, only clean up this participant's own location data.
+                            // CAUTION: it needs to happen before removing the participant,
+                            // thus revoking write access.
+                            locationsRepository.removeForParticipant(it.id, activityId)
                         }
                         // Remove the participants from the activity.
                         requireSuccessfulBackendWrite(

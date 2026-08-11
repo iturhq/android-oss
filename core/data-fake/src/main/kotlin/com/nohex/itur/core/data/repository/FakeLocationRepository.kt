@@ -65,6 +65,10 @@ class FakeLocationRepository constructor(
         locationsByActivity.remove(activityId)
     }
 
+    override suspend fun removeForParticipant(userId: UserId, activityId: IturActivityId) {
+        locationsByActivity[activityId]?.remove(userId)
+    }
+
     override suspend fun updateForParticipant(
         userId: UserId,
         activityId: IturActivityId,

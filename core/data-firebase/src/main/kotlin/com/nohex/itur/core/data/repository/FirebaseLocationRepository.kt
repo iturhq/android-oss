@@ -68,6 +68,21 @@ constructor(
         }
     }
 
+    override suspend fun removeForParticipant(userId: UserId, activityId: IturActivityId) {
+        withContext(Dispatchers.IO) {
+            val querySnapshot = locationsCollection
+                .whereEqualTo("activityId", activityId.value)
+                .whereEqualTo("userId", userId.value)
+                .get()
+                .await()
+            querySnapshot.documents.forEach { it.reference.delete().await() }
+            Log.d(
+                "FirestoreLocationRepo",
+                "Removed ${querySnapshot.size()} location(s) for user ${userId.value} in activity ${activityId.value}",
+            )
+        }
+    }
+
     override suspend fun updateForParticipant(
         userId: UserId,
         activityId: IturActivityId,

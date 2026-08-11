@@ -32,4 +32,10 @@ interface LocationRepository {
      * Removes all location records for the given activity.
      */
     suspend fun removeForActivity(activityId: IturActivityId)
+
+    /**
+     * Removes the location record of a single participant in an activity, leaving other
+     * participants' location records untouched.
+     */
+    suspend fun removeForParticipant(userId: UserId, activityId: IturActivityId)
 }
