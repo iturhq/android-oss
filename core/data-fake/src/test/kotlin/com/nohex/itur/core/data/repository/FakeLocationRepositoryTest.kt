@@ -127,13 +127,14 @@ class FakeLocationRepositoryTest {
 
         // getForActivity regenerates a fresh position for any participant with no stored
         // location, so the removed participant's location is unrelated to what was stored...
-        val removedParticipantLocation = repo.getForActivity(ACTIVITY_ID)
+        val locationsAfterRemoval = repo.getForActivity(ACTIVITY_ID)
+        val removedParticipantLocation = locationsAfterRemoval
             .first { it.userId == PARTICIPANT_ID }
             .location
         assertTrue(abs(removedParticipantLocation.latitude - 52.0) > MAX_JITTER_DEGREES)
 
         // ...while the other participant's stored location survives untouched.
-        val organizerLocation = repo.getForActivity(ACTIVITY_ID)
+        val organizerLocation = locationsAfterRemoval
             .first { it.userId == ORGANIZER_ID }
             .location
         assertTrue(abs(organizerLocation.latitude - 51.0) <= MAX_JITTER_DEGREES)
