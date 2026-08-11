@@ -23,13 +23,27 @@ interface UserRepository {
      */
     suspend fun getAll(ids: List<UserId>): List<User>
 
-    /**
-     * Signs in via Google and returns the authenticated user.
-     */
-    suspend fun signIn(context: Context): User
+    /** Signs in without exposing provider exceptions across the application boundary. */
+    suspend fun signIn(context: Context): SignInResult
 
     /**
      * Signs out the current user; subsequent [getCurrentUser] calls return an anonymous user.
      */
     suspend fun signOut()
+}
+
+/** Application-owned sign-in outcome; provider types and messages never reach feature UI. */
+sealed interface SignInResult {
+    data class Success(val user: User) : SignInResult
+
+    data object Cancelled : SignInResult
+
+    data class Failure(val reason: SignInFailureReason) : SignInResult
+}
+
+enum class SignInFailureReason {
+    NO_ACCOUNT,
+    NOT_CONFIGURED,
+    SERVICE_UNAVAILABLE,
+    UNEXPECTED,
 }

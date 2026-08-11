@@ -15,8 +15,10 @@ import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.data.repository.DataResult
 import com.nohex.itur.core.data.repository.FakeActivityRepository
 import com.nohex.itur.core.data.repository.FakeLocationRepository
-import com.nohex.itur.core.data.repository.LocationRepository
 import com.nohex.itur.core.data.repository.FakeUserRepository
+import com.nohex.itur.core.data.repository.LocationRepository
+import com.nohex.itur.core.data.repository.SignInFailureReason
+import com.nohex.itur.core.data.repository.SignInResult
 import com.nohex.itur.core.data.repository.UserRepository
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
@@ -37,8 +39,8 @@ import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
@@ -54,6 +56,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
@@ -166,6 +169,70 @@ class MapViewModelTest {
         }
     }
 
+    @Test
+    fun `GIVEN user cancellation WHEN signing in THEN prior state is preserved and no failure is presented`() = runTest {
+        val vm = viewModel(userRepo = ScriptedSignInUserRepository(SignInResult.Cancelled))
+        val previousState = vm.uiState.value
+
+        vm.signIn(context)
+
+        assertSame(previousState, vm.uiState.value)
+        assertNull(vm.signInPresentation.value)
+        assertIs<User.AnonymousUser>(vm.currentUser.value)
+    }
+
+    @Test
+    fun `GIVEN classified failures WHEN signing in THEN stable product copy replaces provider detail`() = runTest {
+        val expected = mapOf(
+            SignInFailureReason.NO_ACCOUNT to
+                "No Google account is available. Add an account and try again.",
+            SignInFailureReason.NOT_CONFIGURED to
+                "Sign-in isn't configured for this app.",
+            SignInFailureReason.SERVICE_UNAVAILABLE to
+                "Sign-in is temporarily unavailable. Check your connection and try again.",
+            SignInFailureReason.UNEXPECTED to
+                "Sign-in couldn't be completed. Try again.",
+        )
+
+        expected.forEach { (reason, message) ->
+            val vm = viewModel(
+                userRepo = ScriptedSignInUserRepository(SignInResult.Failure(reason)),
+            )
+            val previousState = vm.uiState.value
+
+            vm.signIn(context)
+
+            val presentation = assertNotNull(vm.signInPresentation.value)
+            assertSame(previousState, vm.uiState.value)
+            assertEquals(message, presentation.message)
+            assertEquals(reason != SignInFailureReason.NOT_CONFIGURED, presentation.retryable)
+            listOf(
+                "Requests from this Android client application com.nohex.itur.pro are blocked",
+                "FirebaseAuthException",
+                "api_key=provider-secret",
+                "token=provider-token",
+            ).forEach { rawDetail -> assertFalse(rawDetail in presentation.message) }
+        }
+    }
+
+    @Test
+    fun `GIVEN a retryable sign-in failure WHEN retrying THEN success updates the user`() = runTest {
+        val registered = User.RegisteredUser(UserId("2"), "Test User", "test@example.com")
+        val vm = viewModel(
+            userRepo = ScriptedSignInUserRepository(
+                SignInResult.Failure(SignInFailureReason.SERVICE_UNAVAILABLE),
+                SignInResult.Success(registered),
+            ),
+        )
+        vm.signIn(context)
+
+        assertNotNull(vm.signInPresentation.value).onRetry()
+        runCurrent()
+
+        assertEquals(registered, vm.currentUser.value)
+        assertNull(vm.signInPresentation.value)
+    }
+
     // --- signOut ---
 
     @Test
@@ -197,6 +264,28 @@ class MapViewModelTest {
             vm.startActivity(context)
             assertIs<User.RegisteredUser>(vm.currentUser.value)
         }
+    }
+
+    @Test
+    fun `GIVEN automatic sign-in is unavailable WHEN retrying THEN prior state is preserved until activity starts`() = runTest {
+        val registered = User.RegisteredUser(UserId("2"), "Test User", "test@example.com")
+        val vm = viewModel(
+            userRepo = ScriptedSignInUserRepository(
+                SignInResult.Failure(SignInFailureReason.SERVICE_UNAVAILABLE),
+                SignInResult.Success(registered),
+            ),
+        )
+        val previousState = vm.uiState.value
+
+        vm.startActivity(context)
+
+        assertSame(previousState, vm.uiState.value)
+        assertNotNull(vm.signInPresentation.value).onRetry()
+        runCurrent()
+
+        assertEquals(registered, vm.currentUser.value)
+        assertOngoing(vm)
+        assertNull(vm.signInPresentation.value)
     }
 
     @Test
@@ -439,7 +528,7 @@ class MapViewModelTest {
     fun `GIVEN an ongoing activity as participant WHEN leaving THEN participant is removed and uiState is Idle`() {
         runTest {
             val userRepo = userRepo()
-            val signedInUser = userRepo.signIn(context)
+            val signedInUser = assertIs<SignInResult.Success>(userRepo.signIn(context)).user
             val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
             val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
 
@@ -466,7 +555,7 @@ class MapViewModelTest {
             val otherParticipantLocation = Location(latitude = 51.0, longitude = 0.0)
 
             val userRepo = userRepo()
-            val signedInUser = userRepo.signIn(context)
+            val signedInUser = assertIs<SignInResult.Success>(userRepo.signIn(context)).user
             val activityRepo = activityRepo(PARTICIPANT_ACTIVITY.copy(participantIds = listOf(otherParticipantId)))
             val locationRepo = locationRepo(activityRepo)
             val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo, locationRepo = locationRepo)
@@ -899,6 +988,25 @@ class MapViewModelTest {
             val state = assertIs<MapUiState.Error>(vm.uiState.value)
             assertEquals("quota exceeded", state.message)
         }
+    }
+}
+
+private class ScriptedSignInUserRepository(
+    vararg results: SignInResult,
+) : UserRepository {
+    private val results = ArrayDeque(results.toList())
+    private var current: User = User.AnonymousUser(UserId("1"))
+
+    override suspend fun getCurrentUser(): User = current
+
+    override suspend fun getAll(ids: List<UserId>): List<User> = listOf(current).filter { it.id in ids }
+
+    override suspend fun signIn(context: Context): SignInResult = results.removeFirst().also {
+        if (it is SignInResult.Success) current = it.user
+    }
+
+    override suspend fun signOut() {
+        current = User.AnonymousUser(UserId("1"))
     }
 }
 

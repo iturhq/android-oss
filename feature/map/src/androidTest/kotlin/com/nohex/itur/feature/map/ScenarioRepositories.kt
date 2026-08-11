@@ -11,6 +11,7 @@ import com.nohex.itur.core.data.repository.ActivityFilter
 import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.data.repository.DataResult
 import com.nohex.itur.core.data.repository.LocationRepository
+import com.nohex.itur.core.data.repository.SignInResult
 import com.nohex.itur.core.data.repository.UserRepository
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
@@ -37,16 +38,16 @@ class ScenarioUserRepository : UserRepository {
     )
 
     var current: User = anonymous
-    var signInFailure: Throwable? = null
+    var signInResult: SignInResult? = null
 
     override suspend fun getCurrentUser(): User = current
 
     override suspend fun getAll(ids: List<UserId>): List<User> = listOf(anonymous, registered, participant).filter { it.id in ids }
 
-    override suspend fun signIn(context: Context): User {
-        signInFailure?.let { throw it }
+    override suspend fun signIn(context: Context): SignInResult {
+        signInResult?.let { return it }
         current = registered
-        return current
+        return SignInResult.Success(current)
     }
 
     override suspend fun signOut() {

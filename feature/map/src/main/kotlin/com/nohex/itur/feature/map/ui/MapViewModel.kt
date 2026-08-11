@@ -21,6 +21,8 @@ import com.nohex.itur.core.data.repository.ActivityFilter
 import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.data.repository.DataResult
 import com.nohex.itur.core.data.repository.LocationRepository
+import com.nohex.itur.core.data.repository.SignInFailureReason
+import com.nohex.itur.core.data.repository.SignInResult
 import com.nohex.itur.core.data.repository.UserRepository
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
@@ -71,6 +73,9 @@ constructor(
     // The current user.
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser = _currentUser.asStateFlow()
+
+    private val _signInPresentation = MutableStateFlow<SignInFailurePresentation?>(null)
+    val signInPresentation = _signInPresentation.asStateFlow()
 
     // The current activity.
     private val _ongoingActivityId = MutableStateFlow<IturActivityId?>(null)
@@ -326,7 +331,11 @@ constructor(
             try {
                 // Organisers must be signed in; trigger sign-in automatically if needed.
                 if (_currentUser.value !is User.RegisteredUser) {
-                    _currentUser.value = userRepository.signIn(context)
+                    val signedIn = performSignIn(context) { startActivity(context) }
+                    if (!signedIn) {
+                        _uiState.value = previousState
+                        return@launch
+                    }
                 }
                 val organizer = requireNotNull(_currentUser.value)
 
@@ -347,6 +356,8 @@ constructor(
                     is DataResult.NotFound ->
                         _uiState.value = MapUiState.Error("Activity ${result.id} not found")
                 }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
             } catch (e: Exception) {
                 val message = e.message ?: "Failed to start an activity"
                 Log.e("MapViewModel", message, e)
@@ -388,13 +399,35 @@ constructor(
      */
     fun signIn(context: Context) {
         viewModelScope.launch {
-            try {
-                _currentUser.value = userRepository.signIn(context)
-            } catch (e: Exception) {
-                val message = e.message ?: "Sign-in failed"
-                Log.e("MapViewModel", message, e)
-                if (!reportBackendFailure(e)) _uiState.value = MapUiState.Error(message)
-            }
+            performSignIn(context) { signIn(context) }
+        }
+    }
+
+    private suspend fun performSignIn(
+        context: Context,
+        retry: () -> Unit,
+    ): Boolean = when (val result = userRepository.signIn(context)) {
+        is SignInResult.Success -> {
+            _currentUser.value = result.user
+            _signInPresentation.value = null
+            true
+        }
+
+        SignInResult.Cancelled -> {
+            _signInPresentation.value = null
+            false
+        }
+
+        is SignInResult.Failure -> {
+            _signInPresentation.value = SignInFailurePresentation(
+                reason = result.reason,
+                onRetry = {
+                    _signInPresentation.value = null
+                    retry()
+                },
+                onDismiss = { _signInPresentation.value = null },
+            )
+            false
         }
     }
 
@@ -734,6 +767,27 @@ sealed interface MapUiState {
         val onRetry: () -> Unit,
         val onCancel: () -> Unit,
     ) : MapUiState
+}
+
+class SignInFailurePresentation(
+    val reason: SignInFailureReason,
+    val onRetry: () -> Unit,
+    val onDismiss: () -> Unit,
+) {
+    val message: String
+        get() = when (reason) {
+            SignInFailureReason.NO_ACCOUNT ->
+                "No Google account is available. Add an account and try again."
+            SignInFailureReason.NOT_CONFIGURED ->
+                "Sign-in isn't configured for this app."
+            SignInFailureReason.SERVICE_UNAVAILABLE ->
+                "Sign-in is temporarily unavailable. Check your connection and try again."
+            SignInFailureReason.UNEXPECTED ->
+                "Sign-in couldn't be completed. Try again."
+        }
+
+    val retryable: Boolean
+        get() = reason != SignInFailureReason.NOT_CONFIGURED
 }
 
 data class BackendAvailabilityUiState(
