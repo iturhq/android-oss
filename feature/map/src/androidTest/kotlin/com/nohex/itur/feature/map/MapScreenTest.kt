@@ -15,10 +15,13 @@ import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
+import com.nohex.itur.core.data.TestFixtures
+import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.ui.theme.IturTheme
 import com.nohex.itur.feature.map.ui.MapScreen
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -37,6 +40,9 @@ class MapScreenTest {
 
     @Inject
     lateinit var locationClient: FakeLocationClient
+
+    @Inject
+    lateinit var activityRepository: ActivityRepository
 
     @get:Rule(order = 0)
     val hiltRule = HiltAndroidRule(this)
@@ -94,10 +100,25 @@ class MapScreenTest {
         composeRule.onNodeWithTag("start_activity_fab").assertIsDisplayed()
     }
 
-    @Test
-    fun startingAnActivityShowsOngoingControlsAsOrganizer() {
+    /**
+     * The demo flavor's [com.nohex.itur.core.data.di.FakeDataModule] seeds an ONGOING activity
+     * already owned by the same organizer identity `sign_in_fab` signs in as (so the demo app
+     * has something to show out of the box). MEMB-4B18's single-active-activity rule now blocks
+     * that same organizer from starting a *second* one -- clear the seed first so these
+     * "start a brand new activity" scenarios exercise a genuinely fresh state.
+     */
+    private fun startAsOrganizer() {
+        runBlocking {
+            activityRepository.deleteActivity(TestFixtures.ONGOING_ACTIVITY_ID)
+            activityRepository.deleteActivity(TestFixtures.DRAFT_ACTIVITY_ID)
+        }
         composeRule.onNodeWithTag("sign_in_fab").performClick()
         composeRule.onNodeWithTag("start_activity_fab").performClick()
+    }
+
+    @Test
+    fun startingAnActivityShowsOngoingControlsAsOrganizer() {
+        startAsOrganizer()
 
         composeRule.onNodeWithTag("recenter_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("zoom_group_fab").assertIsDisplayed()
@@ -110,8 +131,7 @@ class MapScreenTest {
 
     @Test
     fun helpButtonExplainsTheOrganizerControls() {
-        composeRule.onNodeWithTag("sign_in_fab").performClick()
-        composeRule.onNodeWithTag("start_activity_fab").performClick()
+        startAsOrganizer()
 
         composeRule.onNodeWithTag("help_fab").performClick()
 
@@ -122,8 +142,7 @@ class MapScreenTest {
 
     @Test
     fun stoppingAnActivityReturnsToIdleWithAConfirmationMessage() {
-        composeRule.onNodeWithTag("sign_in_fab").performClick()
-        composeRule.onNodeWithTag("start_activity_fab").performClick()
+        startAsOrganizer()
 
         composeRule.onNodeWithTag("stop_activity_fab").performClick()
 

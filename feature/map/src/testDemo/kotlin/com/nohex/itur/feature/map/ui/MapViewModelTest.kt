@@ -10,6 +10,7 @@ import android.os.Looper
 import com.nohex.itur.core.data.TestFixtures
 import com.nohex.itur.core.data.health.BackendHealthCheck
 import com.nohex.itur.core.data.health.BackendService
+import com.nohex.itur.core.data.repository.ActivityFilter
 import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.data.repository.DataResult
 import com.nohex.itur.core.data.repository.FakeActivityRepository
@@ -259,6 +260,100 @@ class MapViewModelTest {
             assertOngoing(vm)
             healthGate.complete(Unit)
             runCurrent()
+        }
+    }
+
+    // --- MEMB-7A05: single-active-activity blocking ---
+
+    @Test
+    fun `GIVEN the organizer already has an ongoing activity WHEN starting another THEN uiState becomes Idle with a specific message`() {
+        runTest {
+            val userRepo = userRepo()
+            userRepo.signIn(context)
+            val activityRepo = activityRepo(TestFixtures.ongoingActivity)
+            val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
+
+            vm.startActivity(context)
+
+            val state = vm.uiState.value
+            assertIs<MapUiState.Idle>(state)
+            assertEquals("You're already in an activity -- leave it first", state.message)
+        }
+    }
+
+    @Test
+    fun `GIVEN the organizer already has an ongoing activity WHEN starting another THEN no new activity is created`() {
+        runTest {
+            val userRepo = userRepo()
+            userRepo.signIn(context)
+            val activityRepo = activityRepo(TestFixtures.ongoingActivity)
+            val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
+
+            vm.startActivity(context)
+
+            val activities = activityRepo.getActivities(ActivityFilter.ByOrganizer(TestFixtures.ORGANIZER_ID))
+            assertIs<DataResult.Success<List<IturActivity>>>(activities)
+            assertEquals(1, activities.data.size)
+        }
+    }
+
+    @Test
+    fun `GIVEN a participant already active in a different ongoing activity WHEN joining another THEN uiState becomes Idle with a specific message`() {
+        runTest {
+            val userRepo = userRepo()
+            userRepo.signIn(context)
+            val activityRepo = activityRepo(TestFixtures.ongoingActivity, PARTICIPANT_ACTIVITY)
+            val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
+
+            vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+
+            val state = vm.uiState.value
+            assertIs<MapUiState.Idle>(state)
+            assertEquals("You're already in an activity -- leave it first", state.message)
+        }
+    }
+
+    @Test
+    fun `GIVEN a participant already active in a different ongoing activity WHEN joining another THEN they are not added as a participant`() {
+        runTest {
+            val userRepo = userRepo()
+            userRepo.signIn(context)
+            val activityRepo = activityRepo(TestFixtures.ongoingActivity, PARTICIPANT_ACTIVITY)
+            val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
+
+            vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+
+            val updated = activityRepo.getActivity(PARTICIPANT_ACTIVITY.id)
+            assertIs<DataResult.Success<IturActivity>>(updated)
+            assertTrue(TestFixtures.ORGANIZER_ID !in updated.data.participantIds)
+        }
+    }
+
+    @Test
+    fun `GIVEN a user already an active member of an activity WHEN re-joining that same activity THEN it is not blocked`() {
+        runTest {
+            val userRepo = userRepo()
+            userRepo.signIn(context)
+            val activityRepo = activityRepo(TestFixtures.ongoingActivity)
+            val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
+
+            vm.joinActivity(TestFixtures.ONGOING_ACTIVITY_ID, context)
+
+            assertOngoing(vm)
+        }
+    }
+
+    @Test
+    fun `GIVEN the organizer's only membership is a DRAFT activity WHEN starting a new one THEN it is not blocked`() {
+        runTest {
+            val userRepo = userRepo()
+            userRepo.signIn(context)
+            val activityRepo = activityRepo(TestFixtures.draftActivity)
+            val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
+
+            vm.startActivity(context)
+
+            assertOngoing(vm)
         }
     }
 
@@ -573,6 +668,7 @@ class MapViewModelTest {
         )
         val activityRepo = mockk<ActivityRepository>()
         coEvery { activityRepo.getActivities(any()) } returns DataResult.Success(emptyList())
+        coEvery { activityRepo.getActiveActivityId(TestFixtures.ORGANIZER_ID) } returns DataResult.Success(null)
         coEvery {
             activityRepo.addParticipant(
                 TestFixtures.ONGOING_ACTIVITY_ID,
@@ -678,6 +774,7 @@ class MapViewModelTest {
         runTest {
             val activityRepo = mockk<ActivityRepository>()
             coEvery { activityRepo.getActivities(any()) } returns DataResult.Success(emptyList())
+            coEvery { activityRepo.getActiveActivityId(TestFixtures.ORGANIZER_ID) } returns DataResult.Success(null)
             coEvery { activityRepo.createActivity(TestFixtures.ORGANIZER_ID) } returns DataResult.Error("quota exceeded")
 
             val vm = viewModel(activityRepo = activityRepo)

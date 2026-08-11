@@ -42,10 +42,71 @@ private val ACTIVITY_DTO = IturActivityDTO(
 
 class FirebaseActivityRepositoryTest {
     private val activitiesCollection = mockk<CollectionReference>()
+    private val usersCollection = mockk<CollectionReference>()
     private val firestore = mockk<FirebaseFirestore> {
         every { collection(FirestoreCollections.ACTIVITIES) } returns activitiesCollection
+        every { collection(FirestoreCollections.USERS) } returns usersCollection
     }
     private val repository = FirebaseActivityRepository(firestore)
+
+    // --- getActiveActivityId ---
+
+    @Test
+    fun `GIVEN a user document with activeActivityId set WHEN getting the active activity THEN returns it`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        every { usersCollection.document(ORGANIZER_ID.value) } returns docRef
+        val snapshot = mockk<DocumentSnapshot> {
+            every { exists() } returns true
+            every { getString("activeActivityId") } returns ACTIVITY_ID.value
+        }
+        every { docRef.get() } returns successfulTask(snapshot)
+
+        val result = repository.getActiveActivityId(ORGANIZER_ID)
+
+        assertIs<DataResult.Success<IturActivityId?>>(result)
+        assertEquals(ACTIVITY_ID, result.data)
+    }
+
+    @Test
+    fun `GIVEN a user document with no activeActivityId WHEN getting the active activity THEN returns null`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        every { usersCollection.document(ORGANIZER_ID.value) } returns docRef
+        val snapshot = mockk<DocumentSnapshot> {
+            every { exists() } returns true
+            every { getString("activeActivityId") } returns null
+        }
+        every { docRef.get() } returns successfulTask(snapshot)
+
+        val result = repository.getActiveActivityId(ORGANIZER_ID)
+
+        assertIs<DataResult.Success<IturActivityId?>>(result)
+        assertEquals(null, result.data)
+    }
+
+    @Test
+    fun `GIVEN no user document exists WHEN getting the active activity THEN returns null`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        every { usersCollection.document(ORGANIZER_ID.value) } returns docRef
+        val snapshot = mockk<DocumentSnapshot> { every { exists() } returns false }
+        every { docRef.get() } returns successfulTask(snapshot)
+
+        val result = repository.getActiveActivityId(ORGANIZER_ID)
+
+        assertIs<DataResult.Success<IturActivityId?>>(result)
+        assertEquals(null, result.data)
+    }
+
+    @Test
+    fun `GIVEN Firestore throws WHEN getting the active activity THEN returns Error rather than propagating`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        every { usersCollection.document(ORGANIZER_ID.value) } returns docRef
+        every { docRef.get() } returns failedTask(RuntimeException("offline"))
+
+        val result = repository.getActiveActivityId(ORGANIZER_ID)
+
+        assertIs<DataResult.Error>(result)
+        Unit
+    }
 
     // --- getActivity ---
 

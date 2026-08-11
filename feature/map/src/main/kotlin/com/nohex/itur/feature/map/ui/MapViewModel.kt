@@ -306,12 +306,20 @@ constructor(
                     _currentUser.value = userRepository.signIn(context)
                 }
                 val organizer = requireNotNull(_currentUser.value)
+
+                // MEMB-4B18/MEMB-7A05: starting a second activity while already an active member
+                // of one is rejected server-side; check first so the message is specific rather
+                // than a generic write failure.
+                if (isAlreadyActiveElsewhere(organizer.id, targetActivityId = null)) return@launch
+
                 val result = activityRepository.createActivity(organizerId = organizer.id)
                 when (result) {
                     is DataResult.Success -> triggerOngoingState(result.data, context)
                     is DataResult.Error -> {
-                        requestHealthCheck()
-                        _uiState.value = MapUiState.Error(result.message)
+                        if (!isAlreadyActiveElsewhere(organizer.id, targetActivityId = null)) {
+                            requestHealthCheck()
+                            _uiState.value = MapUiState.Error(result.message)
+                        }
                     }
                     is DataResult.NotFound ->
                         _uiState.value = MapUiState.Error("Activity ${result.id} not found")
@@ -319,6 +327,10 @@ constructor(
             } catch (e: Exception) {
                 val message = e.message ?: "Failed to start an activity"
                 Log.e("MapViewModel", message, e)
+                val organizerId = (_currentUser.value as? User.RegisteredUser)?.id
+                if (organizerId != null && isAlreadyActiveElsewhere(organizerId, targetActivityId = null)) {
+                    return@launch
+                }
                 _uiState.value = if (reportBackendFailure(e)) {
                     previousState
                 } else {
@@ -326,6 +338,26 @@ constructor(
                 }
             }
         }
+    }
+
+    /**
+     * MEMB-4B18/MEMB-7A05: true (and, as a side effect, shows the "already in an activity"
+     * message) if [userId] is an active member of an `ONGOING` activity other than
+     * [targetActivityId] (`null` when starting a brand-new one, so any active membership blocks
+     * it). Used both pre-emptively, before attempting a write the backend would reject anyway,
+     * and after a write failure, to recognise that specific rejection (backend-agnostic --
+     * re-checks the same repository call rather than inspecting a Firebase-specific exception
+     * type) instead of showing a generic error.
+     */
+    private suspend fun isAlreadyActiveElsewhere(userId: UserId, targetActivityId: IturActivityId?): Boolean {
+        val activeElsewhere = when (val result = activityRepository.getActiveActivityId(userId)) {
+            is DataResult.Success -> result.data != null && result.data != targetActivityId
+            else -> false
+        }
+        if (activeElsewhere) {
+            triggerIdleState("You're already in an activity -- leave it first")
+        }
+        return activeElsewhere
     }
 
     /**
@@ -370,14 +402,22 @@ constructor(
                 val user = currentUser.value ?: userRepository.getCurrentUser().also {
                     _currentUser.value = it
                 }
+
+                // MEMB-4B18/MEMB-7A05: joining a second, different ONGOING activity is rejected
+                // server-side; check first for a specific message. Already being a member of
+                // *this* activity is not a conflict.
+                if (isAlreadyActiveElsewhere(user.id, targetActivityId = activityId)) return@launch
+
                 // Join the activity.
                 val result = activityRepository.addParticipant(activityId, user.id)
                 // Change the UI state.
                 when (result) {
                     is DataResult.Success -> triggerOngoingState(result.data, context)
                     is DataResult.Error -> {
-                        requestHealthCheck()
-                        _uiState.value = MapUiState.Error(result.message)
+                        if (!isAlreadyActiveElsewhere(user.id, targetActivityId = activityId)) {
+                            requestHealthCheck()
+                            _uiState.value = MapUiState.Error(result.message)
+                        }
                     }
                     is DataResult.NotFound ->
                         _uiState.value =
@@ -386,6 +426,10 @@ constructor(
             } catch (e: Exception) {
                 val message = "Failed to join activity $activityId"
                 Log.e("MapViewModel", message, e)
+                val userId = _currentUser.value?.id
+                if (userId != null && isAlreadyActiveElsewhere(userId, targetActivityId = activityId)) {
+                    return@launch
+                }
                 _uiState.value = if (reportBackendFailure(e)) {
                     previousState
                 } else {
