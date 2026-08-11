@@ -24,6 +24,13 @@ interface ActivityRepository {
     suspend fun getActivity(activityId: IturActivityId): DataResult<IturActivity>
 
     /**
+     * The `ONGOING` activity (if any) [userId] is currently an active member of -- organiser or
+     * participant. `Success(null)` means they are not active in any. Used to block starting or
+     * joining a second one before attempting a write the backend would reject anyway.
+     */
+    suspend fun getActiveActivityId(userId: UserId): DataResult<IturActivityId?>
+
+    /**
      * Creates a new activity for the given user.
      */
     suspend fun createActivity(organizerId: UserId): DataResult<IturActivity>

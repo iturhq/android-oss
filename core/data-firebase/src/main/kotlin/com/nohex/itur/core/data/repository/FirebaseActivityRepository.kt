@@ -32,6 +32,18 @@ constructor(
     firestore: FirebaseFirestore,
 ) : ActivityRepository {
     private val activitiesCollection = firestore.collection(FirestoreCollections.ACTIVITIES)
+    private val usersCollection = firestore.collection(FirestoreCollections.USERS)
+
+    override suspend fun getActiveActivityId(userId: UserId): DataResult<IturActivityId?> = try {
+        withContext(Dispatchers.IO) {
+            val snapshot = usersCollection.document(userId.value).get().await()
+            val activeActivityId = if (snapshot.exists()) snapshot.getString("activeActivityId") else null
+            DataResult.Success(activeActivityId?.let { IturActivityId(it) })
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to read active-activity record for ${userId.value}", e)
+        DataResult.Error(e.message ?: "Failed to read active-activity record")
+    }
 
     override suspend fun getActivity(activityId: IturActivityId): DataResult<IturActivity> {
         val reference = activitiesCollection.document(activityId.value)

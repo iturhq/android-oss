@@ -72,6 +72,13 @@ class FakeActivityRepository(
         return DataResult.Success(deletedActivity)
     }
 
+    override suspend fun getActiveActivityId(userId: UserId): DataResult<IturActivityId?> = DataResult.Success(
+        activities.firstOrNull { activity ->
+            activity.status == IturActivityStatus.ONGOING &&
+                (activity.organizerId == userId || userId in activity.participantIds)
+        }?.id,
+    )
+
     override suspend fun createActivity(organizerId: UserId): DataResult<IturActivity> {
         // Random 20-letter ID, similar to a Firebase one.
         val newId = (1..20)

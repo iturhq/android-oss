@@ -69,7 +69,7 @@ internal fun MapScreenCoordinator(
     viewModel: MapViewModel,
     locationPermissionCheck: (Context) -> Boolean,
     openGlEsSupportCheck: (Context) -> OpenGlEsSupport,
-    qrScanSheet: @Composable (onDismissRequest: () -> Unit, onScanSuccess: (String) -> Unit) -> Unit,
+    qrCustomization: QrCustomization,
 ) {
     val environment = RememberMapEnvironment(openGlEsSupportCheck, modifier)
     val presentation = CollectMapPresentation(viewModel)
@@ -79,7 +79,7 @@ internal fun MapScreenCoordinator(
 
     MapScreenEffects(viewModel, environment, presentation, interaction, snackbarHostState)
     CompositionLocalProvider(LocalHelpAnchorRegistry provides helpAnchorRegistry) {
-        MapTransientSurfaces(viewModel, environment, presentation, interaction, qrScanSheet)
+        MapTransientSurfaces(viewModel, environment, presentation, interaction, qrCustomization)
         MapScaffold(viewModel, environment, presentation, interaction, snackbarHostState)
     }
 }

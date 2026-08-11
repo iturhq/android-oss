@@ -114,4 +114,44 @@ class FakeLocationRepositoryTest {
         assertTrue(abs(returned.latitude - updated.latitude) <= MAX_JITTER_DEGREES)
         assertTrue(abs(returned.longitude - updated.longitude) <= MAX_JITTER_DEGREES)
     }
+
+    // --- removeForParticipant ---
+
+    @Test
+    fun `GIVEN stored locations for multiple participants WHEN removing one participant's location THEN only that participant is removed`() = runBlocking {
+        val repo = locationRepo(activityRepo(ACTIVITY))
+        repo.updateForParticipant(ORGANIZER_ID, ACTIVITY_ID, Location(latitude = 51.0, longitude = 0.0))
+        repo.updateForParticipant(PARTICIPANT_ID, ACTIVITY_ID, Location(latitude = 52.0, longitude = 1.0))
+
+        repo.removeForParticipant(PARTICIPANT_ID, ACTIVITY_ID)
+
+        // getForActivity regenerates a fresh position for any participant with no stored
+        // location, so the removed participant's location is unrelated to what was stored...
+        val locationsAfterRemoval = repo.getForActivity(ACTIVITY_ID)
+        val removedParticipantLocation = locationsAfterRemoval
+            .first { it.userId == PARTICIPANT_ID }
+            .location
+        assertTrue(abs(removedParticipantLocation.latitude - 52.0) > MAX_JITTER_DEGREES)
+
+        // ...while the other participant's stored location survives untouched.
+        val organizerLocation = locationsAfterRemoval
+            .first { it.userId == ORGANIZER_ID }
+            .location
+        assertTrue(abs(organizerLocation.latitude - 51.0) <= MAX_JITTER_DEGREES)
+        assertTrue(abs(organizerLocation.longitude - 0.0) <= MAX_JITTER_DEGREES)
+    }
+
+    @Test
+    fun `GIVEN no stored location for a participant WHEN removing it THEN nothing throws`() = runBlocking {
+        val repo = locationRepo(activityRepo(ACTIVITY))
+        repo.removeForParticipant(PARTICIPANT_ID, ACTIVITY_ID)
+        // No exception -- nothing further to verify.
+    }
+
+    @Test
+    fun `GIVEN an unknown activity WHEN removing a participant's location THEN nothing throws`() = runBlocking {
+        val repo = locationRepo(activityRepo())
+        repo.removeForParticipant(PARTICIPANT_ID, ACTIVITY_ID)
+        // No exception -- nothing further to verify.
+    }
 }

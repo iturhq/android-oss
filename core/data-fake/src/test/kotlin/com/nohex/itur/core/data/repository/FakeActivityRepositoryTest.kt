@@ -98,6 +98,37 @@ class FakeActivityRepositoryTest {
         assertEquals(listOf(ACTIVITY), result.data)
     }
 
+    // --- getActiveActivityId ---
+
+    @Test
+    fun `GIVEN an ongoing activity WHEN getting the organizer's active activity THEN returns its ID`() = runBlocking {
+        val result = repository(ACTIVITY).getActiveActivityId(ORGANIZER_ID)
+        assertIs<DataResult.Success<IturActivityId?>>(result)
+        assertEquals(ACTIVITY_ID, result.data)
+    }
+
+    @Test
+    fun `GIVEN an ongoing activity WHEN getting a participant's active activity THEN returns its ID`() = runBlocking {
+        val result = repository(ACTIVITY).getActiveActivityId(PARTICIPANT_ID)
+        assertIs<DataResult.Success<IturActivityId?>>(result)
+        assertEquals(ACTIVITY_ID, result.data)
+    }
+
+    @Test
+    fun `GIVEN no membership anywhere WHEN getting the active activity THEN returns null`() = runBlocking {
+        val result = repository(ACTIVITY).getActiveActivityId(UserId("unrelated-user"))
+        assertIs<DataResult.Success<IturActivityId?>>(result)
+        assertEquals(null, result.data)
+    }
+
+    @Test
+    fun `GIVEN membership only in a DRAFT activity WHEN getting the active activity THEN returns null`() = runBlocking {
+        val draft = ACTIVITY.copy(id = OTHER_ID, status = IturActivityStatus.DRAFT)
+        val result = repository(draft).getActiveActivityId(ORGANIZER_ID)
+        assertIs<DataResult.Success<IturActivityId?>>(result)
+        assertEquals(null, result.data)
+    }
+
     // --- createActivity ---
 
     @Test

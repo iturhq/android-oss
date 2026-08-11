@@ -27,6 +27,7 @@ import com.nohex.itur.core.domain.id.url
 fun QRDisplaySheet(
     activityId: IturActivityId,
     onDismissRequest: () -> Unit,
+    qrUrl: (IturActivityId) -> String = { it.url },
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -45,7 +46,7 @@ fun QRDisplaySheet(
                     .padding(16.dp)
                     .align(Alignment.CenterHorizontally),
             )
-            QRImage(qrURL = activityId.url)
+            QRImage(qrURL = qrUrl(activityId))
             Spacer(modifier = Modifier.size(16.dp))
         }
     }

@@ -106,6 +106,13 @@ class ScenarioActivityRepository : ActivityRepository {
             ?: DataResult.NotFound(activityId.value)
     }
 
+    override suspend fun getActiveActivityId(userId: UserId): DataResult<IturActivityId?> = DataResult.Success(
+        activities.firstOrNull { activity ->
+            activity.status == IturActivityStatus.ONGOING &&
+                (activity.organizerId == userId || userId in activity.participantIds)
+        }?.id,
+    )
+
     override suspend fun createActivity(organizerId: UserId): DataResult<IturActivity> {
         createFailure?.let { return DataResult.Error(it) }
         val activity = IturActivity(
@@ -220,5 +227,11 @@ class ScenarioLocationRepository(
         removeFailure?.let { throw it }
         removeCount.incrementAndGet()
         locations.remove(activityId)
+    }
+
+    override suspend fun removeForParticipant(userId: UserId, activityId: IturActivityId) {
+        removeFailure?.let { throw it }
+        removeCount.incrementAndGet()
+        locations[activityId]?.remove(userId)
     }
 }

@@ -97,6 +97,7 @@ constructor(
     private var backendCheckJob: Job? = null
     private var backendCadenceJob: Job? = null
     private var backendMonitoringActive = false
+    private var participantLocationMonitoringJob: Job? = null
     private var initialRestorePending = true
     private var locationUpdatesActive = false
 
@@ -173,6 +174,28 @@ constructor(
         backendCadenceJob?.cancel()
         backendRetryJob?.cancel()
         backendCheckJob?.cancel()
+    }
+
+    /**
+     * Refreshes participant markers independently of this device's own GPS callback while the
+     * map screen is visible. The optional interval keeps the cadence deterministic in tests.
+     */
+    fun startParticipantLocationMonitoring(
+        refreshIntervalMillis: Long = PARTICIPANT_LOCATION_REFRESH_INTERVAL_MILLIS,
+    ) {
+        if (participantLocationMonitoringJob?.isActive == true) return
+        participantLocationMonitoringJob = viewModelScope.launch {
+            while (true) {
+                delay(refreshIntervalMillis)
+                refreshParticipantLocations()
+            }
+        }
+    }
+
+    /** Stops participant-marker polling while the map screen is not visible. */
+    fun stopParticipantLocationMonitoring() {
+        participantLocationMonitoringJob?.cancel()
+        participantLocationMonitoringJob = null
     }
 
     private fun scheduleNextCadenceCheck() {
@@ -306,12 +329,20 @@ constructor(
                     _currentUser.value = userRepository.signIn(context)
                 }
                 val organizer = requireNotNull(_currentUser.value)
+
+                // MEMB-4B18/MEMB-7A05: starting a second activity while already an active member
+                // of one is rejected server-side; check first so the message is specific rather
+                // than a generic write failure.
+                if (isAlreadyActiveElsewhere(organizer.id, targetActivityId = null)) return@launch
+
                 val result = activityRepository.createActivity(organizerId = organizer.id)
                 when (result) {
                     is DataResult.Success -> triggerOngoingState(result.data, context)
                     is DataResult.Error -> {
-                        requestHealthCheck()
-                        _uiState.value = MapUiState.Error(result.message)
+                        if (!isAlreadyActiveElsewhere(organizer.id, targetActivityId = null)) {
+                            requestHealthCheck()
+                            _uiState.value = MapUiState.Error(result.message)
+                        }
                     }
                     is DataResult.NotFound ->
                         _uiState.value = MapUiState.Error("Activity ${result.id} not found")
@@ -319,6 +350,10 @@ constructor(
             } catch (e: Exception) {
                 val message = e.message ?: "Failed to start an activity"
                 Log.e("MapViewModel", message, e)
+                val organizerId = (_currentUser.value as? User.RegisteredUser)?.id
+                if (organizerId != null && isAlreadyActiveElsewhere(organizerId, targetActivityId = null)) {
+                    return@launch
+                }
                 _uiState.value = if (reportBackendFailure(e)) {
                     previousState
                 } else {
@@ -326,6 +361,26 @@ constructor(
                 }
             }
         }
+    }
+
+    /**
+     * MEMB-4B18/MEMB-7A05: true (and, as a side effect, shows the "already in an activity"
+     * message) if [userId] is an active member of an `ONGOING` activity other than
+     * [targetActivityId] (`null` when starting a brand-new one, so any active membership blocks
+     * it). Used both pre-emptively, before attempting a write the backend would reject anyway,
+     * and after a write failure, to recognise that specific rejection (backend-agnostic --
+     * re-checks the same repository call rather than inspecting a Firebase-specific exception
+     * type) instead of showing a generic error.
+     */
+    private suspend fun isAlreadyActiveElsewhere(userId: UserId, targetActivityId: IturActivityId?): Boolean {
+        val activeElsewhere = when (val result = activityRepository.getActiveActivityId(userId)) {
+            is DataResult.Success -> result.data != null && result.data != targetActivityId
+            else -> false
+        }
+        if (activeElsewhere) {
+            triggerIdleState("You're already in an activity -- leave it first")
+        }
+        return activeElsewhere
     }
 
     /**
@@ -370,14 +425,22 @@ constructor(
                 val user = currentUser.value ?: userRepository.getCurrentUser().also {
                     _currentUser.value = it
                 }
+
+                // MEMB-4B18/MEMB-7A05: joining a second, different ONGOING activity is rejected
+                // server-side; check first for a specific message. Already being a member of
+                // *this* activity is not a conflict.
+                if (isAlreadyActiveElsewhere(user.id, targetActivityId = activityId)) return@launch
+
                 // Join the activity.
                 val result = activityRepository.addParticipant(activityId, user.id)
                 // Change the UI state.
                 when (result) {
                     is DataResult.Success -> triggerOngoingState(result.data, context)
                     is DataResult.Error -> {
-                        requestHealthCheck()
-                        _uiState.value = MapUiState.Error(result.message)
+                        if (!isAlreadyActiveElsewhere(user.id, targetActivityId = activityId)) {
+                            requestHealthCheck()
+                            _uiState.value = MapUiState.Error(result.message)
+                        }
                     }
                     is DataResult.NotFound ->
                         _uiState.value =
@@ -386,6 +449,10 @@ constructor(
             } catch (e: Exception) {
                 val message = "Failed to join activity $activityId"
                 Log.e("MapViewModel", message, e)
+                val userId = _currentUser.value?.id
+                if (userId != null && isAlreadyActiveElsewhere(userId, targetActivityId = activityId)) {
+                    return@launch
+                }
                 _uiState.value = if (reportBackendFailure(e)) {
                     previousState
                 } else {
@@ -403,20 +470,24 @@ constructor(
             // If there is an ongoing activity...
             _ongoingActivityId.value?.let { activityId ->
                 try {
-                    // Clean up location data for the activity.
-                    // CAUTION: it needs to happen before removing the participant,
-                    // thus revoking write access.
-                    locationsRepository.removeForActivity(activityId)
-
                     currentUser.value?.let {
                         if (_organizerId.value == it.id) {
-                            // If it's the organiser, finish the activity for everyone.
+                            // If it's the organiser, finish the activity for everyone and clean
+                            // up every participant's location data.
+                            // CAUTION: it needs to happen before removing the participant,
+                            // thus revoking write access.
+                            locationsRepository.removeForActivity(activityId)
                             requireSuccessfulBackendWrite(
                                 activityRepository.updateActivityStatus(
                                     activityId,
                                     IturActivityStatus.FINISHED,
                                 ),
                             )
+                        } else {
+                            // Otherwise, only clean up this participant's own location data.
+                            // CAUTION: it needs to happen before removing the participant,
+                            // thus revoking write access.
+                            locationsRepository.removeForParticipant(it.id, activityId)
                         }
                         // Remove the participants from the activity.
                         requireSuccessfulBackendWrite(
@@ -439,6 +510,7 @@ constructor(
 
     fun triggerIdleState(message: String? = null) {
         _ongoingActivityId.value = null
+        _participantLocations.value = emptyList()
         _uiState.value = MapUiState.Idle(message)
         lastBroadcastSeen = null
         _latestBroadcast.value = null
@@ -490,12 +562,14 @@ constructor(
         // Select the joined activity as the current one.
         _ongoingActivityId.value = activity.id
         // Show the ongoing activity state.
+        val locations = locationsRepository.getForActivity(activity.id)
+        _participantLocations.value = locations
         _uiState.value = Ongoing(
             activity = activity,
             organizer = userRepository.getAll(listOf(activity.organizerId))
                 .firstOrNull() ?: AnonymousUser(activity.organizerId),
             participantIds = activity.participantIds,
-            locations = locationsRepository.getForActivity(activity.id),
+            locations = locations,
         )
 
         // Start updating the location.
@@ -533,6 +607,18 @@ constructor(
         }
     }
 
+    private suspend fun refreshParticipantLocations() {
+        val activityId = _ongoingActivityId.value ?: return
+        try {
+            _participantLocations.value = locationsRepository.getForActivity(activityId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("MapViewModel", "Failed to refresh participant locations for $activityId", e)
+            reportBackendFailure(e)
+        }
+    }
+
     /**
      * Posts the location of the current user along with the activity.
      */
@@ -547,8 +633,7 @@ constructor(
                 activityId,
                 IturLocation(latitude = location.latitude, longitude = location.longitude),
             )
-            // Update the participants location list.
-            _participantLocations.value = locationsRepository.getForActivity(activityId)
+            refreshParticipantLocations()
         } catch (e: Exception) {
             Log.e(
                 "MapViewModel",
@@ -662,3 +747,4 @@ private class BackendOperationException(message: String) : Exception(message)
 private val RETRY_DELAYS_SECONDS = listOf(5, 10, 20, 40, 60)
 private const val BACKEND_PROBE_TIMEOUT_MILLIS = 5_000L
 private const val BACKEND_MONITOR_INTERVAL_MILLIS = 30_000L
+private const val PARTICIPANT_LOCATION_REFRESH_INTERVAL_MILLIS = 15_000L
