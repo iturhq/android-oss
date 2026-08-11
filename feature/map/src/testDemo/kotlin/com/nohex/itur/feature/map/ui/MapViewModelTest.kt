@@ -915,6 +915,22 @@ class MapViewModelTest {
     }
 
     @Test
+    fun `GIVEN one of two services recovers WHEN scheduled retry runs THEN only the remaining outage retries`() = runTest {
+        val auth = FakeBackendHealthCheck("auth", "Firebase Authentication", false)
+        val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore", false)
+        val vm = viewModel(healthChecks = setOf(auth, firestore))
+        vm.startBackendMonitoring()
+        auth.available = true
+
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(5_001L)
+        runCurrent()
+
+        assertEquals(listOf(firestore.service), vm.backendAvailability.value.failingServices)
+        assertEquals(10, vm.backendAvailability.value.retryCountdown)
+        vm.stopBackendMonitoring()
+    }
+
+    @Test
     fun `GIVEN an ongoing activity WHEN a service fails THEN the operation state is preserved and resumes`() = runTest {
         val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore")
         val userRepo = userRepo().also { it.signIn(context) }
