@@ -23,11 +23,11 @@ internal fun MapTransientSurfaces(
     environment: MapEnvironment,
     presentation: MapPresentation,
     interaction: MapInteractionState,
-    qrScanSheet: @Composable (onDismissRequest: () -> Unit, onScanSuccess: (String) -> Unit) -> Unit,
+    qrCustomization: QrCustomization,
 ) {
     RecoverableErrorSurface(presentation.uiState)
-    QrDisplaySurface(presentation.ongoingActivityId, interaction)
-    QrScanSurface(viewModel, environment.context, interaction, qrScanSheet)
+    QrDisplaySurface(presentation.ongoingActivityId, interaction, qrCustomization.displayUrl)
+    QrScanSurface(viewModel, environment.context, interaction, qrCustomization.scanSheet)
     HelpSurface(presentation, interaction)
 }
 
@@ -46,12 +46,14 @@ private fun RecoverableErrorSurface(uiState: MapUiState) {
 private fun QrDisplaySurface(
     ongoingActivityId: IturActivityId?,
     interaction: MapInteractionState,
+    qrDisplayUrl: (IturActivityId) -> String,
 ) {
     if (interaction.showQrDisplaySheet) {
         ongoingActivityId?.let {
             QRDisplaySheet(
                 activityId = it,
                 onDismissRequest = { interaction.showQrDisplaySheet = false },
+                qrUrl = qrDisplayUrl,
             )
         }
     }
