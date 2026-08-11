@@ -184,6 +184,14 @@ object BackendDiagnosticSanitizer {
 interface BackendHealthCheck {
     val service: BackendService
 
+    /** Stable diagnostics ordering; legacy contributors remain valid through the default. */
+    val diagnosticOrder: Int
+        get() = Int.MAX_VALUE
+
+    /** User-safe success evidence used by the shared recovery registry. */
+    val successDetail: String
+        get() = "${service.displayName} is reachable"
+
     suspend fun probe()
 
     fun recognizes(cause: Throwable): Boolean = false

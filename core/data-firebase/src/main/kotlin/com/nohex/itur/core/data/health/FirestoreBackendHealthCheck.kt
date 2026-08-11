@@ -22,6 +22,8 @@ class FirestoreBackendHealthCheck @Inject constructor(
         id = BackendServiceIds.FIREBASE_FIRESTORE,
         displayName = "Cloud Firestore",
     )
+    override val diagnosticOrder = 40
+    override val successDetail = "Bounded server read completed"
 
     override suspend fun probe() {
         firestore.collection(FirestoreCollections.ACTIVITIES)
