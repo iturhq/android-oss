@@ -15,6 +15,7 @@ import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.data.repository.DataResult
 import com.nohex.itur.core.data.repository.FakeActivityRepository
 import com.nohex.itur.core.data.repository.FakeLocationRepository
+import com.nohex.itur.core.data.repository.LocationRepository
 import com.nohex.itur.core.data.repository.FakeUserRepository
 import com.nohex.itur.core.data.repository.UserRepository
 import com.nohex.itur.core.domain.id.IturActivityId
@@ -29,6 +30,7 @@ import com.nohex.itur.feature.map.config.LocationUpdateConfig
 import com.nohex.itur.feature.map.config.MapStyleConfig
 import com.nohex.itur.feature.map.notifications.BroadcastNotifier
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -36,6 +38,7 @@ import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
@@ -98,7 +101,7 @@ class MapViewModelTest {
         activityRepo: ActivityRepository = activityRepo(),
         userRepo: UserRepository = userRepo(),
         healthChecks: Set<BackendHealthCheck> = emptySet(),
-        locationRepo: FakeLocationRepository = locationRepo(activityRepo),
+        locationRepo: LocationRepository = locationRepo(activityRepo),
     ) = MapViewModel(
         activityRepository = activityRepo,
         userRepository = userRepo,
@@ -366,6 +369,44 @@ class MapViewModelTest {
     }
 
     // --- leaveActivity ---
+
+    @Test
+    fun `GIVEN no local GPS fix WHEN the participant refresh interval elapses THEN markers refresh`() = runTest {
+        val activityRepo = activityRepo(TestFixtures.ongoingActivity)
+        val initialLocations = TestFixtures.ongoingActivityLocations
+        val refreshedLocations = initialLocations.dropLast(1)
+        val locationRepo = mockk<LocationRepository>()
+        coEvery { locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns
+            initialLocations andThen refreshedLocations
+        val userRepo = userRepo().also { it.signIn(context) }
+        val vm = viewModel(
+            activityRepo = activityRepo,
+            userRepo = userRepo,
+            locationRepo = locationRepo,
+        )
+        vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+        assertEquals(initialLocations, vm.participantLocations.value)
+
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        try {
+            advanceTimeBy(999L)
+            runCurrent()
+            assertEquals(initialLocations, vm.participantLocations.value)
+
+            advanceTimeBy(2L)
+            runCurrent()
+            assertEquals(refreshedLocations, vm.participantLocations.value)
+            coVerify(exactly = 0) {
+                locationRepo.updateForParticipant(
+                    TestFixtures.ORGANIZER_ID,
+                    TestFixtures.ONGOING_ACTIVITY_ID,
+                    any(),
+                )
+            }
+        } finally {
+            vm.stopParticipantLocationMonitoring()
+        }
+    }
 
     @Test
     fun `GIVEN no ongoing activity WHEN leaving THEN uiState remains Idle`() {

@@ -32,12 +32,35 @@ internal fun MapScreenEffects(
     snackbarHostState: SnackbarHostState,
 ) {
     BackendMonitoringEffect(viewModel)
+    ParticipantLocationMonitoringEffect(viewModel)
     MessageEffects(presentation, interaction, snackbarHostState)
     LocationUpdatesEffect(viewModel, environment.context, interaction.locationPermissionGranted)
     LocationPermissionEffect(environment, interaction)
     InitialCenteringEffect(presentation, interaction)
     NotificationPermissionEffect(environment.context, interaction.locationPermissionGranted)
     ActivityStateEffects(viewModel, environment.context, presentation)
+}
+
+@Composable
+private fun ParticipantLocationMonitoringEffect(viewModel: MapViewModel) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> viewModel.startParticipantLocationMonitoring()
+                Lifecycle.Event.ON_STOP -> viewModel.stopParticipantLocationMonitoring()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            viewModel.startParticipantLocationMonitoring()
+        }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.stopParticipantLocationMonitoring()
+        }
+    }
 }
 
 @Composable
