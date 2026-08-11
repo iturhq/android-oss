@@ -14,6 +14,7 @@ import com.nohex.itur.core.ui.theme.IturTheme
 import com.nohex.itur.feature.map.ui.components.map.IdleState
 import com.nohex.itur.feature.map.ui.components.map.OngoingState
 import com.nohex.itur.feature.map.ui.components.map.OngoingStateActions
+import com.nohex.itur.feature.map.ui.components.map.UserFABs
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -22,6 +23,24 @@ import org.junit.Test
 class ServiceAwareControlsTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun consumerCanMoveSignedInAuthenticationOffTheMap() {
+        composeRule.setContent {
+            IturTheme {
+                UserFABs(
+                    onSignInRequested = {},
+                    onSignOutRequested = {},
+                    isSignedIn = true,
+                    authenticationActionsEnabled = true,
+                    showSignOutOnMap = false,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("sign_out_fab").assertDoesNotExist()
+        composeRule.onNodeWithTag("sign_in_fab").assertDoesNotExist()
+    }
 
     @Test
     fun disabledAuthenticationActionsKeepJoinUsable() {
