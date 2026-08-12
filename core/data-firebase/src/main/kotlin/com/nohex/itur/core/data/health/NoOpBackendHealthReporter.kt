@@ -12,6 +12,7 @@ internal object NoOpBackendHealthReporter : BackendHealthReporter {
 }
 
 /** Reports only the Firestore mutation boundary, never reads or application-owned values. */
+@Suppress("TooGenericExceptionCaught")
 internal suspend fun <T> BackendHealthReporter.observeFirestoreMutation(
     operation: suspend () -> T,
 ): T = try {
