@@ -63,9 +63,7 @@ interface ActivityRepository {
      */
     suspend fun removeParticipant(activityId: IturActivityId, userId: UserId): DataResult<IturActivity>
 
-    /**
-     * Signals that a participant needs the organiser's attention.
-     */
+    /** Compatibility entry point for the former binary attention request. */
     suspend fun requestAttention(activityId: IturActivityId, userId: UserId)
 
     /**

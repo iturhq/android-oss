@@ -12,12 +12,14 @@ import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.data.repository.FirebaseActivityRepository
 import com.nohex.itur.core.data.repository.FirebaseLocationRepository
 import com.nohex.itur.core.data.repository.LocationRepository
+import com.nohex.itur.core.data.repository.ParticipantSignalRepository
 import com.nohex.itur.core.data.repository.UserRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
+import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -33,7 +35,16 @@ object DataModule {
     ): BackendHealthCheck = healthCheck
 
     @Provides
-    fun provideActivityRepository(firestore: FirebaseFirestore): ActivityRepository = FirebaseActivityRepository(firestore)
+    @Singleton
+    fun provideFirebaseActivityRepository(firestore: FirebaseFirestore): FirebaseActivityRepository = FirebaseActivityRepository(firestore)
+
+    @Provides
+    fun provideActivityRepository(repository: FirebaseActivityRepository): ActivityRepository = repository
+
+    @Provides
+    fun provideParticipantSignalRepository(
+        repository: FirebaseActivityRepository,
+    ): ParticipantSignalRepository = repository.participantSignalRepository
 
     @Provides
     fun provideLocationRepository(

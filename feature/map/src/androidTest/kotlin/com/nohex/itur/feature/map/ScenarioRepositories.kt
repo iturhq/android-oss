@@ -11,6 +11,7 @@ import com.nohex.itur.core.data.repository.ActivityFilter
 import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.data.repository.DataResult
 import com.nohex.itur.core.data.repository.LocationRepository
+import com.nohex.itur.core.data.repository.ParticipantSignalRepository
 import com.nohex.itur.core.data.repository.SignInResult
 import com.nohex.itur.core.data.repository.UserRepository
 import com.nohex.itur.core.domain.id.IturActivityId
@@ -21,6 +22,7 @@ import com.nohex.itur.core.model.IturActivity
 import com.nohex.itur.core.model.IturActivityStatus
 import com.nohex.itur.core.model.Location
 import com.nohex.itur.core.model.ParticipantLocation
+import com.nohex.itur.core.model.ParticipantSignal
 import java.util.Date
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -55,7 +57,9 @@ class ScenarioUserRepository : UserRepository {
     }
 }
 
-class ScenarioActivityRepository : ActivityRepository {
+class ScenarioActivityRepository :
+    ActivityRepository,
+    ParticipantSignalRepository {
     // The anonymous actor starts outside every activity. Join scenarios add them explicitly;
     // organizer and registered-participant cold-start scenarios retain their fixture membership.
     private val activities = TestFixtures.activities.map { activity ->
@@ -167,17 +171,39 @@ class ScenarioActivityRepository : ActivityRepository {
         if (index < 0) return DataResult.NotFound(activityId.value)
         activities[index] = activities[index].copy(
             participantIds = activities[index].participantIds - userId,
+            participantSignals = activities[index].participantSignals - userId,
+        )
+        return DataResult.Success(activities[index])
+    }
+
+    override suspend fun setParticipantSignal(
+        activityId: IturActivityId,
+        userId: UserId,
+        signal: ParticipantSignal,
+    ): DataResult<IturActivity> {
+        val index = activities.indexOfFirst { it.id == activityId }
+        if (index < 0) return DataResult.NotFound(activityId.value)
+        activities[index] = activities[index].copy(
+            participantSignals = activities[index].participantSignals + (userId to signal),
+        )
+        return DataResult.Success(activities[index])
+    }
+
+    override suspend fun clearParticipantSignal(
+        activityId: IturActivityId,
+        userId: UserId,
+    ): DataResult<IturActivity> {
+        val index = activities.indexOfFirst { it.id == activityId }
+        if (index < 0) return DataResult.NotFound(activityId.value)
+        activities[index] = activities[index].copy(
+            participantSignals = activities[index].participantSignals - userId,
         )
         return DataResult.Success(activities[index])
     }
 
     override suspend fun requestAttention(activityId: IturActivityId, userId: UserId) {
         attentionRequestCount.incrementAndGet()
-        val index = activities.indexOfFirst { it.id == activityId }
-        if (index < 0) return
-        activities[index] = activities[index].copy(
-            attentionRequests = (activities[index].attentionRequests + userId).distinct(),
-        )
+        setParticipantSignal(activityId, userId, ParticipantSignal.NEEDS_HELP)
     }
 
     override suspend fun getBroadcastsSince(

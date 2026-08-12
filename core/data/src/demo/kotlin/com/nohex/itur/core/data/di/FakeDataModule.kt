@@ -12,19 +12,30 @@ import com.nohex.itur.core.data.repository.FakeLocationRepository
 import com.nohex.itur.core.data.repository.FakeUserRepository
 import com.nohex.itur.core.data.repository.FakeUserSettingsRepository
 import com.nohex.itur.core.data.repository.LocationRepository
+import com.nohex.itur.core.data.repository.ParticipantSignalRepository
 import com.nohex.itur.core.data.repository.UserRepository
 import com.nohex.itur.core.data.repository.UserSettingsRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
 object FakeDataModule {
 
     @Provides
-    fun provideActivityRepository(): ActivityRepository = FakeActivityRepository(initialActivities = TestFixtures.activities)
+    @Singleton
+    fun provideFakeActivityRepository(): FakeActivityRepository = FakeActivityRepository(initialActivities = TestFixtures.activities)
+
+    @Provides
+    fun provideActivityRepository(repository: FakeActivityRepository): ActivityRepository = repository
+
+    @Provides
+    fun provideParticipantSignalRepository(
+        repository: FakeActivityRepository,
+    ): ParticipantSignalRepository = repository.participantSignalRepository
 
     @Provides
     fun provideUserRepository(): UserRepository = FakeUserRepository()

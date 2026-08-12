@@ -28,9 +28,18 @@ data class IturActivity(
     val finishedOn: Date? = null,
     // Whether the activity is exposed to public surfaces. Android-created activities default to false.
     val listed: Boolean = false,
-    // User IDs that have requested organiser attention (see UC-ACTIVITY-005).
-    val attentionRequests: List<UserId> = emptyList(),
+    // Current non-okay safety signal for each participant (see UC-ACTIVITY-005).
+    // Absence means the participant is okay.
+    val participantSignals: Map<UserId, ParticipantSignal> = emptyMap(),
 )
+
+enum class ParticipantSignal {
+    // The participant has stopped temporarily and intends to catch up.
+    DELAYED,
+
+    // The participant needs help and asks the organiser/group to converge on them.
+    NEEDS_HELP,
+}
 
 enum class IturActivityStatus {
     // The activity is not yet ready to go live.

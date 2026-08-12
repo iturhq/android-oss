@@ -29,13 +29,13 @@ import com.nohex.itur.core.data.repository.SignInResult
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.url
 import com.nohex.itur.core.model.IturActivityStatus
+import com.nohex.itur.core.model.ParticipantSignal
 import com.nohex.itur.core.ui.theme.IturTheme
 import com.nohex.itur.feature.map.ui.MapScreen
 import com.nohex.itur.feature.map.ui.QrCustomization
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -353,9 +353,10 @@ class CanonicalUseCasesTest {
         composeRule.waitUntil { activities.attentionRequestCount.get() == 1 }
 
         assertEquals(1, activities.attentionRequestCount.get())
-        assertTrue(
-            users.anonymous.id in
-                activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)!!.attentionRequests,
+        assertEquals(
+            ParticipantSignal.NEEDS_HELP,
+            activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)!!
+                .participantSignals[users.anonymous.id],
         )
         composeRule.onNodeWithTag("hail_organiser_fab").assertIsDisplayed()
     }
@@ -395,7 +396,9 @@ class CanonicalUseCasesTest {
         activities.replaceActivities(
             listOf(
                 TestFixtures.ongoingActivity.copy(
-                    attentionRequests = listOf(TestFixtures.PARTICIPANT_1_ID),
+                    participantSignals = mapOf(
+                        TestFixtures.PARTICIPANT_1_ID to ParticipantSignal.NEEDS_HELP,
+                    ),
                 ),
             ),
         )
@@ -403,8 +406,10 @@ class CanonicalUseCasesTest {
 
         composeRule.onNodeWithTag("hail_organiser_fab").assertDoesNotExist()
         assertEquals(
-            listOf(TestFixtures.PARTICIPANT_1_ID),
-            activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)?.attentionRequests,
+            ParticipantSignal.NEEDS_HELP,
+            activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)
+                ?.participantSignals
+                ?.get(TestFixtures.PARTICIPANT_1_ID),
         )
     }
 
