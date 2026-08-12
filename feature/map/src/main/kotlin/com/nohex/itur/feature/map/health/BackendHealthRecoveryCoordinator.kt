@@ -9,6 +9,7 @@ import android.util.Log
 import com.nohex.itur.core.data.health.BackendDiagnosticEvidence
 import com.nohex.itur.core.data.health.BackendHealthCheck
 import com.nohex.itur.core.data.health.BackendHealthObservation
+import com.nohex.itur.core.data.health.BackendHealthReporter
 import com.nohex.itur.core.data.health.BackendHealthStatus
 import com.nohex.itur.core.data.health.BackendServiceHealth
 import com.nohex.itur.core.data.health.withObservation
@@ -33,7 +34,7 @@ import javax.inject.Singleton
 @Singleton
 class BackendHealthRecoveryCoordinator @Inject constructor(
     checks: Set<@JvmSuppressWildcards BackendHealthCheck>,
-) {
+) : BackendHealthReporter {
     private val orderedChecks = checks
         .sortedWith(compareBy(BackendHealthCheck::diagnosticOrder, { it.service.id }))
         .also { sorted ->
@@ -42,6 +43,7 @@ class BackendHealthRecoveryCoordinator @Inject constructor(
             }
         }
     private val checksById = orderedChecks.associateBy { it.service.id }
+    private val probeLayers = orderedChecks.toProbeLayers(checksById)
     private val mutableServices = MutableStateFlow(
         orderedChecks.map { check ->
             BackendServiceHealth(
@@ -131,7 +133,7 @@ class BackendHealthRecoveryCoordinator @Inject constructor(
     }
 
     /** Applies stronger real-operation evidence and wakes the single recovery schedule. */
-    fun report(
+    override fun report(
         serviceId: String,
         observation: BackendHealthObservation,
     ) {
@@ -187,20 +189,39 @@ class BackendHealthRecoveryCoordinator @Inject constructor(
     }
 
     private suspend fun performHealthCheck() {
-        val observations = coroutineScope {
-            orderedChecks.map { check ->
-                async { check.service.id to check.probeObservation() }
-            }.awaitAll()
-        }
-        observations.forEach { (serviceId, observation) ->
-            mutableServices.update { current ->
-                current.map { service ->
-                    if (service.id == serviceId) service.withObservation(observation) else service
+        probeLayers.forEach { layer ->
+            val observations = coroutineScope {
+                layer.map { check ->
+                    async { check.service.id to check.prerequisiteAwareObservation() }
+                }.awaitAll()
+            }
+            observations.forEach { (serviceId, observation) ->
+                mutableServices.update { current ->
+                    current.map { service ->
+                        if (service.id == serviceId) service.withObservation(observation) else service
+                    }
                 }
             }
         }
         mutableCheckGeneration.value += 1
         scheduleForCurrentState()
+    }
+
+    private suspend fun BackendHealthCheck.prerequisiteAwareObservation(): BackendHealthObservation {
+        val unavailable = prerequisiteServiceIds.firstNotNullOfOrNull { prerequisiteId ->
+            mutableServices.value.firstOrNull { service ->
+                service.id == prerequisiteId && service.status == BackendHealthStatus.UNAVAILABLE
+            }
+        }
+        return if (unavailable == null) {
+            probeObservation()
+        } else {
+            BackendHealthObservation.ReachabilityFailed(
+                BackendDiagnosticEvidence.sanitized(
+                    "Blocked by unavailable prerequisite: ${unavailable.name}",
+                ),
+            )
+        }
     }
 
     private suspend fun BackendHealthCheck.probeObservation(): BackendHealthObservation = try {
@@ -292,5 +313,30 @@ class BackendHealthRecoveryCoordinator @Inject constructor(
         val RETRY_DELAYS_SECONDS = listOf(5, 10, 20, 40, 60)
         const val BACKEND_PROBE_TIMEOUT_MILLIS = 5_000L
         const val BACKEND_MONITOR_INTERVAL_MILLIS = 30_000L
+    }
+}
+
+private fun List<BackendHealthCheck>.toProbeLayers(
+    checksById: Map<String, BackendHealthCheck>,
+): List<List<BackendHealthCheck>> {
+    forEach { check ->
+        require(check.service.id !in check.prerequisiteServiceIds) {
+            "Backend service ${check.service.id} cannot require itself"
+        }
+        val unknown = check.prerequisiteServiceIds - checksById.keys
+        require(unknown.isEmpty()) {
+            "Backend service ${check.service.id} has unknown prerequisites: ${unknown.sorted()}"
+        }
+    }
+    val remaining = toMutableList()
+    val completed = mutableSetOf<String>()
+    return buildList {
+        while (remaining.isNotEmpty()) {
+            val layer = remaining.filter { it.prerequisiteServiceIds.all(completed::contains) }
+            require(layer.isNotEmpty()) { "Backend health prerequisites contain a cycle" }
+            add(layer)
+            completed += layer.map { it.service.id }
+            remaining.removeAll(layer.toSet())
+        }
     }
 }

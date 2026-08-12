@@ -22,6 +22,7 @@ class FirestoreBackendHealthCheck @Inject constructor(
         id = BackendServiceIds.FIREBASE_FIRESTORE,
         displayName = "Cloud Firestore",
     )
+    override val prerequisiteServiceIds = setOf(BackendServiceIds.FIREBASE_AUTH)
     override val diagnosticOrder = 40
     override val successDetail = "Bounded server read completed"
 

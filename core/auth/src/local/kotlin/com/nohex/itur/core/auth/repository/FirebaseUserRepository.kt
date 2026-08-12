@@ -26,12 +26,16 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
 import com.nohex.itur.core.auth.config.GoogleSignInConfig
+import com.nohex.itur.core.auth.health.reportFirebaseAuthFailed
+import com.nohex.itur.core.auth.health.reportFirebaseAuthSucceeded
+import com.nohex.itur.core.data.health.BackendHealthReporter
 import com.nohex.itur.core.data.repository.FirestoreCollections
 import com.nohex.itur.core.data.repository.SignInFailureReason
 import com.nohex.itur.core.data.repository.SignInResult
 import com.nohex.itur.core.data.repository.UserRepository
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.domain.model.User
+import dagger.Lazy
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
@@ -45,6 +49,7 @@ class FirebaseUserRepository @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
     @ApplicationContext private val context: Context,
     private val googleSignInConfig: GoogleSignInConfig,
+    private val backendHealthReporter: Lazy<BackendHealthReporter>,
 ) : UserRepository {
     private var currentUser: User? = null
 
@@ -92,6 +97,7 @@ class FirebaseUserRepository @Inject constructor(
 
     override suspend fun signIn(context: Context): SignInResult {
         if (googleSignInConfig.webClientId.isBlank()) {
+            backendHealthReporter.get().reportFirebaseAuthFailed(SignInFailureReason.NOT_CONFIGURED)
             return SignInResult.Failure(SignInFailureReason.NOT_CONFIGURED)
         }
         val credentialManager = CredentialManager.create(context)
@@ -122,10 +128,12 @@ class FirebaseUserRepository @Inject constructor(
                         name = firebaseUser.displayName,
                         email = firebaseUser.email,
                     ).also { currentUser = it }
+                }?.also {
+                    backendHealthReporter.get().reportFirebaseAuthSucceeded("Google sign-in completed")
                 }?.let(SignInResult::Success)
-                    ?: SignInResult.Failure(SignInFailureReason.UNEXPECTED)
+                    ?: SignInFailureReason.UNEXPECTED.asReportedFailure()
             } else {
-                SignInResult.Failure(SignInFailureReason.UNEXPECTED)
+                SignInFailureReason.UNEXPECTED.asReportedFailure()
             }
         } catch (_: GetCredentialCancellationException) {
             SignInResult.Cancelled
@@ -138,17 +146,25 @@ class FirebaseUserRepository @Inject constructor(
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (_: FirebaseNetworkException) {
-            SignInResult.Failure(SignInFailureReason.SERVICE_UNAVAILABLE)
+            SignInFailureReason.SERVICE_UNAVAILABLE.asReportedFailure()
         } catch (failure: FirebaseAuthException) {
-            SignInResult.Failure(failure.toSignInFailureReason())
+            failure.toSignInFailureReason().asReportedFailure()
         } catch (_: Exception) {
-            SignInResult.Failure(SignInFailureReason.UNEXPECTED)
+            SignInFailureReason.UNEXPECTED.asReportedFailure()
         }
     }
 
     override suspend fun signOut() {
-        firebaseAuth.signOut()
-        currentUser = null
+        try {
+            firebaseAuth.signOut()
+            currentUser = null
+            backendHealthReporter.get().reportFirebaseAuthSucceeded("Sign-out completed")
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            backendHealthReporter.get().reportFirebaseAuthFailed(SignInFailureReason.UNEXPECTED)
+            throw failure
+        }
     }
 
     override suspend fun getAll(ids: List<UserId>): List<User> {
@@ -166,6 +182,11 @@ class FirebaseUserRepository @Inject constructor(
             // All users from Firebase are registered.
             User.RegisteredUser(id, name, email)
         }
+    }
+
+    private fun SignInFailureReason.asReportedFailure(): SignInResult.Failure {
+        backendHealthReporter.get().reportFirebaseAuthFailed(this)
+        return SignInResult.Failure(this)
     }
 }
 

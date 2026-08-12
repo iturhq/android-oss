@@ -89,6 +89,11 @@ sealed interface BackendHealthObservation {
     ) : BackendHealthObservation
 }
 
+/** Application-operation evidence sink backed by the shared service-health registry. */
+interface BackendHealthReporter {
+    fun report(serviceId: String, observation: BackendHealthObservation)
+}
+
 /**
  * Applies one observation with explicit precedence.
  *
@@ -184,6 +189,10 @@ object BackendDiagnosticSanitizer {
  */
 interface BackendHealthCheck {
     val service: BackendService
+
+    /** Services that must be reachable before this check can produce independent evidence. */
+    val prerequisiteServiceIds: Set<String>
+        get() = emptySet()
 
     /** Stable diagnostics ordering; legacy contributors remain valid through the default. */
     val diagnosticOrder: Int
