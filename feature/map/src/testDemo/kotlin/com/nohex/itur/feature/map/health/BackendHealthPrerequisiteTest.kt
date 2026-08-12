@@ -83,6 +83,40 @@ class BackendHealthPrerequisiteTest {
     }
 
     @Test
+    fun `server read unavailability differs from mutation denial and successful mutation recovers`() = runTest {
+        var serverReachable = false
+        val firestore = check(
+            id = "firebase-firestore",
+            name = "Cloud Firestore",
+        ) {
+            check(serverReachable) { "Network unavailable" }
+        }
+        val coordinator = BackendHealthRecoveryCoordinator(setOf(firestore))
+
+        coordinator.refresh()
+        assertEquals(
+            BackendHealthStatus.UNAVAILABLE,
+            coordinator.services.value.single().status,
+        )
+
+        serverReachable = true
+        coordinator.refresh()
+        coordinator.report(
+            "firebase-firestore",
+            BackendHealthObservation.OperationFailed(
+                BackendDiagnosticEvidence.sanitized("Cloud Firestore mutation failed"),
+            ),
+        )
+        assertEquals(BackendHealthStatus.DEGRADED, coordinator.services.value.single().status)
+
+        coordinator.report(
+            "firebase-firestore",
+            BackendHealthObservation.OperationSucceeded("Cloud Firestore mutation completed"),
+        )
+        assertEquals(BackendHealthStatus.WORKING, coordinator.services.value.single().status)
+    }
+
+    @Test
     fun `unknown and cyclic prerequisites fail before any probe`() {
         assertFailsWith<IllegalArgumentException> {
             BackendHealthRecoveryCoordinator(

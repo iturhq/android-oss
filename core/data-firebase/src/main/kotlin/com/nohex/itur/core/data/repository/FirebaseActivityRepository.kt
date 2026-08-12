@@ -12,6 +12,9 @@ import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.nohex.itur.core.data.health.BackendHealthReporter
+import com.nohex.itur.core.data.health.NoOpBackendHealthReporter
+import com.nohex.itur.core.data.health.observeFirestoreMutation
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.model.Broadcast
@@ -30,6 +33,7 @@ class FirebaseActivityRepository
 @Inject
 constructor(
     firestore: FirebaseFirestore,
+    private val backendHealthReporter: BackendHealthReporter = NoOpBackendHealthReporter,
 ) : ActivityRepository {
     private val activitiesCollection = firestore.collection(FirestoreCollections.ACTIVITIES)
     private val usersCollection = firestore.collection(FirestoreCollections.USERS)
@@ -122,7 +126,9 @@ constructor(
                 if (newStatus == IturActivityStatus.FINISHED || newStatus == IturActivityStatus.CANCELLED) {
                     updates["finishedOn"] = FieldValue.serverTimestamp()
                 }
-                reference.update(updates).await()
+                backendHealthReporter.observeFirestoreMutation {
+                    reference.update(updates).await()
+                }
 
                 // Return the updated activity.
                 getActivity(id)
@@ -151,9 +157,11 @@ constructor(
         return try {
             withContext(Dispatchers.IO) {
                 // Store the activity.
-                reference
-                    .set(newActivity.toDto())
-                    .await()
+                backendHealthReporter.observeFirestoreMutation {
+                    reference
+                        .set(newActivity.toDto())
+                        .await()
+                }
 
                 // Add the organiser as a participant.
 
@@ -175,7 +183,9 @@ constructor(
                 val snapshot = reference.get().await()
                 if (snapshot.exists()) {
                     // Delete the document.
-                    reference.delete().await()
+                    backendHealthReporter.observeFirestoreMutation {
+                        reference.delete().await()
+                    }
                 }
 
                 snapshot.toObject(IturActivityDTO::class.java)?.toDomain()?.let {
@@ -220,9 +230,11 @@ constructor(
     override suspend fun requestAttention(activityId: IturActivityId, userId: UserId) {
         try {
             withContext(Dispatchers.IO) {
-                activitiesCollection.document(activityId.value)
-                    .update("attentionRequests", FieldValue.arrayUnion(userId.value))
-                    .await()
+                backendHealthReporter.observeFirestoreMutation {
+                    activitiesCollection.document(activityId.value)
+                        .update("attentionRequests", FieldValue.arrayUnion(userId.value))
+                        .await()
+                }
                 Log.d(TAG, "User ${userId.value} requested attention in activity ${activityId.value}")
             }
         } catch (e: Exception) {
@@ -250,7 +262,9 @@ constructor(
         return try {
             withContext(Dispatchers.IO) {
                 // Update the participant's ID.
-                reference.update("participantIds", function.invoke()).await()
+                backendHealthReporter.observeFirestoreMutation {
+                    reference.update("participantIds", function.invoke()).await()
+                }
 
                 reference.get().await().toObject(IturActivityDTO::class.java)?.toDomain()
                     ?.let { updatedActivity ->

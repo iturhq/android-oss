@@ -11,8 +11,15 @@ import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
+import com.nohex.itur.core.data.health.BackendHealthObservation
+import com.nohex.itur.core.data.health.BackendHealthReporter
+import com.nohex.itur.core.data.health.BackendHealthStatus
+import com.nohex.itur.core.data.health.BackendServiceHealth
+import com.nohex.itur.core.data.health.BackendServiceIds
+import com.nohex.itur.core.data.health.withObservation
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.model.IturActivity
@@ -27,6 +34,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private val ORGANIZER_ID = UserId("organizer1")
@@ -39,6 +47,14 @@ private val ACTIVITY_DTO = IturActivityDTO(
     participantIds = listOf(ORGANIZER_ID.value, PARTICIPANT_ID.value),
     status = "ONGOING",
 )
+
+private class RecordingBackendHealthReporter : BackendHealthReporter {
+    val reports = mutableListOf<Pair<String, BackendHealthObservation>>()
+
+    override fun report(serviceId: String, observation: BackendHealthObservation) {
+        reports += serviceId to observation
+    }
+}
 
 class FirebaseActivityRepositoryTest {
     private val activitiesCollection = mockk<CollectionReference>()
@@ -329,6 +345,48 @@ class FirebaseActivityRepositoryTest {
 
         assertFailsWith<RuntimeException> { repository.createActivity(ORGANIZER_ID) }
         Unit
+    }
+
+    @Test
+    fun `permission denied mutation reports generic degradation and next mutation recovers`() = runBlocking {
+        val reporter = RecordingBackendHealthReporter()
+        val healthAwareRepository = FirebaseActivityRepository(firestore, reporter)
+        val docRef = mockk<DocumentReference>()
+        val privateFailure = FirebaseFirestoreException(
+            "PERMISSION_DENIED activity=${ACTIVITY_ID.value} user=${PARTICIPANT_ID.value} token=secret",
+            FirebaseFirestoreException.Code.PERMISSION_DENIED,
+        )
+        every { activitiesCollection.document() } returns docRef
+        every { docRef.id } returns "NewActivity000000001"
+        every { docRef.set(any<IturActivityDTO>()) } returns
+            failedTask(privateFailure) andThen successfulTask(null)
+
+        assertFailsWith<FirebaseFirestoreException> {
+            healthAwareRepository.createActivity(ORGANIZER_ID)
+        }
+        assertIs<DataResult.Success<IturActivity>>(healthAwareRepository.createActivity(ORGANIZER_ID))
+
+        assertEquals(
+            listOf(BackendServiceIds.FIREBASE_FIRESTORE, BackendServiceIds.FIREBASE_FIRESTORE),
+            reporter.reports.map(Pair<String, BackendHealthObservation>::first),
+        )
+        val failure = assertIs<BackendHealthObservation.OperationFailed>(reporter.reports.first().second)
+        assertEquals("Cloud Firestore mutation failed", failure.evidence.summary)
+        assertNull(failure.evidence.diagnosticTrace)
+        assertTrue(!failure.evidence.summary.contains(ACTIVITY_ID.value))
+        assertTrue(!failure.evidence.summary.contains(PARTICIPANT_ID.value))
+        assertIs<BackendHealthObservation.OperationSucceeded>(reporter.reports.last().second)
+
+        val degraded = BackendServiceHealth(
+            id = BackendServiceIds.FIREBASE_FIRESTORE,
+            name = "Cloud Firestore",
+            status = BackendHealthStatus.WORKING,
+            detail = "Bounded server read completed",
+        ).withObservation(reporter.reports.first().second)
+        val recovered = degraded.withObservation(reporter.reports.last().second)
+        assertEquals(BackendHealthStatus.DEGRADED, degraded.status)
+        assertEquals(BackendHealthStatus.WORKING, recovered.status)
+        assertEquals("Cloud Firestore mutation completed", recovered.detail)
     }
 
     // --- deleteActivity ---
