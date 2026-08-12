@@ -16,6 +16,7 @@ import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.model.Location
 import com.nohex.itur.core.model.ParticipantLocation
+import dagger.Lazy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -26,8 +27,19 @@ class FirebaseLocationRepository
 constructor(
     firestore: FirebaseFirestore,
     private val userRepository: UserRepository,
-    private val backendHealthReporter: BackendHealthReporter = NoOpBackendHealthReporter,
+    private val backendHealthReporter: Lazy<BackendHealthReporter>,
 ) : LocationRepository {
+    constructor(
+        firestore: FirebaseFirestore,
+        userRepository: UserRepository,
+    ) : this(firestore, userRepository, Lazy { NoOpBackendHealthReporter })
+
+    constructor(
+        firestore: FirebaseFirestore,
+        userRepository: UserRepository,
+        backendHealthReporter: BackendHealthReporter,
+    ) : this(firestore, userRepository, Lazy { backendHealthReporter })
+
     private val locationsCollection = firestore.collection(FirestoreCollections.LOCATIONS)
     override suspend fun getForActivity(activityId: IturActivityId): List<ParticipantLocation> = withContext(Dispatchers.IO) {
         val querySnapshot =
@@ -65,7 +77,7 @@ constructor(
                 .get()
                 .await()
             if (querySnapshot.documents.isNotEmpty()) {
-                backendHealthReporter.observeFirestoreMutation {
+                backendHealthReporter.get().observeFirestoreMutation {
                     querySnapshot.documents.forEach { it.reference.delete().await() }
                 }
             }
@@ -84,7 +96,7 @@ constructor(
                 .get()
                 .await()
             if (querySnapshot.documents.isNotEmpty()) {
-                backendHealthReporter.observeFirestoreMutation {
+                backendHealthReporter.get().observeFirestoreMutation {
                     querySnapshot.documents.forEach { it.reference.delete().await() }
                 }
             }
@@ -117,7 +129,7 @@ constructor(
                 location = firebaseLocation,
                 updatedOn = Timestamp.now(),
             )
-            val newReference = backendHealthReporter.observeFirestoreMutation {
+            val newReference = backendHealthReporter.get().observeFirestoreMutation {
                 locationsCollection.add(newRecord).await()
             }
 
@@ -128,7 +140,7 @@ constructor(
         } else {
             // ...otherwise update the existing record.
             val documentId = querySnapshot.documents.first().id
-            backendHealthReporter.observeFirestoreMutation {
+            backendHealthReporter.get().observeFirestoreMutation {
                 locationsCollection.document(documentId).update(
                     mapOf(
                         "location" to firebaseLocation,

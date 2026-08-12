@@ -20,6 +20,7 @@ import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.model.Broadcast
 import com.nohex.itur.core.model.IturActivity
 import com.nohex.itur.core.model.IturActivityStatus
+import dagger.Lazy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -33,8 +34,18 @@ class FirebaseActivityRepository
 @Inject
 constructor(
     firestore: FirebaseFirestore,
-    private val backendHealthReporter: BackendHealthReporter = NoOpBackendHealthReporter,
+    private val backendHealthReporter: Lazy<BackendHealthReporter>,
 ) : ActivityRepository {
+    constructor(firestore: FirebaseFirestore) : this(
+        firestore,
+        Lazy { NoOpBackendHealthReporter },
+    )
+
+    constructor(
+        firestore: FirebaseFirestore,
+        backendHealthReporter: BackendHealthReporter,
+    ) : this(firestore, Lazy { backendHealthReporter })
+
     private val activitiesCollection = firestore.collection(FirestoreCollections.ACTIVITIES)
     private val usersCollection = firestore.collection(FirestoreCollections.USERS)
 
@@ -126,7 +137,7 @@ constructor(
                 if (newStatus == IturActivityStatus.FINISHED || newStatus == IturActivityStatus.CANCELLED) {
                     updates["finishedOn"] = FieldValue.serverTimestamp()
                 }
-                backendHealthReporter.observeFirestoreMutation {
+                backendHealthReporter.get().observeFirestoreMutation {
                     reference.update(updates).await()
                 }
 
@@ -157,7 +168,7 @@ constructor(
         return try {
             withContext(Dispatchers.IO) {
                 // Store the activity.
-                backendHealthReporter.observeFirestoreMutation {
+                backendHealthReporter.get().observeFirestoreMutation {
                     reference
                         .set(newActivity.toDto())
                         .await()
@@ -183,7 +194,7 @@ constructor(
                 val snapshot = reference.get().await()
                 if (snapshot.exists()) {
                     // Delete the document.
-                    backendHealthReporter.observeFirestoreMutation {
+                    backendHealthReporter.get().observeFirestoreMutation {
                         reference.delete().await()
                     }
                 }
@@ -230,7 +241,7 @@ constructor(
     override suspend fun requestAttention(activityId: IturActivityId, userId: UserId) {
         try {
             withContext(Dispatchers.IO) {
-                backendHealthReporter.observeFirestoreMutation {
+                backendHealthReporter.get().observeFirestoreMutation {
                     activitiesCollection.document(activityId.value)
                         .update("attentionRequests", FieldValue.arrayUnion(userId.value))
                         .await()
@@ -262,7 +273,7 @@ constructor(
         return try {
             withContext(Dispatchers.IO) {
                 // Update the participant's ID.
-                backendHealthReporter.observeFirestoreMutation {
+                backendHealthReporter.get().observeFirestoreMutation {
                     reference.update("participantIds", function.invoke()).await()
                 }
 
