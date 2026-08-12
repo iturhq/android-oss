@@ -63,6 +63,8 @@ fun MapLibreView(
     participantLocations: List<ParticipantLocation>,
     modifier: Modifier = Modifier,
     onMapReady: (MapLibreMap) -> Unit = {},
+    onStyleLoadFailed: () -> Unit = {},
+    onStyleLoadSucceeded: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -80,6 +82,24 @@ fun MapLibreView(
     var mapLibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
     var styleLoaded by remember { mutableStateOf(false) }
     var locationComponent by remember { mutableStateOf<LocationComponent?>(null) }
+
+    DisposableEffect(mapView, onStyleLoadFailed, onStyleLoadSucceeded) {
+        val failureListener = MapView.OnDidFailLoadingMapListener { onStyleLoadFailed() }
+        val renderingListener = MapView.OnDidFinishRenderingMapListener { fully ->
+            if (fully) onStyleLoadSucceeded()
+        }
+        val shaderFailureListener = MapView.OnShaderCompileFailedListener { _, _, _ ->
+            onStyleLoadFailed()
+        }
+        mapView.addOnDidFailLoadingMapListener(failureListener)
+        mapView.addOnDidFinishRenderingMapListener(renderingListener)
+        mapView.addOnShaderCompileFailedListener(shaderFailureListener)
+        onDispose {
+            mapView.removeOnDidFailLoadingMapListener(failureListener)
+            mapView.removeOnDidFinishRenderingMapListener(renderingListener)
+            mapView.removeOnShaderCompileFailedListener(shaderFailureListener)
+        }
+    }
 
     // Forward lifecycle events to the map
     DisposableEffect(lifecycle) {

@@ -37,6 +37,7 @@ import com.nohex.itur.core.model.ParticipantLocation
 import com.nohex.itur.feature.map.config.LocationUpdateConfig
 import com.nohex.itur.feature.map.config.MapStyleConfig
 import com.nohex.itur.feature.map.health.BackendHealthRecoveryCoordinator
+import com.nohex.itur.feature.map.health.MapStyleRendererHealthReporter
 import com.nohex.itur.feature.map.notifications.BroadcastNotifier
 import com.nohex.itur.feature.map.ui.MapUiState.Ongoing
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -66,6 +67,8 @@ constructor(
     backendHealthChecks: Set<@JvmSuppressWildcards BackendHealthCheck>,
     private val backendHealthCoordinator: BackendHealthRecoveryCoordinator =
         BackendHealthRecoveryCoordinator(backendHealthChecks),
+    private val mapStyleRendererHealthReporter: MapStyleRendererHealthReporter =
+        MapStyleRendererHealthReporter(dagger.Lazy { backendHealthCoordinator }),
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<MapUiState>(MapUiState.Idle())
     val uiState = _uiState.asStateFlow()
@@ -101,6 +104,10 @@ constructor(
     private var initialRestorePending = true
     private var initialRestoreRunning = false
     private var locationUpdatesActive = false
+
+    fun reportMapStyleLoadFailed() = mapStyleRendererHealthReporter.styleLoadFailed()
+
+    fun reportMapStyleLoadSucceeded() = mapStyleRendererHealthReporter.styleLoadSucceeded()
 
     // The most recent operator broadcast (UC-ACTIVITY-007), for an in-app banner alongside
     // the system notification posted by [broadcastNotifier]. Polling itself is driven by the UI

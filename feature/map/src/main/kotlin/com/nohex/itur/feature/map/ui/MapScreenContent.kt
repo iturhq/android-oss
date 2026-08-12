@@ -83,6 +83,8 @@ private fun MapReadyContent(
             participantLocations = presentation.participantLocations,
             modifier = environment.modifier.fillMaxSize(),
             onMapReady = { interaction.mapLibreMap = it },
+            onStyleLoadFailed = viewModel::reportMapStyleLoadFailed,
+            onStyleLoadSucceeded = viewModel::reportMapStyleLoadSucceeded,
         )
     }
     MapStateControls(viewModel, environment, presentation, interaction)

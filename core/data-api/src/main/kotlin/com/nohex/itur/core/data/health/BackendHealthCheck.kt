@@ -18,6 +18,7 @@ object BackendServiceIds {
     const val FIREBASE_AUTH = "firebase-auth"
     const val FIREBASE_FIRESTORE = "firebase-firestore"
     const val LOCAL_SETTINGS = "local-settings"
+    const val MAP_STYLE = "map-style"
 }
 
 /** Ordered health states shared by probes, operation reporters, and host presentation. */

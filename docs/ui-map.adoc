@@ -16,7 +16,10 @@ do not override participant pan or zoom gestures. A configured MapTiler build us
 *File:* `feature/map/ui/MapScreen.kt`
 
 The map view is always present in the background.
-The overlay composable rendered on top changes with `MapUiState`.
+The overlay composable rendered on top changes with `MapUiState`. MapLibre
+load, shader, and fully-rendered callbacks contribute fixed map-style
+degradation and recovery observations to the shared health registry without
+replacing the map with an error surface.
 
 [cols="2,3,2"]
 |===
