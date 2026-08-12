@@ -76,6 +76,32 @@ class ServiceAwareControlsTest {
     }
 
     @Test
+    fun disabledFirestoreActionsKeepAuthenticationUsable() {
+        var signedIn = false
+        var started = false
+        composeRule.setContent {
+            IturTheme {
+                IdleState(
+                    onStartRequested = { started = true },
+                    onSignInRequested = { signedIn = true },
+                    onSignOutRequested = {},
+                    onQRRequested = {},
+                    onHelpRequested = {},
+                    isSignedIn = false,
+                    authenticationActionsEnabled = true,
+                    activityActionsEnabled = false,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("sign_in_fab").assertIsEnabled().performClick()
+        composeRule.onNodeWithTag("start_activity_fab").assertIsNotEnabled().performClick()
+
+        assertTrue(signedIn)
+        assertFalse(started)
+    }
+
+    @Test
     fun disabledActivityActionsKeepLocalOngoingControlsUsable() {
         var stopped = false
         var tracked = false
