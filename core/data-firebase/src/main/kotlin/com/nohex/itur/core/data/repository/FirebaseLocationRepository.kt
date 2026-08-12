@@ -9,6 +9,9 @@ import android.util.Log
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.GeoPoint
+import com.nohex.itur.core.data.health.BackendHealthReporter
+import com.nohex.itur.core.data.health.NoOpBackendHealthReporter
+import com.nohex.itur.core.data.health.observeFirestoreMutation
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.model.Location
@@ -23,6 +26,7 @@ class FirebaseLocationRepository
 constructor(
     firestore: FirebaseFirestore,
     private val userRepository: UserRepository,
+    private val backendHealthReporter: BackendHealthReporter = NoOpBackendHealthReporter,
 ) : LocationRepository {
     private val locationsCollection = firestore.collection(FirestoreCollections.LOCATIONS)
     override suspend fun getForActivity(activityId: IturActivityId): List<ParticipantLocation> = withContext(Dispatchers.IO) {
@@ -60,7 +64,11 @@ constructor(
                 .whereEqualTo("activityId", activityId.value)
                 .get()
                 .await()
-            querySnapshot.documents.forEach { it.reference.delete().await() }
+            if (querySnapshot.documents.isNotEmpty()) {
+                backendHealthReporter.observeFirestoreMutation {
+                    querySnapshot.documents.forEach { it.reference.delete().await() }
+                }
+            }
             Log.d(
                 "FirestoreLocationRepo",
                 "Removed ${querySnapshot.size()} location(s) for activity ${activityId.value}",
@@ -75,7 +83,11 @@ constructor(
                 .whereEqualTo("userId", userId.value)
                 .get()
                 .await()
-            querySnapshot.documents.forEach { it.reference.delete().await() }
+            if (querySnapshot.documents.isNotEmpty()) {
+                backendHealthReporter.observeFirestoreMutation {
+                    querySnapshot.documents.forEach { it.reference.delete().await() }
+                }
+            }
             Log.d(
                 "FirestoreLocationRepo",
                 "Removed ${querySnapshot.size()} location(s) for user ${userId.value} in activity ${activityId.value}",
@@ -105,7 +117,9 @@ constructor(
                 location = firebaseLocation,
                 updatedOn = Timestamp.now(),
             )
-            val newReference = locationsCollection.add(newRecord).await()
+            val newReference = backendHealthReporter.observeFirestoreMutation {
+                locationsCollection.add(newRecord).await()
+            }
 
             Log.d(
                 "FirestoreLocationRepo",
@@ -114,12 +128,14 @@ constructor(
         } else {
             // ...otherwise update the existing record.
             val documentId = querySnapshot.documents.first().id
-            locationsCollection.document(documentId).update(
-                mapOf(
-                    "location" to firebaseLocation,
-                    "updatedOn" to Timestamp.now(),
-                ),
-            ).await()
+            backendHealthReporter.observeFirestoreMutation {
+                locationsCollection.document(documentId).update(
+                    mapOf(
+                        "location" to firebaseLocation,
+                        "updatedOn" to Timestamp.now(),
+                    ),
+                ).await()
+            }
 
             Log.d(
                 "FirestoreLocationRepo",
