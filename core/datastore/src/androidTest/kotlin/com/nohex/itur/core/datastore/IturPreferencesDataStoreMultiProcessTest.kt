@@ -5,18 +5,25 @@
 
 package com.nohex.itur.core.datastore
 
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
+import android.os.Handler
+import android.os.IBinder
+import android.os.Looper
+import android.os.Message
+import android.os.Messenger
 import androidx.datastore.core.MultiProcessDataStoreFactory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import java.util.UUID
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -27,75 +34,116 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/**
- * Uses independently constructed multi-process stores over one physical file. This covers the
- * storage-factory guarantee which an in-memory [androidx.datastore.core.DataStore] fake cannot:
- * the transaction that chooses a first participant name is coherent across store instances.
- */
+/** Proves one atomic winner while two OS processes update the same physical DataStore file. */
 @RunWith(AndroidJUnit4::class)
 class IturPreferencesDataStoreMultiProcessTest {
 
     @Test
-    fun concurrentFactoriesPersistAtMostOneParticipantNameWinner() = runBlocking {
-        val file = testFile()
-        val firstScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val secondScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    fun concurrentProcessesPersistAtMostOneParticipantNameWinner() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().context
+        val fileName = "svcs-374a-${UUID.randomUUID()}.pb"
+        val remote = RemoteProcessClient(context)
+        val localScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         try {
-            val first = IturPreferencesDataStore(createStore(file, firstScope), TestEmailCipher)
-            val second = IturPreferencesDataStore(createStore(file, secondScope), TestEmailCipher)
-            val firstGeneratorEntered = CountDownLatch(1)
-            val releaseFirstGenerator = CountDownLatch(1)
+            remote.bind()
+            remote.start(fileName)
+            remote.generatorEntered.await()
 
-            val firstResult = async(Dispatchers.IO) {
-                first.getOrCreateParticipantDisplayName {
-                    firstGeneratorEntered.countDown()
-                    check(releaseFirstGenerator.await(10, TimeUnit.SECONDS)) {
-                        "Test did not release the first name generator"
-                    }
-                    "First generated name"
-                }
+            val localStore = IturPreferencesDataStore(
+                createStore(File(context.cacheDir, fileName), localScope),
+                TestEmailCipher,
+            )
+            val localResult = async(Dispatchers.IO) {
+                localStore.getOrCreateParticipantDisplayName { "Local generated name" }
             }
-            assertTrue(firstGeneratorEntered.await(10, TimeUnit.SECONDS))
+            assertFalse(localResult.isCompleted)
 
-            val secondStarted = CountDownLatch(1)
-            val secondResult = async(Dispatchers.IO) {
-                secondStarted.countDown()
-                second.getOrCreateParticipantDisplayName { "Second generated name" }
-            }
-            assertTrue(secondStarted.await(10, TimeUnit.SECONDS))
-            // The second factory has entered the competing call but cannot publish another winner
-            // until the first transaction commits. This makes the overlap deterministic.
-            assertFalse(secondResult.isCompleted)
+            remote.release()
+            val remoteResult = withTimeout(20_000) { remote.completed.await() }
+            val localWinner = withTimeout(20_000) { localResult.await() }
 
-            releaseFirstGenerator.countDown()
-            val results = withTimeout(20_000) { awaitAll(firstResult, secondResult) }
-
-            assertEquals(1, results.distinct().size)
-            assertEquals("First generated name", results.single())
-            assertEquals(results.single(), first.preferences.first().participantDisplayName)
-            assertEquals(results.single(), second.preferences.first().participantDisplayName)
+            assertEquals("Remote generated name", remoteResult)
+            assertEquals(remoteResult, localWinner)
+            assertEquals(remoteResult, localStore.preferences.first().participantDisplayName)
+            assertTrue(remote.remotePid != android.os.Process.myPid())
         } finally {
-            firstScope.cancel()
-            secondScope.cancel()
+            localScope.cancel()
+            remote.close()
         }
     }
 
-    private fun createStore(
-        file: File,
-        scope: CoroutineScope,
-    ) = MultiProcessDataStoreFactory.create(
-        serializer = IturSettingsSerializer(),
-        scope = scope,
-    ) { file }
+    private fun createStore(file: File, scope: CoroutineScope) =
+        MultiProcessDataStoreFactory.create(
+            serializer = IturSettingsSerializer(),
+            scope = scope,
+        ) { file }
+}
 
-    private fun testFile(): File = File(
-        InstrumentationRegistry.getInstrumentation().targetContext.cacheDir,
-        "svcs-374a-${UUID.randomUUID()}.pb",
-    )
+private class RemoteProcessClient(private val context: Context) : AutoCloseable {
+    val generatorEntered = CompletableDeferred<Unit>()
+    val completed = CompletableDeferred<String>()
+    var remotePid: Int = android.os.Process.myPid()
+        private set
 
-    private object TestEmailCipher : EmailCipher {
-        override fun encrypt(plainText: String): String = plainText
+    private val connected = CompletableDeferred<Messenger>()
+    private val replies = Messenger(Handler(Looper.getMainLooper()) { message ->
+        when (message.what) {
+            DataStoreProcessProtocol.GENERATOR_ENTERED -> {
+                remotePid = message.arg1
+                generatorEntered.complete(Unit)
+            }
+            DataStoreProcessProtocol.COMPLETED -> completed.complete(
+                requireNotNull(message.data.getString(DataStoreProcessProtocol.RESULT)),
+            )
+            DataStoreProcessProtocol.FAILED -> completed.completeExceptionally(
+                AssertionError(message.data.getString(DataStoreProcessProtocol.RESULT)),
+            )
+        }
+        true
+    })
+    private val connection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName, service: IBinder) {
+            connected.complete(Messenger(service))
+        }
 
-        override fun decrypt(storedValue: String): String = storedValue
+        override fun onServiceDisconnected(name: ComponentName) = Unit
     }
+
+    suspend fun bind() {
+        val intent = Intent(context, RemoteDataStoreService::class.java)
+        check(context.bindService(intent, connection, Context.BIND_AUTO_CREATE))
+        withTimeout(10_000) { connected.await() }
+    }
+
+    suspend fun start(fileName: String) {
+        send(DataStoreProcessProtocol.START) {
+            data.putString(DataStoreProcessProtocol.FILE_NAME, fileName)
+            replyTo = replies
+        }
+    }
+
+    suspend fun release() = send(DataStoreProcessProtocol.RELEASE)
+
+    private suspend fun send(what: Int, configure: Message.() -> Unit = {}) {
+        connected.await().send(Message.obtain(null, what).apply(configure))
+    }
+
+    override fun close() {
+        if (connected.isCompleted) context.unbindService(connection)
+    }
+}
+
+internal object DataStoreProcessProtocol {
+    const val START = 1
+    const val RELEASE = 2
+    const val GENERATOR_ENTERED = 3
+    const val COMPLETED = 4
+    const val FAILED = 5
+    const val FILE_NAME = "file-name"
+    const val RESULT = "result"
+}
+
+internal object TestEmailCipher : EmailCipher {
+    override fun encrypt(plainText: String): String = plainText
+    override fun decrypt(storedValue: String): String = storedValue
 }
