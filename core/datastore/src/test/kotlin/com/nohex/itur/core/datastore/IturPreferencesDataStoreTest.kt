@@ -71,4 +71,41 @@ class IturPreferencesDataStoreTest {
             assertEquals("", dataStore.preferences.first().email)
         }
     }
+
+    @Test
+    fun `GIVEN no persisted participant name WHEN creating one THEN it is stored and returned`() = runBlocking {
+        val dataStore = IturPreferencesDataStore(FakeIturPreferencesStore(), FakeEmailCipher())
+
+        assertEquals(
+            "Blue Falcon",
+            dataStore.getOrCreateParticipantDisplayName { "Blue Falcon" },
+        )
+        assertEquals("Blue Falcon", dataStore.preferences.first().participantDisplayName)
+    }
+
+    @Test
+    fun `GIVEN a persisted participant name WHEN creating one THEN it retains the persisted winner`() = runBlocking {
+        val generatedNames = mutableListOf<String>()
+        val dataStore = IturPreferencesDataStore(
+            FakeIturPreferencesStore(IturPreferences(participant_display_name = "Existing name")),
+            FakeEmailCipher(),
+        )
+
+        val result = dataStore.getOrCreateParticipantDisplayName {
+            generatedNames += "Should not be generated"
+            "Should not be generated"
+        }
+
+        assertEquals("Existing name", result)
+        assertEquals(emptyList(), generatedNames)
+    }
+
+    @Test
+    fun `GIVEN a participant name WHEN replacing it THEN preferences exposes the replacement`() = runBlocking {
+        val dataStore = IturPreferencesDataStore(FakeIturPreferencesStore(), FakeEmailCipher())
+
+        dataStore.setParticipantDisplayName("Renamed participant")
+
+        assertEquals("Renamed participant", dataStore.preferences.first().participantDisplayName)
+    }
 }
