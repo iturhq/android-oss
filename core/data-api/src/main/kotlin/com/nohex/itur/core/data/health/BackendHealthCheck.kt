@@ -17,6 +17,7 @@ data class BackendService(
 object BackendServiceIds {
     const val FIREBASE_AUTH = "firebase-auth"
     const val FIREBASE_FIRESTORE = "firebase-firestore"
+    const val LOCAL_SETTINGS = "local-settings"
 }
 
 /** Ordered health states shared by probes, operation reporters, and host presentation. */

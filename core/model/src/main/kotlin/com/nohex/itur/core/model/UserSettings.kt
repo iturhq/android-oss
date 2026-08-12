@@ -10,4 +10,5 @@ package com.nohex.itur.core.model
  */
 data class UserSettings(
     val email: String? = null,
+    val participantDisplayName: String? = null,
 )
