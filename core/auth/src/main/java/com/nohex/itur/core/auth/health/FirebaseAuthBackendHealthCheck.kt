@@ -27,6 +27,8 @@ class FirebaseAuthBackendHealthCheck @Inject constructor(
         id = BackendServiceIds.FIREBASE_AUTH,
         displayName = "Firebase Authentication",
     )
+    override val diagnosticOrder = 30
+    override val successDetail = "Authentication session reachable"
 
     override suspend fun probe() {
         firebaseAuth.currentUser?.getIdToken(true)?.await()

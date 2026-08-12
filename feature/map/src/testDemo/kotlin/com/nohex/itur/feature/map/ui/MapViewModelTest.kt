@@ -841,6 +841,96 @@ class MapViewModelTest {
     }
 
     @Test
+    fun `GIVEN a persistent outage WHEN virtual time advances THEN retries use bounded exponential backoff`() = runTest {
+        val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore", false)
+        val vm = viewModel(healthChecks = setOf(firestore))
+        vm.startBackendMonitoring()
+        var expectedProbes = firestore.probeCount
+
+        listOf(5, 10, 20, 40, 60).forEachIndexed { index, delaySeconds ->
+            mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(delaySeconds * 1_000L + 1L)
+            runCurrent()
+
+            expectedProbes++
+            assertEquals(expectedProbes, firestore.probeCount)
+            assertEquals(
+                listOf(10, 20, 40, 60, 60)[index],
+                vm.backendAvailability.value.retryCountdown,
+            )
+        }
+        vm.stopBackendMonitoring()
+    }
+
+    @Test
+    fun `GIVEN monitoring is stopped WHEN resumed THEN one retry loop is scheduled`() = runTest {
+        val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore", false)
+        val vm = viewModel(healthChecks = setOf(firestore))
+        vm.startBackendMonitoring()
+        vm.stopBackendMonitoring()
+        val probesWhileInactive = firestore.probeCount
+
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(60_000L)
+        runCurrent()
+
+        assertEquals(probesWhileInactive, firestore.probeCount)
+        vm.startBackendMonitoring()
+        val probesAfterResume = firestore.probeCount
+        vm.startBackendMonitoring()
+        val probesAfterRepeatedStart = firestore.probeCount
+
+        assertEquals(probesAfterResume, probesAfterRepeatedStart)
+
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(5_001L)
+        runCurrent()
+
+        assertEquals(probesAfterRepeatedStart + 1, firestore.probeCount)
+        vm.stopBackendMonitoring()
+    }
+
+    @Test
+    fun `GIVEN manual retry and recovery THEN backoff resets and healthy cadence is thirty seconds`() = runTest {
+        val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore", false)
+        val vm = viewModel(healthChecks = setOf(firestore))
+        vm.startBackendMonitoring()
+
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(5_001L)
+        runCurrent()
+        assertEquals(10, vm.backendAvailability.value.retryCountdown)
+
+        vm.retryNow()
+        assertEquals(5, vm.backendAvailability.value.retryCountdown)
+
+        firestore.available = true
+        vm.retryNow()
+        val probesAfterRecovery = firestore.probeCount
+        assertEquals(BackendAvailabilityUiState(), vm.backendAvailability.value)
+
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(29_999L)
+        runCurrent()
+        assertEquals(probesAfterRecovery, firestore.probeCount)
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(1L)
+        runCurrent()
+        assertEquals(probesAfterRecovery + 1, firestore.probeCount)
+        vm.stopBackendMonitoring()
+    }
+
+    @Test
+    fun `GIVEN one of two services recovers WHEN scheduled retry runs THEN only the remaining outage retries`() = runTest {
+        val auth = FakeBackendHealthCheck("auth", "Firebase Authentication", false)
+        val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore", false)
+        val vm = viewModel(healthChecks = setOf(auth, firestore))
+        vm.startBackendMonitoring()
+        auth.available = true
+
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(5_001L)
+        runCurrent()
+
+        assertEquals(listOf(firestore.service), vm.backendAvailability.value.failingServices)
+        assertEquals(10, vm.backendAvailability.value.retryCountdown)
+        vm.stopBackendMonitoring()
+    }
+
+    @Test
     fun `GIVEN an ongoing activity WHEN a service fails THEN the operation state is preserved and resumes`() = runTest {
         val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore")
         val userRepo = userRepo().also { it.signIn(context) }

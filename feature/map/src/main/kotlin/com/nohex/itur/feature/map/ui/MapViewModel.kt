@@ -16,6 +16,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nohex.itur.core.data.health.BackendHealthCheck
+import com.nohex.itur.core.data.health.BackendHealthStatus
 import com.nohex.itur.core.data.health.BackendService
 import com.nohex.itur.core.data.repository.ActivityFilter
 import com.nohex.itur.core.data.repository.ActivityRepository
@@ -35,22 +36,19 @@ import com.nohex.itur.core.model.IturActivityStatus
 import com.nohex.itur.core.model.ParticipantLocation
 import com.nohex.itur.feature.map.config.LocationUpdateConfig
 import com.nohex.itur.feature.map.config.MapStyleConfig
+import com.nohex.itur.feature.map.health.BackendHealthRecoveryCoordinator
 import com.nohex.itur.feature.map.notifications.BroadcastNotifier
 import com.nohex.itur.feature.map.ui.MapUiState.Ongoing
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
 import java.util.Date
 import javax.inject.Inject
 import com.nohex.itur.core.model.Location as IturLocation
@@ -65,7 +63,9 @@ constructor(
     private val broadcastNotifier: BroadcastNotifier,
     val mapStyleConfig: MapStyleConfig,
     private val locationUpdateConfig: LocationUpdateConfig,
-    private val backendHealthChecks: Set<@JvmSuppressWildcards BackendHealthCheck>,
+    backendHealthChecks: Set<@JvmSuppressWildcards BackendHealthCheck>,
+    private val backendHealthCoordinator: BackendHealthRecoveryCoordinator =
+        BackendHealthRecoveryCoordinator(backendHealthChecks),
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<MapUiState>(MapUiState.Idle())
     val uiState = _uiState.asStateFlow()
@@ -97,13 +97,9 @@ constructor(
 
     private val _backendAvailability = MutableStateFlow(BackendAvailabilityUiState())
     val backendAvailability = _backendAvailability.asStateFlow()
-    private var backendRetryAttempt = 0
-    private var backendRetryJob: Job? = null
-    private var backendCheckJob: Job? = null
-    private var backendCadenceJob: Job? = null
-    private var backendMonitoringActive = false
     private var participantLocationMonitoringJob: Job? = null
     private var initialRestorePending = true
+    private var initialRestoreRunning = false
     private var locationUpdatesActive = false
 
     // The most recent operator broadcast (UC-ACTIVITY-007), for an in-app banner alongside
@@ -116,7 +112,43 @@ constructor(
     private var lastBroadcastSeen: Date? = null
 
     init {
-        requestHealthCheck()
+        viewModelScope.launch {
+            combine(
+                backendHealthCoordinator.services,
+                backendHealthCoordinator.retryCountdown,
+                backendHealthCoordinator.checkGeneration,
+            ) { services, countdown, generation ->
+                BackendAvailabilityUiState(
+                    failingServices = if (generation == 0L) {
+                        emptyList()
+                    } else {
+                        services
+                            .filter { it.status != BackendHealthStatus.WORKING }
+                            .map { BackendService(it.id, it.name) }
+                    },
+                    retryCountdown = countdown,
+                )
+            }.collect { availability ->
+                _backendAvailability.value = availability
+            }
+        }
+        viewModelScope.launch {
+            backendHealthCoordinator.checkGeneration.collect { generation ->
+                if (
+                    generation > 0L &&
+                    initialRestorePending &&
+                    !initialRestoreRunning
+                ) {
+                    initialRestoreRunning = true
+                    try {
+                        restoreInitialState()
+                    } finally {
+                        initialRestoreRunning = false
+                    }
+                }
+            }
+        }
+        backendHealthCoordinator.checkOnce(viewModelScope)
     }
 
     /**
@@ -161,24 +193,14 @@ constructor(
      * Starts lifecycle-aware periodic monitoring. The Compose screen calls this on `ON_START`.
      */
     fun startBackendMonitoring() {
-        backendMonitoringActive = true
-        if (initialRestorePending) {
-            requestHealthCheck()
-        } else if (_backendAvailability.value.failingServices.isEmpty()) {
-            scheduleNextCadenceCheck()
-        } else {
-            scheduleBackendRetry()
-        }
+        backendHealthCoordinator.start(viewModelScope)
     }
 
     /**
      * Stops cadence, retries, and in-flight probes while the screen is inactive or exiting.
      */
     fun stopBackendMonitoring() {
-        backendMonitoringActive = false
-        backendCadenceJob?.cancel()
-        backendRetryJob?.cancel()
-        backendCheckJob?.cancel()
+        backendHealthCoordinator.stop()
     }
 
     /**
@@ -203,123 +225,21 @@ constructor(
         participantLocationMonitoringJob = null
     }
 
-    private fun scheduleNextCadenceCheck() {
-        backendCadenceJob?.cancel()
-        if (!backendMonitoringActive) return
-        backendCadenceJob = viewModelScope.launch {
-            delay(BACKEND_MONITOR_INTERVAL_MILLIS)
-            performHealthCheck()
-        }
-    }
-
-    private fun requestHealthCheck(resetBackoff: Boolean = false) {
-        if (resetBackoff) backendRetryAttempt = 0
-        backendRetryJob?.cancel()
-        backendCadenceJob?.cancel()
-        backendCheckJob?.cancel()
-        backendCheckJob = viewModelScope.launch {
-            performHealthCheck()
-        }
-    }
-
-    private suspend fun performHealthCheck() {
-        val failingServices = coroutineScope {
-            backendHealthChecks.map { check ->
-                async {
-                    try {
-                        withTimeout(BACKEND_PROBE_TIMEOUT_MILLIS) { check.probe() }
-                        null
-                    } catch (e: TimeoutCancellationException) {
-                        Log.w(
-                            "MapViewModel",
-                            "Backend probe timed out for ${check.service.id}",
-                            e,
-                        )
-                        check.service
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Log.w(
-                            "MapViewModel",
-                            "Backend probe failed for ${check.service.id}: ${e.message}",
-                            e,
-                        )
-                        check.service
-                    }
-                }
-            }.awaitAll().filterNotNull().sortedBy { it.id }
-        }
-
-        if (failingServices.isEmpty()) {
-            backendRetryJob?.cancel()
-            backendRetryAttempt = 0
-            _backendAvailability.value = BackendAvailabilityUiState()
-            if (initialRestorePending) restoreInitialState()
-            if (_backendAvailability.value.failingServices.isEmpty()) {
-                scheduleNextCadenceCheck()
-            }
-        } else {
-            _backendAvailability.value = BackendAvailabilityUiState(failingServices)
-            scheduleBackendRetry()
-        }
-    }
-
-    /**
-     * Starts a countdown and then probes every service, preserving bounded exponential backoff.
-     */
-    private fun scheduleBackendRetry() {
-        backendRetryJob?.cancel()
-        val failingServices = _backendAvailability.value.failingServices
-        if (failingServices.isEmpty() || !backendMonitoringActive) return
-        val delaySeconds =
-            RETRY_DELAYS_SECONDS.getOrElse(backendRetryAttempt) { RETRY_DELAYS_SECONDS.last() }
-        backendRetryJob = viewModelScope.launch {
-            for (remaining in delaySeconds downTo 1) {
-                _backendAvailability.value = BackendAvailabilityUiState(
-                    failingServices = _backendAvailability.value.failingServices,
-                    retryCountdown = remaining,
-                )
-                delay(1_000L)
-            }
-            backendRetryAttempt++
-            // The retry job is now the caller of performHealthCheck. Clear the field so a
-            // success or partial-failure transition does not cancel its own coroutine before
-            // restoration/probe work finishes.
-            backendRetryJob = null
-            performHealthCheck()
-        }
-    }
-
     /**
      * Cancels the pending countdown and probes every service immediately.
      */
     fun retryNow() {
-        requestHealthCheck(resetBackoff = true)
+        backendHealthCoordinator.retryNow(viewModelScope)
     }
 
     private fun reportBackendFailure(
         cause: Throwable,
         assumeAllServices: Boolean = false,
-    ): Boolean {
-        val recognized = backendHealthChecks.filter { it.recognizes(cause) }
-        val failedChecks = when {
-            recognized.isNotEmpty() -> recognized
-            assumeAllServices -> backendHealthChecks.toList()
-            else -> {
-                requestHealthCheck()
-                return false
-            }
-        }
-        val failingById = _backendAvailability.value.failingServices
-            .associateBy { it.id }
-            .toMutableMap()
-        failedChecks.forEach { failingById[it.service.id] = it.service }
-        _backendAvailability.value = BackendAvailabilityUiState(
-            failingServices = failingById.values.sortedBy { it.id },
-        )
-        scheduleBackendRetry()
-        return failedChecks.isNotEmpty()
-    }
+    ): Boolean = backendHealthCoordinator.reportFailure(
+        cause,
+        assumeAllServices,
+        fallbackScope = viewModelScope,
+    )
 
     /**
      * The current user starts an activity, signing in first if they are anonymous.
@@ -349,7 +269,7 @@ constructor(
                     is DataResult.Success -> triggerOngoingState(result.data, context)
                     is DataResult.Error -> {
                         if (!isAlreadyActiveElsewhere(organizer.id, targetActivityId = null)) {
-                            requestHealthCheck()
+                            backendHealthCoordinator.recheckNow(viewModelScope)
                             _uiState.value = MapUiState.Error(result.message)
                         }
                     }
@@ -471,7 +391,7 @@ constructor(
                     is DataResult.Success -> triggerOngoingState(result.data, context)
                     is DataResult.Error -> {
                         if (!isAlreadyActiveElsewhere(user.id, targetActivityId = activityId)) {
-                            requestHealthCheck()
+                            backendHealthCoordinator.recheckNow(viewModelScope)
                             _uiState.value = MapUiState.Error(result.message)
                         }
                     }
@@ -579,7 +499,7 @@ constructor(
 
             is DataResult.Error -> {
                 Log.e("MapViewModel", "Could not trigger the ongoing state: ${result.message}")
-                requestHealthCheck()
+                backendHealthCoordinator.recheckNow(viewModelScope)
                 _uiState.value = MapUiState.RecoverableError(
                     message = "The ongoing activity could not be resumed.",
                     onRetry = { viewModelScope.launch { triggerOngoingState(activityId, context) } },
@@ -798,7 +718,4 @@ data class BackendAvailabilityUiState(
 private class BackendInitializationException(message: String) : Exception(message)
 private class BackendOperationException(message: String) : Exception(message)
 
-private val RETRY_DELAYS_SECONDS = listOf(5, 10, 20, 40, 60)
-private const val BACKEND_PROBE_TIMEOUT_MILLIS = 5_000L
-private const val BACKEND_MONITOR_INTERVAL_MILLIS = 30_000L
 private const val PARTICIPANT_LOCATION_REFRESH_INTERVAL_MILLIS = 15_000L
