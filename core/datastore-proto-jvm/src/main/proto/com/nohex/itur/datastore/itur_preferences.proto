@@ -5,4 +5,5 @@ option java_multiple_files = true;
 
 message IturPreferences {
     string user_email = 1;
+    string participant_display_name = 2;
 }
