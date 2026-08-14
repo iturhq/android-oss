@@ -397,7 +397,11 @@ private constructor(
         val before = get(reference).toObject(IturActivityDTO::class.java)
             ?: error("Activity ${activityId.value} not found")
         val transition = membershipTransition(before, newStatus)
-        val reservations = if (transition.entersOngoing) readReservations(transition.members) else emptyMap()
+        val reservations = if (transition.entersOngoing) {
+            readReservations(listOf(UserId(before.organizerId)))
+        } else {
+            emptyMap()
+        }
         if (transition.entersOngoing) {
             requireReservationsAvailable(reservations, activityId)
         }
@@ -414,7 +418,8 @@ private constructor(
         val wasOngoing = before.status == IturActivityStatus.ONGOING.name
         val willBeOngoing = newStatus == IturActivityStatus.ONGOING
         val members = when {
-            !wasOngoing && willBeOngoing -> listOf(UserId(before.organizerId))
+            !wasOngoing && willBeOngoing ->
+                (listOf(before.organizerId) + before.participantIds).distinct().map(::UserId)
             wasOngoing && !willBeOngoing ->
                 (listOf(before.organizerId) + before.participantIds).distinct().map(::UserId)
             else -> emptyList()

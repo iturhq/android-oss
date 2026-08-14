@@ -340,6 +340,34 @@ class FirebaseActivityRepositoryTest {
     }
 
     @Test
+    fun `GIVEN a ready activity WHEN starting THEN every canonical member is reserved`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        val organizerRef = mockk<DocumentReference>()
+        val participantRef = mockk<DocumentReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { usersCollection.document(ORGANIZER_ID.value) } returns organizerRef
+        every { usersCollection.document(PARTICIPANT_ID.value) } returns participantRef
+        every { transaction.get(docRef) } returns mockk {
+            every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(status = "READY")
+        }
+        every { transaction.get(organizerRef) } returns reservationSnapshot(null)
+
+        val result = repository.updateActivityStatus(ACTIVITY_ID, IturActivityStatus.ONGOING)
+
+        assertIs<DataResult.Success<IturActivity>>(result)
+        verify(exactly = 0) { transaction.get(participantRef) }
+        listOf(organizerRef, participantRef).forEach { memberRef ->
+            verify(exactly = 1) {
+                transaction.set(
+                    memberRef,
+                    match<Map<String, String>> { it["activeActivityId"] == ACTIVITY_ID.value },
+                    any<SetOptions>(),
+                )
+            }
+        }
+    }
+
+    @Test
     fun `GIVEN Firestore throws WHEN updating status THEN returns Error`() = runBlocking {
         val docRef = mockk<DocumentReference>()
         every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
