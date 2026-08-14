@@ -14,6 +14,8 @@ import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.Transaction
 import com.nohex.itur.core.data.health.BackendHealthReporter
 import com.nohex.itur.core.data.health.NoOpBackendHealthReporter
 import com.nohex.itur.core.data.health.observeFirestoreMutation
@@ -32,22 +34,40 @@ import java.util.Date
 import javax.inject.Inject
 
 private const val TAG = "FBActivityRepo"
+private const val ACTIVE_ACTIVITY_ID = "activeActivityId"
 
 class FirebaseActivityRepository
-@Inject
-constructor(
-    firestore: FirebaseFirestore,
+private constructor(
+    private val firestore: FirebaseFirestore,
     private val backendHealthReporter: Lazy<BackendHealthReporter>,
+    private val transactionExecutor: FirestoreTransactionExecutor,
 ) : ActivityRepository {
+    @Inject
+    constructor(
+        firestore: FirebaseFirestore,
+        backendHealthReporter: Lazy<BackendHealthReporter>,
+    ) : this(firestore, backendHealthReporter, FirebaseFirestoreTransactionExecutor(firestore))
+
     constructor(firestore: FirebaseFirestore) : this(
         firestore,
         Lazy { NoOpBackendHealthReporter },
+        FirebaseFirestoreTransactionExecutor(firestore),
     )
 
     constructor(
         firestore: FirebaseFirestore,
         backendHealthReporter: BackendHealthReporter,
-    ) : this(firestore, Lazy { backendHealthReporter })
+    ) : this(
+        firestore,
+        Lazy { backendHealthReporter },
+        FirebaseFirestoreTransactionExecutor(firestore),
+    )
+
+    internal constructor(
+        firestore: FirebaseFirestore,
+        backendHealthReporter: BackendHealthReporter,
+        transactionExecutor: FirestoreTransactionExecutor,
+    ) : this(firestore, Lazy { backendHealthReporter }, transactionExecutor)
 
     private val activitiesCollection = firestore.collection(FirestoreCollections.ACTIVITIES)
     private val usersCollection = firestore.collection(FirestoreCollections.USERS)
@@ -139,19 +159,10 @@ constructor(
 
         return try {
             withContext(Dispatchers.IO) {
-                // Update the activity status.
-                val updates = mutableMapOf<String, Any>("status" to newStatus.name)
-                if (newStatus == IturActivityStatus.FINISHED || newStatus == IturActivityStatus.CANCELLED) {
-                    updates["finishedOn"] = FieldValue.serverTimestamp()
-                    updates["participantSignals"] = emptyMap<String, String>()
-                    updates["attentionRequests"] = emptyList<String>()
+                val updated = backendHealthReporter.get().observeFirestoreMutation {
+                    transactionExecutor.run { transaction -> transaction.changeStatus(reference, id, newStatus) }
                 }
-                backendHealthReporter.get().observeFirestoreMutation {
-                    reference.update(updates).await()
-                }
-
-                // Return the updated activity.
-                getActivity(id)
+                DataResult.Success(updated.toDomain())
             }
         } catch (e: Exception) {
             Log.e(TAG, e.message, e)
@@ -178,9 +189,13 @@ constructor(
             withContext(Dispatchers.IO) {
                 // Store the activity.
                 backendHealthReporter.get().observeFirestoreMutation {
-                    reference
-                        .set(newActivity.toDto())
-                        .await()
+                    transactionExecutor.run { transaction ->
+                        val existing = transaction.get(usersCollection.document(organizerId.value))
+                            .getString(ACTIVE_ACTIVITY_ID)
+                        transaction.requireReservationAvailable(existing, organizerId, newActivity.id)
+                        transaction.set(reference, newActivity.toDto())
+                        transaction.reserve(organizerId, newActivity.id)
+                    }
                 }
 
                 // Add the organiser as a participant.
@@ -199,16 +214,21 @@ constructor(
 
         return try {
             withContext(Dispatchers.IO) {
-                // Retrieve the document.
-                val snapshot = reference.get().await()
-                if (snapshot.exists()) {
-                    // Delete the document.
-                    backendHealthReporter.get().observeFirestoreMutation {
-                        reference.delete().await()
+                val deleted = backendHealthReporter.get().observeFirestoreMutation {
+                    transactionExecutor.run { transaction ->
+                        val before = transaction.get(reference).toObject(IturActivityDTO::class.java)
+                            ?: return@run null
+                        val memberIds = if (before.status == IturActivityStatus.ONGOING.name) {
+                            (listOf(before.organizerId) + before.participantIds).distinct().map(::UserId)
+                        } else {
+                            emptyList()
+                        }
+                        transaction.delete(reference)
+                        memberIds.forEach { userId -> transaction.clearExistingReservation(userId) }
+                        before
                     }
                 }
-
-                snapshot.toObject(IturActivityDTO::class.java)?.toDomain()?.let {
+                deleted?.toDomain()?.let {
                     DataResult.Success(it)
                 } ?: DataResult.NotFound(activityId.value)
             }
@@ -256,7 +276,32 @@ constructor(
     override suspend fun addParticipant(
         activityId: IturActivityId,
         userId: UserId,
-    ): DataResult<IturActivity> = updateParticipants(activityId) { FieldValue.arrayUnion(userId.value) }
+    ): DataResult<IturActivity> {
+        val reference = activitiesCollection.document(activityId.value)
+        return try {
+            withContext(Dispatchers.IO) {
+                val updated = backendHealthReporter.get().observeFirestoreMutation {
+                    transactionExecutor.run { transaction ->
+                        val before = transaction.get(reference).toObject(IturActivityDTO::class.java)
+                            ?: error("Activity ${activityId.value} not found")
+                        val ongoing = before.status == IturActivityStatus.ONGOING.name
+                        if (ongoing) {
+                            val existing = transaction.get(usersCollection.document(userId.value))
+                                .getString(ACTIVE_ACTIVITY_ID)
+                            transaction.requireReservationAvailable(existing, userId, activityId)
+                        }
+                        transaction.update(reference, "participantIds", FieldValue.arrayUnion(userId.value))
+                        if (ongoing) transaction.reserve(userId, activityId)
+                        before.copy(participantIds = (before.participantIds + userId.value).distinct())
+                    }
+                }
+                DataResult.Success(updated.toDomain())
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not add participant", e)
+            DataResult.Error(e.message ?: "Could not add participant")
+        }
+    }
 
     override suspend fun removeParticipant(
         activityId: IturActivityId,
@@ -265,46 +310,34 @@ constructor(
         val reference = activitiesCollection.document(activityId.value)
         return try {
             withContext(Dispatchers.IO) {
-                backendHealthReporter.get().observeFirestoreMutation {
-                    reference.update(
-                        FieldPath.of("participantSignals", userId.value),
-                        FieldValue.delete(),
-                        "participantIds",
-                        FieldValue.arrayRemove(userId.value),
-                        "attentionRequests",
-                        FieldValue.arrayRemove(userId.value),
-                    ).await()
+                val updated = backendHealthReporter.get().observeFirestoreMutation {
+                    transactionExecutor.run { transaction ->
+                        val before = transaction.get(reference).toObject(IturActivityDTO::class.java)
+                            ?: error("Activity ${activityId.value} not found")
+                        val userSnapshot = transaction.get(usersCollection.document(userId.value))
+                        transaction.update(
+                            reference,
+                            FieldPath.of("participantSignals", userId.value),
+                            FieldValue.delete(),
+                            "participantIds",
+                            FieldValue.arrayRemove(userId.value),
+                            "attentionRequests",
+                            FieldValue.arrayRemove(userId.value),
+                        )
+                        if (userSnapshot.getString(ACTIVE_ACTIVITY_ID) == activityId.value) {
+                            transaction.clearReservation(userId)
+                        }
+                        before.copy(
+                            participantIds = before.participantIds - userId.value,
+                            participantSignals = before.participantSignals - userId.value,
+                            attentionRequests = before.attentionRequests - userId.value,
+                        )
+                    }
                 }
-                reference.get().await().toObject(IturActivityDTO::class.java)?.toDomain()
-                    ?.let { DataResult.Success(it) }
-                    ?: DataResult.Error("Document updated but DTO conversion failed")
+                DataResult.Success(updated.toDomain())
             }
         } catch (e: Exception) {
             Log.e(TAG, "Could not remove participant", e)
-            DataResult.Error(e.message ?: "")
-        }
-    }
-
-    private suspend fun updateParticipants(
-        activityId: IturActivityId,
-        function: () -> FieldValue,
-    ): DataResult<IturActivity> {
-        val reference = activitiesCollection.document(activityId.value)
-
-        return try {
-            withContext(Dispatchers.IO) {
-                // Update the participant's ID.
-                backendHealthReporter.get().observeFirestoreMutation {
-                    reference.update("participantIds", function.invoke()).await()
-                }
-
-                reference.get().await().toObject(IturActivityDTO::class.java)?.toDomain()
-                    ?.let { updatedActivity ->
-                        DataResult.Success(updatedActivity)
-                    } ?: DataResult.Error("Document updated but DTO conversion failed")
-            }
-        } catch (e: Exception) {
-            Log.e("FirestoreActivityRepo", "Could not update participant", e)
             DataResult.Error(e.message ?: "")
         }
     }
@@ -326,6 +359,129 @@ constructor(
             throw e
         }
     }
+
+    private fun Transaction.reserve(userId: UserId, activityId: IturActivityId) {
+        set(
+            usersCollection.document(userId.value),
+            mapOf(ACTIVE_ACTIVITY_ID to activityId.value),
+            SetOptions.merge(),
+        )
+    }
+
+    private fun Transaction.clearReservation(userId: UserId) {
+        set(
+            usersCollection.document(userId.value),
+            mapOf(ACTIVE_ACTIVITY_ID to null),
+            SetOptions.merge(),
+        )
+    }
+
+    private fun Transaction.requireReservationAvailable(
+        existingActivityId: String?,
+        userId: UserId,
+        targetActivityId: IturActivityId,
+    ) {
+        if (existingActivityId == null || existingActivityId == targetActivityId.value) return
+        val existing = get(activitiesCollection.document(existingActivityId))
+            .toObject(IturActivityDTO::class.java)
+        val stillActive = existing?.status == IturActivityStatus.ONGOING.name &&
+            (existing.organizerId == userId.value || userId.value in existing.participantIds)
+        check(!stillActive) { "User is already active in another activity" }
+    }
+
+    private fun Transaction.changeStatus(
+        reference: DocumentReference,
+        activityId: IturActivityId,
+        newStatus: IturActivityStatus,
+    ): IturActivityDTO {
+        val before = get(reference).toObject(IturActivityDTO::class.java)
+            ?: error("Activity ${activityId.value} not found")
+        val transition = membershipTransition(before, newStatus)
+        val reservations = if (transition.entersOngoing) readReservations(transition.members) else emptyMap()
+        if (transition.entersOngoing) {
+            requireReservationsAvailable(reservations, activityId)
+        }
+
+        update(reference, statusUpdates(newStatus))
+        applyReservationTransition(transition, reservations, activityId)
+        return before.withStatus(newStatus)
+    }
+
+    private fun membershipTransition(
+        before: IturActivityDTO,
+        newStatus: IturActivityStatus,
+    ): MembershipTransition {
+        val wasOngoing = before.status == IturActivityStatus.ONGOING.name
+        val willBeOngoing = newStatus == IturActivityStatus.ONGOING
+        val members = when {
+            !wasOngoing && willBeOngoing -> listOf(UserId(before.organizerId))
+            wasOngoing && !willBeOngoing ->
+                (listOf(before.organizerId) + before.participantIds).distinct().map(::UserId)
+            else -> emptyList()
+        }
+        return MembershipTransition(members, !wasOngoing && willBeOngoing, wasOngoing && !willBeOngoing)
+    }
+
+    private fun Transaction.readReservations(members: List<UserId>): Map<UserId, String?> = members.associateWith { userId ->
+        get(usersCollection.document(userId.value)).getString(ACTIVE_ACTIVITY_ID)
+    }
+
+    private fun Transaction.requireReservationsAvailable(
+        reservations: Map<UserId, String?>,
+        activityId: IturActivityId,
+    ) {
+        reservations.forEach { (userId, existingActivityId) ->
+            requireReservationAvailable(existingActivityId, userId, activityId)
+        }
+    }
+
+    private fun statusUpdates(newStatus: IturActivityStatus): Map<String, Any> = mutableMapOf<String, Any>("status" to newStatus.name).apply {
+        if (newStatus.isTerminal()) {
+            this["finishedOn"] = FieldValue.serverTimestamp()
+            this["participantSignals"] = emptyMap<String, String>()
+            this["attentionRequests"] = emptyList<String>()
+        }
+    }
+
+    private fun Transaction.applyReservationTransition(
+        transition: MembershipTransition,
+        reservations: Map<UserId, String?>,
+        activityId: IturActivityId,
+    ) {
+        when {
+            transition.entersOngoing -> transition.members.forEach { reserve(it, activityId) }
+            transition.leavesOngoing -> transition.members.forEach { userId -> clearExistingReservation(userId) }
+        }
+    }
+
+    private fun Transaction.clearExistingReservation(userId: UserId) {
+        update(usersCollection.document(userId.value), ACTIVE_ACTIVITY_ID, null)
+    }
+}
+
+private fun IturActivityStatus.isTerminal(): Boolean = this == IturActivityStatus.FINISHED || this == IturActivityStatus.CANCELLED
+
+private data class MembershipTransition(
+    val members: List<UserId>,
+    val entersOngoing: Boolean,
+    val leavesOngoing: Boolean,
+)
+
+private fun IturActivityDTO.withStatus(newStatus: IturActivityStatus): IturActivityDTO = copy(
+    status = newStatus.name,
+    finishedOn = if (newStatus.isTerminal()) Date() else finishedOn,
+    participantSignals = if (newStatus.isTerminal()) emptyMap() else participantSignals,
+    attentionRequests = if (newStatus.isTerminal()) emptyList() else attentionRequests,
+)
+
+internal interface FirestoreTransactionExecutor {
+    suspend fun <T> run(operation: (Transaction) -> T): T
+}
+
+private class FirebaseFirestoreTransactionExecutor(
+    private val firestore: FirebaseFirestore,
+) : FirestoreTransactionExecutor {
+    override suspend fun <T> run(operation: (Transaction) -> T): T = firestore.runTransaction(Transaction.Function(operation)).await()
 }
 
 private class FirebaseParticipantSignalRepository(
@@ -392,11 +548,9 @@ private class FirebaseParticipantSignalRepository(
     }
 }
 
-private fun IturActivity.canSignal(userId: UserId): Boolean {
-    return status == IturActivityStatus.ONGOING &&
-        userId != organizerId &&
-        userId in participantIds
-}
+private fun IturActivity.canSignal(userId: UserId): Boolean = status == IturActivityStatus.ONGOING &&
+    userId != organizerId &&
+    userId in participantIds
 
 private fun IturActivityDTO.alreadyStores(userId: UserId, signal: ParticipantSignal?): Boolean {
     val storedSignal = participantSignals[userId.value]
