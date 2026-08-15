@@ -6,6 +6,7 @@
 package com.nohex.itur.core.data.di
 
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.FirebaseFunctions
 import com.nohex.itur.core.data.health.BackendHealthCheck
 import com.nohex.itur.core.data.health.FirestoreBackendHealthCheck
 import com.nohex.itur.core.data.repository.ActivityRepository
@@ -28,11 +29,18 @@ object DataModule {
     // 10.0.2.2 is the loopback alias that routes to the host machine from an Android emulator.
     private const val EMULATOR_HOST = "10.0.2.2"
     private const val FIRESTORE_EMULATOR_PORT = 8080
+    private const val FUNCTIONS_EMULATOR_PORT = 5001
 
     @Provides
     @Singleton
     fun provideFirestore(): FirebaseFirestore = FirebaseFirestore.getInstance().also {
         it.useEmulator(EMULATOR_HOST, FIRESTORE_EMULATOR_PORT)
+    }
+
+    @Provides
+    @Singleton
+    fun provideFunctions(): FirebaseFunctions = FirebaseFunctions.getInstance().also {
+        it.useEmulator(EMULATOR_HOST, FUNCTIONS_EMULATOR_PORT)
     }
 
     @Provides
@@ -43,7 +51,10 @@ object DataModule {
 
     @Provides
     @Singleton
-    fun provideFirebaseActivityRepository(firestore: FirebaseFirestore): FirebaseActivityRepository = FirebaseActivityRepository(firestore)
+    fun provideFirebaseActivityRepository(
+        firestore: FirebaseFirestore,
+        functions: FirebaseFunctions,
+    ): FirebaseActivityRepository = FirebaseActivityRepository(firestore, functions)
 
     @Provides
     fun provideActivityRepository(repository: FirebaseActivityRepository): ActivityRepository = repository

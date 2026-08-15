@@ -38,6 +38,7 @@ dependencies {
     // Firestore
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore.ktx)
+    implementation(libs.firebase.functions)
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlin.test.junit)

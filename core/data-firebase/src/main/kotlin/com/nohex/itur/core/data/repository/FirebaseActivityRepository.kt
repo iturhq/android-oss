@@ -16,6 +16,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.Transaction
+import com.google.firebase.functions.FirebaseFunctions
 import com.nohex.itur.core.data.health.BackendHealthReporter
 import com.nohex.itur.core.data.health.NoOpBackendHealthReporter
 import com.nohex.itur.core.data.health.observeFirestoreMutation
@@ -41,17 +42,35 @@ private constructor(
     private val firestore: FirebaseFirestore,
     private val backendHealthReporter: Lazy<BackendHealthReporter>,
     private val transactionExecutor: FirestoreTransactionExecutor,
+    private val admissionGateway: ActivityAdmissionGateway,
 ) : ActivityRepository {
     @Inject
     constructor(
         firestore: FirebaseFirestore,
         backendHealthReporter: Lazy<BackendHealthReporter>,
-    ) : this(firestore, backendHealthReporter, FirebaseFirestoreTransactionExecutor(firestore))
+        functions: FirebaseFunctions,
+    ) : this(
+        firestore,
+        backendHealthReporter,
+        FirebaseFirestoreTransactionExecutor(firestore),
+        FirebaseFunctionsActivityAdmissionGateway(functions),
+    )
 
     constructor(firestore: FirebaseFirestore) : this(
         firestore,
         Lazy { NoOpBackendHealthReporter },
         FirebaseFirestoreTransactionExecutor(firestore),
+        FirebaseFunctionsActivityAdmissionGateway(FirebaseFunctions.getInstance()),
+    )
+
+    constructor(
+        firestore: FirebaseFirestore,
+        functions: FirebaseFunctions,
+    ) : this(
+        firestore,
+        Lazy { NoOpBackendHealthReporter },
+        FirebaseFirestoreTransactionExecutor(firestore),
+        FirebaseFunctionsActivityAdmissionGateway(functions),
     )
 
     constructor(
@@ -61,13 +80,15 @@ private constructor(
         firestore,
         Lazy { backendHealthReporter },
         FirebaseFirestoreTransactionExecutor(firestore),
+        FirebaseFunctionsActivityAdmissionGateway(FirebaseFunctions.getInstance()),
     )
 
     internal constructor(
         firestore: FirebaseFirestore,
         backendHealthReporter: BackendHealthReporter,
         transactionExecutor: FirestoreTransactionExecutor,
-    ) : this(firestore, Lazy { backendHealthReporter }, transactionExecutor)
+        admissionGateway: ActivityAdmissionGateway,
+    ) : this(firestore, Lazy { backendHealthReporter }, transactionExecutor, admissionGateway)
 
     private val activitiesCollection = firestore.collection(FirestoreCollections.ACTIVITIES)
     private val usersCollection = firestore.collection(FirestoreCollections.USERS)
@@ -155,6 +176,13 @@ private constructor(
         id: IturActivityId,
         newStatus: IturActivityStatus,
     ): DataResult<IturActivity> {
+        if (newStatus == IturActivityStatus.ONGOING) {
+            return when (val admitted = admissionGateway.start(id)) {
+                is DataResult.Success -> getActivity(admitted.data)
+                is DataResult.Error -> admitted
+                is DataResult.NotFound -> admitted
+            }
+        }
         val reference = activitiesCollection.document(id.value)
 
         return try {
@@ -170,43 +198,10 @@ private constructor(
         }
     }
 
-    override suspend fun createActivity(organizerId: UserId): DataResult<IturActivity> {
-        // Generate a new document reference.
-        val reference = activitiesCollection.document()
-
-        // Create the activity.
-        val newActivity = IturActivity(
-            id = IturActivityId(reference.id),
-            organizerId = organizerId,
-            createdOn = Calendar.getInstance().time,
-            // The activity is ongoing.
-            status = IturActivityStatus.ONGOING,
-            // Add the organizer as a participant.
-            participantIds = listOf(organizerId),
-        )
-
-        return try {
-            withContext(Dispatchers.IO) {
-                // Store the activity.
-                backendHealthReporter.get().observeFirestoreMutation {
-                    transactionExecutor.run { transaction ->
-                        val existing = transaction.get(usersCollection.document(organizerId.value))
-                            .getString(ACTIVE_ACTIVITY_ID)
-                        transaction.requireReservationAvailable(existing, organizerId, newActivity.id)
-                        transaction.set(reference, newActivity.toDto())
-                        transaction.reserve(organizerId, newActivity.id)
-                    }
-                }
-
-                // Add the organiser as a participant.
-
-                // Return the successfully created activity
-                DataResult.Success(newActivity)
-            }
-        } catch (e: Exception) {
-            Log.e("FirestoreActivityRepo", "Failed to create the activity", e)
-            throw e
-        }
+    override suspend fun createActivity(organizerId: UserId): DataResult<IturActivity> = when (val admitted = admissionGateway.start()) {
+        is DataResult.Success -> getActivity(admitted.data)
+        is DataResult.Error -> admitted
+        is DataResult.NotFound -> admitted
     }
 
     override suspend fun deleteActivity(activityId: IturActivityId): DataResult<IturActivity> {
@@ -276,31 +271,10 @@ private constructor(
     override suspend fun addParticipant(
         activityId: IturActivityId,
         userId: UserId,
-    ): DataResult<IturActivity> {
-        val reference = activitiesCollection.document(activityId.value)
-        return try {
-            withContext(Dispatchers.IO) {
-                val updated = backendHealthReporter.get().observeFirestoreMutation {
-                    transactionExecutor.run { transaction ->
-                        val before = transaction.get(reference).toObject(IturActivityDTO::class.java)
-                            ?: error("Activity ${activityId.value} not found")
-                        val ongoing = before.status == IturActivityStatus.ONGOING.name
-                        if (ongoing) {
-                            val existing = transaction.get(usersCollection.document(userId.value))
-                                .getString(ACTIVE_ACTIVITY_ID)
-                            transaction.requireReservationAvailable(existing, userId, activityId)
-                        }
-                        transaction.update(reference, "participantIds", FieldValue.arrayUnion(userId.value))
-                        if (ongoing) transaction.reserve(userId, activityId)
-                        before.copy(participantIds = (before.participantIds + userId.value).distinct())
-                    }
-                }
-                DataResult.Success(updated.toDomain())
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Could not add participant", e)
-            DataResult.Error(e.message ?: "Could not add participant")
-        }
+    ): DataResult<IturActivity> = when (val admitted = admissionGateway.join(activityId)) {
+        is DataResult.Success -> getActivity(admitted.data)
+        is DataResult.Error -> admitted
+        is DataResult.NotFound -> admitted
     }
 
     override suspend fun removeParticipant(
