@@ -22,6 +22,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.nohex.itur.core.domain.id.UserId
@@ -112,6 +113,15 @@ fun MapLibreView(
         }
 
         lifecycle.addObserver(observer)
+        // This composable is normally added after the Activity has already reached RESUMED.
+        // Lifecycle observers do not replay past events, so bring MapView to the host's current
+        // state before a permission dialog (or any other overlay) can pause it again.
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            mapView.onStart()
+        }
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            mapView.onResume()
+        }
         onDispose {
             lifecycle.removeObserver(observer)
         }
