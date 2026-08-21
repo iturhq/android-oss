@@ -25,10 +25,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import cat.itur.app.feature.map.R
 
 /** A composable with a map and controls driven by [MapViewModel]. */
 @Composable
@@ -84,8 +86,11 @@ fun ModalAlert(text: String, onDismissRequest: () -> Unit) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(text = text)
                 Spacer(modifier = Modifier.height(24.dp))
-                TextButton(onClick = onDismissRequest, modifier = Modifier.align(Alignment.End)) {
-                    Text("Dismiss")
+                TextButton(
+                    onClick = onDismissRequest,
+                    modifier = Modifier.align(Alignment.End),
+                ) {
+                    Text(stringResource(R.string.feature_map_dismiss))
                 }
             }
         }
@@ -105,8 +110,8 @@ fun RecoverableErrorDialog(message: String, onRetry: () -> Unit, onCancel: () ->
                 Text(text = message)
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(modifier = Modifier.align(Alignment.End)) {
-                    TextButton(onClick = onCancel) { Text("Cancel") }
-                    TextButton(onClick = onRetry) { Text("Try again") }
+                    TextButton(onClick = onCancel) { Text(stringResource(R.string.feature_map_cancel)) }
+                    TextButton(onClick = onRetry) { Text(stringResource(R.string.feature_map_try_again)) }
                 }
             }
         }

@@ -30,10 +30,12 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import cat.itur.app.core.ui.theme.IturTheme
+import cat.itur.app.feature.map.R
 import kotlin.math.roundToInt
 
 /**
@@ -62,13 +64,13 @@ internal fun HelpOverlay(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClickLabel = "Dismiss help",
+                onClickLabel = stringResource(R.string.feature_map_dismiss_help),
                 onClick = onDismissRequest,
             )
             .testTag("help_overlay"),
     ) {
         Text(
-            text = "Tap anywhere to close",
+            text = stringResource(R.string.feature_map_close_help_hint),
             color = Color.White,
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier

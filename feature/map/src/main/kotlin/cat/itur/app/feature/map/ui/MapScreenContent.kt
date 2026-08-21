@@ -24,9 +24,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import cat.itur.app.core.domain.model.User
 import cat.itur.app.core.ui.components.IturProgressIndicator
+import cat.itur.app.feature.map.R
 import cat.itur.app.feature.map.ui.components.map.ErrorState
 import cat.itur.app.feature.map.ui.components.map.IdleState
 import cat.itur.app.feature.map.ui.components.map.MapLibreView
@@ -62,9 +64,11 @@ private fun MapContent(
 ) {
     when {
         !environment.openGlEsSupport.isSupported && !environment.isInspection -> ErrorState(
-            guidance = "This device does not provide the graphics support required by the map.",
-            message = "OpenGL ES 3.0 or newer is required; this device reports " +
-                "${environment.openGlEsSupport.reportedVersion}.",
+            guidance = stringResource(R.string.feature_map_graphics_guidance),
+            message = stringResource(
+                R.string.feature_map_graphics_message,
+                environment.openGlEsSupport.reportedVersion,
+            ),
             modifier = environment.modifier,
         )
         else -> MapReadyContent(viewModel, environment, presentation, interaction)
@@ -139,9 +143,10 @@ private fun MapStateControls(
     interaction: MapInteractionState,
 ) {
     when {
-        presentation.currentUser == null -> IturProgressIndicator(label = "Preparing map...")
+        presentation.currentUser == null ->
+            IturProgressIndicator(label = stringResource(R.string.feature_map_preparing_map))
         presentation.uiState is MapUiState.Loading ->
-            IturProgressIndicator(label = "Preparing activity...")
+            IturProgressIndicator(label = stringResource(R.string.feature_map_preparing_activity))
         presentation.uiState is MapUiState.Ongoing ->
             OngoingControls(viewModel, presentation, interaction, environment)
         else -> IdleControls(viewModel, presentation, interaction, environment)

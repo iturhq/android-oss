@@ -16,9 +16,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cat.itur.app.core.ui.IturIcons
+import cat.itur.app.feature.map.R
 import cat.itur.app.feature.map.ui.components.help.helpAnchor
 
 /**
@@ -45,9 +47,15 @@ internal fun OngoingState(
                     onClick = actions.onTrackGroupRequested,
                     modifier = Modifier
                         .testTag("zoom_group_fab")
-                        .helpAnchor("zoom_group_fab", "Zoom out to fit every participant on the map"),
+                        .helpAnchor(
+                            "zoom_group_fab",
+                            stringResource(R.string.feature_map_help_track_group),
+                        ),
                 ) {
-                    Icon(IturIcons.ZoomAll, contentDescription = "Track group")
+                    Icon(
+                        IturIcons.ZoomAll,
+                        contentDescription = stringResource(R.string.feature_map_track_group),
+                    )
                 }
             }
         }
@@ -89,19 +97,25 @@ private fun OngoingActivityFABs(
             onClick = onQRRequested,
             modifier = Modifier
                 .testTag("show_qr_fab")
-                .helpAnchor("show_qr_fab", "Show the QR code for others to join this activity"),
+                .helpAnchor("show_qr_fab", stringResource(R.string.feature_map_help_show_qr)),
         ) {
-            Icon(IturIcons.Join, contentDescription = "Show QR")
+            Icon(IturIcons.Join, contentDescription = stringResource(R.string.feature_map_show_qr))
         }
     } else {
         FloatingActionButton(
             onClick = { if (activityActionsEnabled) onAttentionRequest() },
             modifier = Modifier
                 .testTag("hail_organiser_fab")
-                .helpAnchor("hail_organiser_fab", "Ask the organiser for attention")
+                .helpAnchor(
+                    "hail_organiser_fab",
+                    stringResource(R.string.feature_map_help_hail_organiser),
+                )
                 .serviceAvailability(activityActionsEnabled),
         ) {
-            Icon(IturIcons.Warning, contentDescription = "Hail organiser")
+            Icon(
+                IturIcons.Warning,
+                contentDescription = stringResource(R.string.feature_map_hail_organiser),
+            )
         }
     }
 
@@ -111,13 +125,21 @@ private fun OngoingActivityFABs(
             .testTag("stop_activity_fab")
             .helpAnchor(
                 "stop_activity_fab",
-                if (isOrganizer) "Stop the activity for everyone" else "Leave the activity",
+                if (isOrganizer) {
+                    stringResource(R.string.feature_map_help_stop_activity)
+                } else {
+                    stringResource(R.string.feature_map_help_leave_activity)
+                },
             )
             .serviceAvailability(activityActionsEnabled),
     ) {
         Icon(
             IturIcons.Stop,
-            contentDescription = if (isOrganizer) "Stop activity" else "Exit activity",
+            contentDescription = if (isOrganizer) {
+                stringResource(R.string.feature_map_stop_activity)
+            } else {
+                stringResource(R.string.feature_map_exit_activity)
+            },
         )
     }
 }

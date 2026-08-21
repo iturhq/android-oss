@@ -16,10 +16,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import cat.itur.app.feature.map.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -91,22 +93,24 @@ private fun MessageEffects(
     interaction: MapInteractionState,
     snackbarHostState: SnackbarHostState,
 ) {
-    val displayMessage = when (val state = presentation.uiState) {
+    val rawDisplayMessage = when (val state = presentation.uiState) {
         is MapUiState.Idle -> state.message
         is MapUiState.Error -> state.message
         else -> interaction.localMessage
     } ?: interaction.localMessage
+    val displayMessage = rawDisplayMessage?.let { localizedMapMessage(it) }
 
     LaunchedEffect(displayMessage) {
         displayMessage?.let {
             snackbarHostState.showSnackbar(it)
-            if (interaction.localMessage == it) interaction.localMessage = null
+            if (interaction.localMessage == rawDisplayMessage) interaction.localMessage = null
         }
     }
-    LaunchedEffect(presentation.latestBroadcastMessage) {
-        presentation.latestBroadcastMessage?.let {
-            snackbarHostState.showSnackbar("Alert: $it")
-        }
+    val localizedBroadcast = presentation.latestBroadcastMessage?.let {
+        stringResource(R.string.feature_map_alert, it)
+    }
+    LaunchedEffect(localizedBroadcast) {
+        localizedBroadcast?.let { snackbarHostState.showSnackbar(it) }
     }
 }
 

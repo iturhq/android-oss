@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Itur © 2025 by Max Noé <code@itur.cat>
+  ~ SPDX-License-Identifier: GPL-3.0-or-later
+  -->
+<resources>
+    <string name="feature_track_interests">Segueix</string>
+    <string name="feature_map_dismiss">Descarta</string>
+    <string name="feature_map_cancel">Cancel·la</string>
+    <string name="feature_map_try_again">Torna-ho a provar</string>
+    <string name="feature_map_graphics_guidance">Aquest dispositiu no ofereix la compatibilitat gràfica que necessita el mapa.</string>
+    <string name="feature_map_graphics_message">Cal OpenGL ES 3.0 o posterior; aquest dispositiu indica la versió %1$s.</string>
+    <string name="feature_map_location_permission_title">Cal el permís d’ubicació</string>
+    <string name="feature_map_location_permission_message">Permet l’accés a la ubicació per mostrar el mapa i compartir la teva posició durant una activitat.</string>
+    <string name="feature_map_preparing_map">S’està preparant el mapa…</string>
+    <string name="feature_map_preparing_activity">S’està preparant l’activitat…</string>
+    <string name="feature_map_camera_permission_message">Cal accedir a la càmera per escanejar el codi QR d’una activitat</string>
+    <string name="feature_map_scan_qr">Escaneja el QR d’una activitat per unir-t’hi</string>
+    <string name="feature_map_scan_this_qr">Escaneja aquest QR per unir-te a l’activitat</string>
+    <string name="feature_map_qr_generation_failed">No s’ha pogut generar el codi QR</string>
+    <string name="feature_map_alert">Avís: %1$s</string>
+    <string name="feature_map_dismiss_help">Tanca l’ajuda</string>
+    <string name="feature_map_close_help_hint">Toca qualsevol lloc per tancar</string>
+    <string name="feature_map_help_recenter">Torna a centrar el mapa a la teva ubicació</string>
+    <string name="feature_map_help_track_group">Allunya el mapa per veure-hi tots els participants</string>
+    <string name="feature_map_help_show_qr">Mostra el codi QR perquè altres persones s’uneixin a aquesta activitat</string>
+    <string name="feature_map_help_sign_out">Tanca la sessió del teu compte</string>
+    <string name="feature_map_sign_out">Tanca la sessió</string>
+    <string name="feature_map_help_sign_in">Inicia la sessió per començar o gestionar una activitat</string>
+    <string name="feature_map_sign_in">Inicia la sessió</string>
+    <string name="feature_map_recenter">Torna a centrar</string>
+    <string name="feature_map_get_help">Obtén ajuda</string>
+    <string name="feature_map_track_group">Segueix el grup</string>
+    <string name="feature_map_show_qr">Mostra el QR</string>
+    <string name="feature_map_help_hail_organiser">Demana l’atenció de l’organitzador</string>
+    <string name="feature_map_hail_organiser">Avisa l’organitzador</string>
+    <string name="feature_map_help_stop_activity">Atura l’activitat per a tothom</string>
+    <string name="feature_map_help_leave_activity">Surt de l’activitat</string>
+    <string name="feature_map_stop_activity">Atura l’activitat</string>
+    <string name="feature_map_exit_activity">Surt de l’activitat</string>
+    <string name="feature_map_itur_logo">Logotip d’Itur</string>
+    <string name="feature_map_help_join_activity">Uneix-te a una activitat escanejant-ne el codi QR</string>
+    <string name="feature_map_join_activity">Uneix-te a una activitat</string>
+    <string name="feature_map_help_start_activity">Comença una activitat nova</string>
+    <string name="feature_map_start_activity">Comença una activitat</string>
+    <string name="feature_map_placeholder">Espai del mapa</string>
+    <string name="feature_map_error_guidance">Contacta amb el fabricant</string>
+    <string name="feature_map_error_title">No es pot mostrar el mapa</string>
+    <string name="feature_map_notification_channel">Avisos d’activitat</string>
+    <string name="feature_map_notification_channel_description">Missatges enviats per l’organitzador de l’activitat o l’operador del sistema.</string>
+    <string name="feature_map_notification_title">Avís d’activitat</string>
+    <string name="feature_map_activity_not_found">No s’ha trobat l’activitat %1$s</string>
+    <string name="feature_map_failed_start">No s’ha pogut començar una activitat</string>
+    <string name="feature_map_already_in_activity">Ja participes en una activitat; surt-ne primer</string>
+    <string name="feature_map_failed_join">No t’has pogut unir a l’activitat %1$s</string>
+    <string name="feature_map_no_longer_participating">Ja no participes en cap activitat</string>
+    <string name="feature_map_failed_leave">No s’ha pogut sortir de l’activitat %1$s</string>
+    <string name="feature_map_resume_failed">No s’ha pogut reprendre l’activitat en curs.</string>
+    <string name="feature_map_sign_in_no_account">No hi ha cap compte de Google disponible. Afegeix-ne un i torna-ho a provar.</string>
+    <string name="feature_map_sign_in_not_configured">L’inici de sessió no està configurat per a aquesta aplicació.</string>
+    <string name="feature_map_sign_in_unavailable">L’inici de sessió no està disponible temporalment. Comprova la connexió i torna-ho a provar.</string>
+    <string name="feature_map_sign_in_failed">No s’ha pogut completar l’inici de sessió. Torna-ho a provar.</string>
+</resources>

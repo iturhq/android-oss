@@ -16,8 +16,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import cat.itur.app.core.ui.IturIcons
+import cat.itur.app.feature.map.R
 import cat.itur.app.feature.map.ui.components.help.helpAnchor
 
 /**
@@ -61,19 +63,19 @@ internal fun UserFABs(
             onClick = onSignOutRequested,
             modifier = Modifier
                 .testTag("sign_out_fab")
-                .helpAnchor("sign_out_fab", "Sign out of your account"),
+                .helpAnchor("sign_out_fab", stringResource(R.string.feature_map_help_sign_out)),
         ) {
-            Icon(IturIcons.SignOut, contentDescription = "Sign out")
+            Icon(IturIcons.SignOut, contentDescription = stringResource(R.string.feature_map_sign_out))
         }
     } else if (!isSignedIn) {
         FloatingActionButton(
             onClick = { if (authenticationActionsEnabled) onSignInRequested() },
             modifier = Modifier
                 .testTag("sign_in_fab")
-                .helpAnchor("sign_in_fab", "Sign in to start or manage an activity")
+                .helpAnchor("sign_in_fab", stringResource(R.string.feature_map_help_sign_in))
                 .serviceAvailability(authenticationActionsEnabled),
         ) {
-            Icon(IturIcons.SignIn, contentDescription = "Sign in")
+            Icon(IturIcons.SignIn, contentDescription = stringResource(R.string.feature_map_sign_in))
         }
     }
 }
@@ -94,9 +96,9 @@ internal fun TrackingFABs(
                 onClick = onTrackUserRequested,
                 modifier = Modifier
                     .testTag("recenter_fab")
-                    .helpAnchor("recenter_fab", "Recenter the map on your own location"),
+                    .helpAnchor("recenter_fab", stringResource(R.string.feature_map_help_recenter)),
             ) {
-                Icon(IturIcons.ZoomSelf, contentDescription = "Recenter")
+                Icon(IturIcons.ZoomSelf, contentDescription = stringResource(R.string.feature_map_recenter))
             }
         }
     }
@@ -111,7 +113,7 @@ internal fun HelpFABs(onHelpRequested: () -> Unit) {
             onClick = onHelpRequested,
             modifier = Modifier.testTag("help_fab"),
         ) {
-            Icon(IturIcons.Help, contentDescription = "Get help")
+            Icon(IturIcons.Help, contentDescription = stringResource(R.string.feature_map_get_help))
         }
     }
 }

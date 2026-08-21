@@ -5,4 +5,5 @@
   -->
 <resources>
     <string name="app_name">Itur</string>
+    <string name="open_source_licenses">Open source licenses</string>
 </resources>

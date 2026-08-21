@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.core.content.ContextCompat
 import cat.itur.app.core.domain.id.IturActivityId
+import cat.itur.app.feature.map.R
 import cat.itur.app.feature.map.ui.components.help.HelpOverlay
 import cat.itur.app.feature.map.ui.components.help.LocalHelpAnchorRegistry
 import cat.itur.app.feature.map.ui.components.qrdisplay.QRDisplaySheet
@@ -38,12 +39,12 @@ private fun SignInFailureSurface(failure: SignInFailurePresentation?) {
     failure ?: return
     if (failure.retryable) {
         RecoverableErrorDialog(
-            message = failure.message,
+            message = localizedMapMessage(failure.message),
             onRetry = failure.onRetry,
             onCancel = failure.onDismiss,
         )
     } else {
-        ModalAlert(text = failure.message, onDismissRequest = failure.onDismiss)
+        ModalAlert(text = localizedMapMessage(failure.message), onDismissRequest = failure.onDismiss)
     }
 }
 
@@ -51,7 +52,7 @@ private fun SignInFailureSurface(failure: SignInFailurePresentation?) {
 private fun RecoverableErrorSurface(uiState: MapUiState) {
     (uiState as? MapUiState.RecoverableError)?.let { error ->
         RecoverableErrorDialog(
-            message = error.message,
+            message = localizedMapMessage(error.message),
             onRetry = error.onRetry,
             onCancel = error.onCancel,
         )
@@ -88,7 +89,7 @@ private fun QrScanSurface(
         interaction.cameraPermissionGranted = isGranted
         if (!isGranted) {
             interaction.showQrScanSheet = false
-            interaction.localMessage = "Camera access is required to scan an activity QR code"
+            interaction.localMessage = context.getString(R.string.feature_map_camera_permission_message)
         }
     }
     if (interaction.showQrScanSheet) {
