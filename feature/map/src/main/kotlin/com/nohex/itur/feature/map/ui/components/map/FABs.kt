@@ -14,6 +14,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.nohex.itur.core.ui.IturIcons
@@ -49,8 +50,13 @@ internal fun UserFABs(
     onSignOutRequested: () -> Unit,
     isSignedIn: Boolean,
     authenticationActionsEnabled: Boolean,
+    showSignOutOnMap: Boolean? = null,
 ) {
-    if (isSignedIn) {
+    val shouldShowSignOut = showSignOutOnMap
+        ?: LocalContext.current.resources.getBoolean(
+            com.nohex.itur.feature.map.R.bool.feature_map_show_sign_out_on_map,
+        )
+    if (isSignedIn && shouldShowSignOut) {
         FloatingActionButton(
             onClick = onSignOutRequested,
             modifier = Modifier
@@ -59,7 +65,7 @@ internal fun UserFABs(
         ) {
             Icon(IturIcons.SignOut, contentDescription = "Sign out")
         }
-    } else {
+    } else if (!isSignedIn) {
         FloatingActionButton(
             onClick = { if (authenticationActionsEnabled) onSignInRequested() },
             modifier = Modifier
