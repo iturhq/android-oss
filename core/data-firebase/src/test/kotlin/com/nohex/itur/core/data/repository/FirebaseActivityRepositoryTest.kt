@@ -68,8 +68,10 @@ private class ImmediateTransactionExecutor(
 private class RecordingAdmissionGateway : ActivityAdmissionGateway {
     var startResult: DataResult<IturActivityId> = DataResult.Error("start not configured")
     var joinResult: DataResult<IturActivityId> = DataResult.Error("join not configured")
+    var leaveResult: DataResult<IturActivityId> = DataResult.Error("leave not configured")
     val startCalls = mutableListOf<IturActivityId?>()
     val joinCalls = mutableListOf<IturActivityId>()
+    val leaveCalls = mutableListOf<IturActivityId>()
 
     override suspend fun start(activityId: IturActivityId?): DataResult<IturActivityId> {
         startCalls += activityId
@@ -79,6 +81,11 @@ private class RecordingAdmissionGateway : ActivityAdmissionGateway {
     override suspend fun join(activityId: IturActivityId): DataResult<IturActivityId> {
         joinCalls += activityId
         return joinResult
+    }
+
+    override suspend fun leave(activityId: IturActivityId): DataResult<IturActivityId> {
+        leaveCalls += activityId
+        return leaveResult
     }
 }
 
@@ -573,43 +580,20 @@ class FirebaseActivityRepositoryTest {
     }
 
     @Test
-    fun `WHEN removing a participant THEN participantIds is updated with an arrayRemove`() = runBlocking {
+    fun `WHEN removing a participant THEN trusted departure runs and the stored activity is returned`() = runBlocking {
         val docRef = mockk<DocumentReference>()
-        val userRef = mockk<DocumentReference>()
         every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
-        every { usersCollection.document(PARTICIPANT_ID.value) } returns userRef
-        val fieldPath = slot<FieldPath>()
-        every {
-            transaction.update(docRef, capture(fieldPath), any(), any(), any(), any(), any())
-        } returns transaction
-        val activitySnapshot = mockk<DocumentSnapshot> {
+        every { docRef.get() } returns successfulTask(mockk {
+            every { exists() } returns true
             every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
-        }
-        every { transaction.get(docRef) } returns activitySnapshot
-        every { transaction.get(userRef) } returns reservationSnapshot(ACTIVITY_ID.value)
+        })
+        admissionGateway.leaveResult = DataResult.Success(ACTIVITY_ID)
 
         val result = repository.removeParticipant(ACTIVITY_ID, PARTICIPANT_ID)
 
         assertIs<DataResult.Success<IturActivity>>(result)
-        assertEquals("participantSignals.${PARTICIPANT_ID.value}", fieldPath.captured.toString())
-        verify(exactly = 1) {
-            transaction.update(
-                docRef,
-                any<FieldPath>(),
-                match { it.javaClass.simpleName == "DeleteFieldValue" },
-                "participantIds",
-                match { it.javaClass.simpleName == "ArrayRemoveFieldValue" },
-                "attentionRequests",
-                match { it.javaClass.simpleName == "ArrayRemoveFieldValue" },
-            )
-        }
-        verify(exactly = 1) {
-            transaction.set(
-                userRef,
-                match<Map<String, String?>> { it["activeActivityId"] == null },
-                any<SetOptions>(),
-            )
-        }
+        assertEquals(listOf(ACTIVITY_ID), admissionGateway.leaveCalls)
+        verify(exactly = 0) { transaction.update(any<DocumentReference>(), any<FieldPath>(), any(), *anyVararg()) }
     }
 
     @Test

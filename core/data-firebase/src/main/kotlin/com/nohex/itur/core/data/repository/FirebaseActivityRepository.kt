@@ -280,40 +280,10 @@ private constructor(
     override suspend fun removeParticipant(
         activityId: IturActivityId,
         userId: UserId,
-    ): DataResult<IturActivity> {
-        val reference = activitiesCollection.document(activityId.value)
-        return try {
-            withContext(Dispatchers.IO) {
-                val updated = backendHealthReporter.get().observeFirestoreMutation {
-                    transactionExecutor.run { transaction ->
-                        val before = transaction.get(reference).toObject(IturActivityDTO::class.java)
-                            ?: error("Activity ${activityId.value} not found")
-                        val userSnapshot = transaction.get(usersCollection.document(userId.value))
-                        transaction.update(
-                            reference,
-                            FieldPath.of("participantSignals", userId.value),
-                            FieldValue.delete(),
-                            "participantIds",
-                            FieldValue.arrayRemove(userId.value),
-                            "attentionRequests",
-                            FieldValue.arrayRemove(userId.value),
-                        )
-                        if (userSnapshot.getString(ACTIVE_ACTIVITY_ID) == activityId.value) {
-                            transaction.clearReservation(userId)
-                        }
-                        before.copy(
-                            participantIds = before.participantIds - userId.value,
-                            participantSignals = before.participantSignals - userId.value,
-                            attentionRequests = before.attentionRequests - userId.value,
-                        )
-                    }
-                }
-                DataResult.Success(updated.toDomain())
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Could not remove participant", e)
-            DataResult.Error(e.message ?: "")
-        }
+    ): DataResult<IturActivity> = when (val departed = admissionGateway.leave(activityId)) {
+        is DataResult.Success -> getActivity(departed.data)
+        is DataResult.Error -> departed
+        is DataResult.NotFound -> departed
     }
 
     override suspend fun getBroadcastsSince(activityId: IturActivityId, since: Date?): List<Broadcast> {

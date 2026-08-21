@@ -54,4 +54,17 @@ class ActivityAdmissionGatewayTest {
         assertEquals(DataErrorCode.ACTIVITY_START_LIMIT_REACHED, error.code)
         assertEquals("Activity start limit reached.", error.message)
     }
+
+    @Test
+    fun `WHEN leaving THEN trusted leave callable receives the activity id`() = runBlocking {
+        every { functions.getHttpsCallable("leaveActivity") } returns callable
+        every { callable.call(mapOf("activityId" to "Activity000000000001")) } returns
+            Tasks.forResult(mockk {
+                every { data } returns mapOf("activityId" to "Activity000000000001")
+            })
+
+        val result = gateway.leave(IturActivityId("Activity000000000001"))
+
+        assertEquals(IturActivityId("Activity000000000001"), assertIs<DataResult.Success<IturActivityId>>(result).data)
+    }
 }

@@ -15,6 +15,8 @@ internal interface ActivityAdmissionGateway {
     suspend fun start(activityId: IturActivityId? = null): DataResult<IturActivityId>
 
     suspend fun join(activityId: IturActivityId): DataResult<IturActivityId>
+
+    suspend fun leave(activityId: IturActivityId): DataResult<IturActivityId>
 }
 
 internal class FirebaseFunctionsActivityAdmissionGateway(
@@ -23,6 +25,8 @@ internal class FirebaseFunctionsActivityAdmissionGateway(
     override suspend fun start(activityId: IturActivityId?): DataResult<IturActivityId> = call("startActivity", activityId)
 
     override suspend fun join(activityId: IturActivityId): DataResult<IturActivityId> = call("joinActivity", activityId)
+
+    override suspend fun leave(activityId: IturActivityId): DataResult<IturActivityId> = call("leaveActivity", activityId)
 
     private suspend fun call(
         functionName: String,
