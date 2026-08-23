@@ -7,10 +7,8 @@ package com.nohex.itur.core.data.repository
 
 import android.util.Log
 import com.google.firebase.Timestamp
-import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.DocumentReference
-import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -36,6 +34,8 @@ import javax.inject.Inject
 
 private const val TAG = "FBActivityRepo"
 private const val ACTIVE_ACTIVITY_ID = "activeActivityId"
+private const val PARTICIPANT_SIGNALS = "participantSignals"
+private const val SIGNAL = "signal"
 
 class FirebaseActivityRepository
 private constructor(
@@ -43,6 +43,7 @@ private constructor(
     private val backendHealthReporter: Lazy<BackendHealthReporter>,
     private val transactionExecutor: FirestoreTransactionExecutor,
     private val admissionGateway: ActivityAdmissionGateway,
+    private val canonicalSignalsLoader: suspend (DocumentReference) -> Map<String, String?>,
 ) : ActivityRepository {
     @Inject
     constructor(
@@ -54,6 +55,7 @@ private constructor(
         backendHealthReporter,
         FirebaseFirestoreTransactionExecutor(firestore),
         FirebaseFunctionsActivityAdmissionGateway(functions),
+        ::loadCanonicalSignals,
     )
 
     constructor(firestore: FirebaseFirestore) : this(
@@ -61,6 +63,7 @@ private constructor(
         Lazy { NoOpBackendHealthReporter },
         FirebaseFirestoreTransactionExecutor(firestore),
         FirebaseFunctionsActivityAdmissionGateway(FirebaseFunctions.getInstance()),
+        ::loadCanonicalSignals,
     )
 
     constructor(
@@ -71,6 +74,7 @@ private constructor(
         Lazy { NoOpBackendHealthReporter },
         FirebaseFirestoreTransactionExecutor(firestore),
         FirebaseFunctionsActivityAdmissionGateway(functions),
+        ::loadCanonicalSignals,
     )
 
     constructor(
@@ -81,6 +85,7 @@ private constructor(
         Lazy { backendHealthReporter },
         FirebaseFirestoreTransactionExecutor(firestore),
         FirebaseFunctionsActivityAdmissionGateway(FirebaseFunctions.getInstance()),
+        ::loadCanonicalSignals,
     )
 
     internal constructor(
@@ -88,13 +93,20 @@ private constructor(
         backendHealthReporter: BackendHealthReporter,
         transactionExecutor: FirestoreTransactionExecutor,
         admissionGateway: ActivityAdmissionGateway,
-    ) : this(firestore, Lazy { backendHealthReporter }, transactionExecutor, admissionGateway)
+        canonicalSignalsLoader: suspend (DocumentReference) -> Map<String, String?> = { emptyMap() },
+    ) : this(
+        firestore,
+        Lazy { backendHealthReporter },
+        transactionExecutor,
+        admissionGateway,
+        canonicalSignalsLoader,
+    )
 
     private val activitiesCollection = firestore.collection(FirestoreCollections.ACTIVITIES)
     private val usersCollection = firestore.collection(FirestoreCollections.USERS)
     val participantSignalRepository: ParticipantSignalRepository = FirebaseParticipantSignalRepository(
-        activitiesCollection = activitiesCollection,
-        backendHealthReporter = backendHealthReporter,
+        admissionGateway = admissionGateway,
+        activityLoader = ::getActivity,
     )
 
     override suspend fun getActiveActivityId(userId: UserId): DataResult<IturActivityId?> = try {
@@ -121,7 +133,8 @@ private constructor(
                 }
 
                 // Convert to domain object.
-                val activity = snapshot.toObject(IturActivityDTO::class.java)?.toDomain()
+                val signals = canonicalSignalsLoader(reference)
+                val activity = snapshot.toObject(IturActivityDTO::class.java)?.toDomain(signals)
 
                 // Convert to result.
                 activity?.let { DataResult.Success(it) }
@@ -430,8 +443,8 @@ private class FirebaseFirestoreTransactionExecutor(
 }
 
 private class FirebaseParticipantSignalRepository(
-    private val activitiesCollection: CollectionReference,
-    private val backendHealthReporter: Lazy<BackendHealthReporter>,
+    private val admissionGateway: ActivityAdmissionGateway,
+    private val activityLoader: suspend (IturActivityId) -> DataResult<IturActivity>,
 ) : ParticipantSignalRepository {
     override suspend fun setParticipantSignal(
         activityId: IturActivityId,
@@ -444,63 +457,15 @@ private class FirebaseParticipantSignalRepository(
         userId: UserId,
     ): DataResult<IturActivity> = updateParticipantSignal(activityId, userId, null)
 
-    @Suppress("TooGenericExceptionCaught")
     private suspend fun updateParticipantSignal(
         activityId: IturActivityId,
-        userId: UserId,
+        @Suppress("UNUSED_PARAMETER") userId: UserId,
         signal: ParticipantSignal?,
-    ): DataResult<IturActivity> {
-        val reference = activitiesCollection.document(activityId.value)
-        return try {
-            withContext(Dispatchers.IO) {
-                updateParticipantSignal(reference, activityId, userId, signal)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to update participant signal in activity ${activityId.value}", e)
-            DataResult.Error(e.message ?: "Failed to update participant signal")
-        }
+    ): DataResult<IturActivity> = when (val updated = admissionGateway.setParticipantSignal(activityId, signal)) {
+        is DataResult.Success -> activityLoader(updated.data)
+        is DataResult.Error -> updated
+        is DataResult.NotFound -> updated
     }
-
-    private suspend fun updateParticipantSignal(
-        reference: DocumentReference,
-        activityId: IturActivityId,
-        userId: UserId,
-        signal: ParticipantSignal?,
-    ): DataResult<IturActivity> {
-        val before = reference.get().await().toObject(IturActivityDTO::class.java)
-            ?: return DataResult.NotFound(activityId.value)
-        val activity = before.toDomain()
-        return when {
-            !activity.canSignal(userId) ->
-                DataResult.Error("Only a current participant can change their safety signal")
-
-            before.alreadyStores(userId, signal) -> DataResult.Success(activity)
-
-            else -> {
-                backendHealthReporter.get().observeFirestoreMutation {
-                    reference.update(
-                        FieldPath.of("participantSignals", userId.value),
-                        signal?.name ?: FieldValue.delete(),
-                        "attentionRequests",
-                        FieldValue.arrayRemove(userId.value),
-                    ).await()
-                }
-                reference.get().await().toObject(IturActivityDTO::class.java)?.toDomain()
-                    ?.let { DataResult.Success(it) }
-                    ?: DataResult.Error("Signal updated but DTO conversion failed")
-            }
-        }
-    }
-}
-
-private fun IturActivity.canSignal(userId: UserId): Boolean = status == IturActivityStatus.ONGOING &&
-    userId != organizerId &&
-    userId in participantIds
-
-private fun IturActivityDTO.alreadyStores(userId: UserId, signal: ParticipantSignal?): Boolean {
-    val storedSignal = participantSignals[userId.value]
-    val hasLegacyRequest = userId.value in attentionRequests
-    return storedSignal == signal?.name && !hasLegacyRequest
 }
 
 private fun DataResult<IturActivity>.requireSuccess() {
@@ -510,6 +475,13 @@ private fun DataResult<IturActivity>.requireSuccess() {
         is DataResult.Error -> error(message)
     }
 }
+
+private suspend fun loadCanonicalSignals(reference: DocumentReference): Map<String, String?> = reference
+    .collection(PARTICIPANT_SIGNALS)
+    .get()
+    .await()
+    .documents
+    .associate { signal -> signal.id to signal.getString(SIGNAL) }
 
 data class IturActivityDTO(
     var id: String = "",
@@ -525,7 +497,7 @@ data class IturActivityDTO(
     var attentionRequests: List<String> = emptyList(),
 )
 
-private fun IturActivityDTO.toDomain(): IturActivity {
+private fun IturActivityDTO.toDomain(canonicalSignals: Map<String, String?> = emptyMap()): IturActivity {
     val organizerUserId = UserId(organizerId)
     val participantUserIds = participantIds.map { UserId(it) }
     val signalEligibleIds = participantUserIds.toSet() - organizerUserId
@@ -534,14 +506,8 @@ private fun IturActivityDTO.toDomain(): IturActivity {
         .filter { it in signalEligibleIds }
         .associateWith { ParticipantSignal.NEEDS_HELP }
         .toMutableMap()
-    participantSignals.forEach { (userId, storedSignal) ->
-        val participantId = UserId(userId)
-        if (participantId in signalEligibleIds) {
-            runCatching { ParticipantSignal.valueOf(storedSignal) }
-                .getOrNull()
-                ?.let { signals[participantId] = it }
-        }
-    }
+    signals.applyLegacySignals(participantSignals, signalEligibleIds)
+    signals.applyCanonicalSignals(canonicalSignals, organizerUserId)
     return IturActivity(
         id = IturActivityId(id),
         status = IturActivityStatus.valueOf(status),
@@ -554,6 +520,32 @@ private fun IturActivityDTO.toDomain(): IturActivity {
         participantSignals = signals,
     )
 }
+
+private fun MutableMap<UserId, ParticipantSignal>.applyLegacySignals(
+    storedSignals: Map<String, String>,
+    eligibleIds: Set<UserId>,
+) = storedSignals.forEach { (userId, storedSignal) ->
+    val participantId = UserId(userId)
+    if (participantId in eligibleIds) {
+        storedSignal.toSignalOrNull()?.let { this[participantId] = it }
+    }
+}
+
+private fun MutableMap<UserId, ParticipantSignal>.applyCanonicalSignals(
+    storedSignals: Map<String, String?>,
+    organizerId: UserId,
+) = storedSignals.forEach { (userId, storedSignal) ->
+    val participantId = UserId(userId)
+    if (participantId == organizerId) return@forEach
+
+    if (storedSignal == null) {
+        remove(participantId)
+    } else {
+        storedSignal.toSignalOrNull()?.let { this[participantId] = it }
+    }
+}
+
+private fun String.toSignalOrNull(): ParticipantSignal? = runCatching { ParticipantSignal.valueOf(this) }.getOrNull()
 
 data class BroadcastDTO(
     @DocumentId

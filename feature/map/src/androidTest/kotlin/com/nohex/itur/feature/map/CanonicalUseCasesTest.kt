@@ -362,6 +362,29 @@ class CanonicalUseCasesTest {
     }
 
     @Test
+    fun uc19_participantAttentionSignalIsClearedWhenLeaving() {
+        launch(TestFixtures.ONGOING_ACTIVITY_ID.url)
+        joinAsParticipant()
+        val participantId = users.anonymous.id
+
+        composeRule.onNodeWithTag("hail_organiser_fab").performClick()
+        composeRule.waitUntil {
+            activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)
+                ?.participantSignals
+                ?.get(participantId) == ParticipantSignal.NEEDS_HELP
+        }
+        composeRule.onNodeWithTag("stop_activity_fab").performClick()
+
+        waitForTag("join_activity_fab")
+        assertEquals(
+            null,
+            activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)
+                ?.participantSignals
+                ?.get(participantId),
+        )
+    }
+
+    @Test
     fun uc20_organizerActivityAutoResumesOnColdStart() {
         users.current = users.registered
         launch(readyTag = "show_qr_fab")

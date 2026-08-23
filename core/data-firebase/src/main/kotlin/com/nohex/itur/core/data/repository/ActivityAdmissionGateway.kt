@@ -8,6 +8,7 @@ package com.nohex.itur.core.data.repository
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.functions.FirebaseFunctionsException
 import com.nohex.itur.core.domain.id.IturActivityId
+import com.nohex.itur.core.model.ParticipantSignal
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
 
@@ -17,6 +18,11 @@ internal interface ActivityAdmissionGateway {
     suspend fun join(activityId: IturActivityId): DataResult<IturActivityId>
 
     suspend fun leave(activityId: IturActivityId): DataResult<IturActivityId>
+
+    suspend fun setParticipantSignal(
+        activityId: IturActivityId,
+        signal: ParticipantSignal?,
+    ): DataResult<IturActivityId>
 }
 
 internal class FirebaseFunctionsActivityAdmissionGateway(
@@ -31,12 +37,27 @@ internal class FirebaseFunctionsActivityAdmissionGateway(
     @Suppress("MaxLineLength")
     override suspend fun leave(activityId: IturActivityId): DataResult<IturActivityId> = call("leaveActivity", activityId)
 
-    @Suppress("TooGenericExceptionCaught")
+    override suspend fun setParticipantSignal(
+        activityId: IturActivityId,
+        signal: ParticipantSignal?,
+    ): DataResult<IturActivityId> = call(
+        "setParticipantSignal",
+        mapOf("activityId" to activityId.value, "signal" to signal?.name),
+    )
+
     private suspend fun call(
         functionName: String,
         activityId: IturActivityId?,
+    ): DataResult<IturActivityId> = call(
+        functionName,
+        activityId?.let { mapOf("activityId" to it.value) } ?: emptyMap<String, String>(),
+    )
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun call(
+        functionName: String,
+        request: Map<String, Any?>,
     ): DataResult<IturActivityId> = try {
-        val request = activityId?.let { mapOf("activityId" to it.value) } ?: emptyMap<String, String>()
         val response = functions.getHttpsCallable(functionName).call(request).await()
         val responseActivityId = (response.data as? Map<*, *>)?.get("activityId") as? String
         if (responseActivityId.isNullOrBlank()) {

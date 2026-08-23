@@ -68,9 +68,11 @@ private class RecordingAdmissionGateway : ActivityAdmissionGateway {
     var startResult: DataResult<IturActivityId> = DataResult.Error("start not configured")
     var joinResult: DataResult<IturActivityId> = DataResult.Error("join not configured")
     var leaveResult: DataResult<IturActivityId> = DataResult.Error("leave not configured")
+    var signalResult: DataResult<IturActivityId> = DataResult.Error("signal not configured")
     val startCalls = mutableListOf<IturActivityId?>()
     val joinCalls = mutableListOf<IturActivityId>()
     val leaveCalls = mutableListOf<IturActivityId>()
+    val signalCalls = mutableListOf<Pair<IturActivityId, ParticipantSignal?>>()
 
     override suspend fun start(activityId: IturActivityId?): DataResult<IturActivityId> {
         startCalls += activityId
@@ -85,6 +87,14 @@ private class RecordingAdmissionGateway : ActivityAdmissionGateway {
     override suspend fun leave(activityId: IturActivityId): DataResult<IturActivityId> {
         leaveCalls += activityId
         return leaveResult
+    }
+
+    override suspend fun setParticipantSignal(
+        activityId: IturActivityId,
+        signal: ParticipantSignal?,
+    ): DataResult<IturActivityId> {
+        signalCalls += activityId to signal
+        return signalResult
     }
 }
 
@@ -614,23 +624,16 @@ class FirebaseActivityRepositoryTest {
     // --- participant signals ---
 
     @Test
-    fun `GIVEN a current participant WHEN setting a signal THEN only their nested field is replaced`() = runBlocking {
+    fun `WHEN setting a signal THEN the trusted callable owns the authenticated write`() = runBlocking {
         val docRef = mockk<DocumentReference>()
         every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
-        val before = mockk<DocumentSnapshot> {
-            every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
-        }
-        val afterDto = ACTIVITY_DTO.copy(
-            participantSignals = mapOf(PARTICIPANT_ID.value to ParticipantSignal.DELAYED.name),
+        every { docRef.get() } returns successfulTask(
+            mockk {
+                every { exists() } returns true
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
+            },
         )
-        val after = mockk<DocumentSnapshot> {
-            every { toObject(IturActivityDTO::class.java) } returns afterDto
-        }
-        every { docRef.get() } returns successfulTask(before) andThen successfulTask(after)
-        val fieldPath = slot<FieldPath>()
-        every {
-            docRef.update(capture(fieldPath), any(), any(), any())
-        } returns successfulTask(null)
+        admissionGateway.signalResult = DataResult.Success(ACTIVITY_ID)
 
         val result = repository.participantSignalRepository.setParticipantSignal(
             ACTIVITY_ID,
@@ -639,148 +642,15 @@ class FirebaseActivityRepositoryTest {
         )
 
         assertIs<DataResult.Success<IturActivity>>(result)
-        assertEquals(ParticipantSignal.DELAYED, result.data.participantSignals[PARTICIPANT_ID])
-        assertEquals("participantSignals.${PARTICIPANT_ID.value}", fieldPath.captured.toString())
-        verify(exactly = 1) {
-            docRef.update(
-                any<FieldPath>(),
-                ParticipantSignal.DELAYED.name,
-                "attentionRequests",
-                match { it.javaClass.simpleName == "ArrayRemoveFieldValue" },
-            )
-        }
+        assertEquals(
+            listOf<Pair<IturActivityId, ParticipantSignal?>>(ACTIVITY_ID to ParticipantSignal.DELAYED),
+            admissionGateway.signalCalls,
+        )
     }
 
     @Test
-    fun `GIVEN the same explicit signal WHEN setting it again THEN no write occurs`() = runBlocking {
-        val docRef = mockk<DocumentReference>()
-        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
-        val snapshot = mockk<DocumentSnapshot> {
-            every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(
-                participantSignals = mapOf(PARTICIPANT_ID.value to ParticipantSignal.DELAYED.name),
-            )
-        }
-        every { docRef.get() } returns successfulTask(snapshot)
-
-        val result = repository.participantSignalRepository.setParticipantSignal(
-            ACTIVITY_ID,
-            PARTICIPANT_ID,
-            ParticipantSignal.DELAYED,
-        )
-
-        assertIs<DataResult.Success<IturActivity>>(result)
-        verify(exactly = 0) { docRef.update(any<FieldPath>(), any(), *anyVararg()) }
-    }
-
-    @Test
-    fun `GIVEN organiser nonmember or terminal activity WHEN setting a signal THEN each is rejected without a write`() = runBlocking {
-        val docRef = mockk<DocumentReference>()
-        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
-        val organizerSnapshot = mockk<DocumentSnapshot> {
-            every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
-        }
-        val terminalSnapshot = mockk<DocumentSnapshot> {
-            every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(status = "FINISHED")
-        }
-        every { docRef.get() } returns
-            successfulTask(organizerSnapshot) andThen
-            successfulTask(organizerSnapshot) andThen
-            successfulTask(terminalSnapshot)
-
-        assertIs<DataResult.Error>(
-            repository.participantSignalRepository.setParticipantSignal(
-                ACTIVITY_ID,
-                ORGANIZER_ID,
-                ParticipantSignal.NEEDS_HELP,
-            ),
-        )
-        assertIs<DataResult.Error>(
-            repository.participantSignalRepository.setParticipantSignal(
-                ACTIVITY_ID,
-                UserId("outsider"),
-                ParticipantSignal.DELAYED,
-            ),
-        )
-        assertIs<DataResult.Error>(
-            repository.participantSignalRepository.setParticipantSignal(
-                ACTIVITY_ID,
-                PARTICIPANT_ID,
-                ParticipantSignal.DELAYED,
-            ),
-        )
-        verify(exactly = 0) { docRef.update(any<FieldPath>(), any(), *anyVararg()) }
-    }
-
-    @Test
-    fun `GIVEN a legacy request WHEN clearing THEN nested and legacy fields are both removed`() = runBlocking {
-        val docRef = mockk<DocumentReference>()
-        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
-        val before = mockk<DocumentSnapshot> {
-            every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(
-                attentionRequests = listOf(PARTICIPANT_ID.value),
-            )
-        }
-        val after = mockk<DocumentSnapshot> {
-            every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
-        }
-        every { docRef.get() } returns successfulTask(before) andThen successfulTask(after)
-        every { docRef.update(any<FieldPath>(), any(), any(), any()) } returns successfulTask(null)
-
-        val result = repository.participantSignalRepository.clearParticipantSignal(
-            ACTIVITY_ID,
-            PARTICIPANT_ID,
-        )
-
-        assertIs<DataResult.Success<IturActivity>>(result)
-        assertTrue(result.data.participantSignals.isEmpty())
-        verify(exactly = 1) {
-            docRef.update(
-                any<FieldPath>(),
-                match { it.javaClass.simpleName == "DeleteFieldValue" },
-                "attentionRequests",
-                match { it.javaClass.simpleName == "ArrayRemoveFieldValue" },
-            )
-        }
-    }
-
-    @Test
-    fun `GIVEN legacy and explicit states WHEN reading THEN explicit wins and legacy remains compatible`() = runBlocking {
-        val otherParticipant = UserId("participant2")
-        val docRef = mockk<DocumentReference>()
-        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
-        val snapshot = mockk<DocumentSnapshot> {
-            every { exists() } returns true
-            every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(
-                participantIds = ACTIVITY_DTO.participantIds + otherParticipant.value,
-                participantSignals = mapOf(
-                    PARTICIPANT_ID.value to ParticipantSignal.DELAYED.name,
-                    "unknown-user" to "FUTURE_STATE",
-                    "former-participant" to ParticipantSignal.NEEDS_HELP.name,
-                ),
-                attentionRequests = listOf(PARTICIPANT_ID.value, otherParticipant.value),
-            )
-        }
-        every { docRef.get() } returns successfulTask(snapshot)
-
-        val result = repository.getActivity(ACTIVITY_ID)
-
-        assertIs<DataResult.Success<IturActivity>>(result)
-        assertEquals(ParticipantSignal.DELAYED, result.data.participantSignals[PARTICIPANT_ID])
-        assertEquals(ParticipantSignal.NEEDS_HELP, result.data.participantSignals[otherParticipant])
-        assertTrue(UserId("unknown-user") !in result.data.participantSignals)
-        assertTrue(UserId("former-participant") !in result.data.participantSignals)
-    }
-
-    @Test
-    fun `GIVEN Firestore write fails WHEN setting a signal THEN returns Error`() = runBlocking {
-        val docRef = mockk<DocumentReference>()
-        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
-        val snapshot = mockk<DocumentSnapshot> {
-            every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
-        }
-        every { docRef.get() } returns successfulTask(snapshot)
-        every { docRef.update(any<FieldPath>(), any(), any(), any()) } returns
-            failedTask(RuntimeException("denied"))
+    fun `GIVEN the backend rejects a signal WHEN setting it THEN no Firestore parent write is attempted`() = runBlocking {
+        admissionGateway.signalResult = DataResult.Error("Only a current participant may change their signal")
 
         val result = repository.participantSignalRepository.setParticipantSignal(
             ACTIVITY_ID,
@@ -789,7 +659,41 @@ class FirebaseActivityRepositoryTest {
         )
 
         assertIs<DataResult.Error>(result)
-        Unit
+        assertEquals(
+            listOf<Pair<IturActivityId, ParticipantSignal?>>(ACTIVITY_ID to ParticipantSignal.NEEDS_HELP),
+            admissionGateway.signalCalls,
+        )
+        verify(exactly = 0) { transaction.update(any<DocumentReference>(), any<FieldPath>(), any(), *anyVararg()) }
+    }
+
+    @Test
+    fun `GIVEN canonical and legacy signal states WHEN hydrating THEN canonical state wins and clear suppresses legacy`() = runBlocking {
+        val otherParticipant = UserId("participant2")
+        val docRef = mockk<DocumentReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { docRef.get() } returns successfulTask(
+            mockk {
+                every { exists() } returns true
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(
+                    participantIds = ACTIVITY_DTO.participantIds + otherParticipant.value,
+                    attentionRequests = listOf(PARTICIPANT_ID.value, otherParticipant.value),
+                )
+            },
+        )
+        val hydratedRepository = FirebaseActivityRepository(
+            firestore,
+            mockk<BackendHealthReporter>(relaxed = true),
+            transactionExecutor,
+            admissionGateway,
+        ) {
+            mapOf(PARTICIPANT_ID.value to ParticipantSignal.DELAYED.name, otherParticipant.value to null)
+        }
+
+        val result = hydratedRepository.getActivity(ACTIVITY_ID)
+
+        assertIs<DataResult.Success<IturActivity>>(result)
+        assertEquals(ParticipantSignal.DELAYED, result.data.participantSignals[PARTICIPANT_ID])
+        assertTrue(otherParticipant !in result.data.participantSignals)
     }
 
     // --- getBroadcastsSince ---

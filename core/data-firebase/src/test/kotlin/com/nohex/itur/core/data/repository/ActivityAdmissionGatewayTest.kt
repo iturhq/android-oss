@@ -11,6 +11,7 @@ import com.google.firebase.functions.FirebaseFunctionsException
 import com.google.firebase.functions.HttpsCallableReference
 import com.google.firebase.functions.HttpsCallableResult
 import com.nohex.itur.core.domain.id.IturActivityId
+import com.nohex.itur.core.model.ParticipantSignal
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -67,6 +68,51 @@ class ActivityAdmissionGatewayTest {
             )
 
         val result = gateway.leave(IturActivityId("Activity000000000001"))
+
+        assertEquals(IturActivityId("Activity000000000001"), assertIs<DataResult.Success<IturActivityId>>(result).data)
+    }
+
+    @Test
+    fun `WHEN setting a signal THEN the trusted callable receives no participant id`() = runBlocking {
+        every { functions.getHttpsCallable("setParticipantSignal") } returns callable
+        every {
+            callable.call(
+                mapOf(
+                    "activityId" to "Activity000000000001",
+                    "signal" to ParticipantSignal.DELAYED.name,
+                ),
+            )
+        } returns Tasks.forResult(
+            HttpsCallableResult::class.java
+                .getConstructor(Any::class.java)
+                .newInstance(mapOf("activityId" to "Activity000000000001")),
+        )
+
+        val result = gateway.setParticipantSignal(
+            IturActivityId("Activity000000000001"),
+            ParticipantSignal.DELAYED,
+        )
+
+        assertEquals(IturActivityId("Activity000000000001"), assertIs<DataResult.Success<IturActivityId>>(result).data)
+    }
+
+    @Test
+    fun `WHEN clearing a signal THEN the trusted callable sends an explicit null tombstone`() = runBlocking {
+        every { functions.getHttpsCallable("setParticipantSignal") } returns callable
+        every {
+            callable.call(
+                mapOf<String, Any?>(
+                    "activityId" to "Activity000000000001",
+                    "signal" to null,
+                ),
+            )
+        } returns Tasks.forResult(
+            HttpsCallableResult::class.java
+                .getConstructor(Any::class.java)
+                .newInstance(mapOf("activityId" to "Activity000000000001")),
+        )
+
+        val result = gateway.setParticipantSignal(IturActivityId("Activity000000000001"), null)
 
         assertEquals(IturActivityId("Activity000000000001"), assertIs<DataResult.Success<IturActivityId>>(result).data)
     }
