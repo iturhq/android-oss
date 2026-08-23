@@ -6,18 +6,11 @@
 package com.nohex.itur.feature.map.ui
 
 import android.Manifest
-import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
-import android.os.Build
-import android.util.Log
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -26,400 +19,44 @@ import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Snackbar
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalInspectionMode
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.nohex.itur.core.domain.id.IturActivityId
-import com.nohex.itur.core.domain.model.User
-import com.nohex.itur.core.ui.components.IturProgressIndicator
-import com.nohex.itur.feature.map.ui.components.help.HelpSheet
-import com.nohex.itur.feature.map.ui.components.map.IdleState
-import com.nohex.itur.feature.map.ui.components.map.MapLibreView
-import com.nohex.itur.feature.map.ui.components.map.NoMapView
-import com.nohex.itur.feature.map.ui.components.map.OngoingState
-import com.nohex.itur.feature.map.ui.components.qrdisplay.QRDisplaySheet
-import com.nohex.itur.feature.map.ui.components.qrscan.QRScanSheet
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import org.maplibre.android.maps.MapLibreMap
 
-/**
- * A composable with a map. The buttons displayed on the map are placed by the UI state.
- */
-@OptIn(ExperimentalMaterial3Api::class)
+/** A composable with a map and controls driven by [MapViewModel]. */
 @Composable
+@Suppress("UNUSED_PARAMETER")
 fun MapScreen(
     modifier: Modifier = Modifier,
     viewModel: MapViewModel = hiltViewModel(),
     locationPermissionCheck: (Context) -> Boolean = ::hasFineLocationPermission,
     locationPermissionRequest: (((Boolean) -> Unit) -> Unit)? = null,
     cameraPermissionRequest: (((Boolean) -> Unit) -> Unit)? = null,
-    qrScanSheet: @Composable (
-        onDismissRequest: () -> Unit,
-        onScanSuccess: (String) -> Unit,
-    ) -> Unit = { onDismissRequest, onScanSuccess ->
-        QRScanSheet(
-            onDismissRequest = onDismissRequest,
-            onScanSuccess = onScanSuccess,
-        )
-    },
+    qrScanSheet: (
+        @Composable (
+            onDismissRequest: () -> Unit,
+            onScanSuccess: (String) -> Unit,
+        ) -> Unit
+    )? = null,
+    openGlEsSupportCheck: (Context) -> OpenGlEsSupport = ::checkOpenGlEsSupport,
+    qrCustomization: QrCustomization = QrCustomization(),
 ) {
-    val context = LocalContext.current
-
-    val uiState by viewModel.uiState.collectAsState()
-    val backendAvailability by viewModel.backendAvailability.collectAsState()
-    val lifecycleOwner = LocalLifecycleOwner.current
-    // The current user.
-    val currentUser by viewModel.currentUser.collectAsState()
-    // The identifier of the activity displayed on the map, when there is one.
-    val ongoingActivityId by viewModel.ongoingActivityId.collectAsState()
-    // The identifier of the organiser of the activity displayed on the map, when there is one.
-    val organizerId by viewModel.organizerId.collectAsState()
-    // A reference to the MapLibre map.
-    var mapLibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
-    // The positions of the participants.
-    val participantLocations by viewModel.participantLocations.collectAsState()
-    // The last location of the device.
-    val lastLocation by viewModel.lastLocation.observeAsState()
-    // The most recent operator broadcast, shown as a snackbar alongside the system notification.
-    val latestBroadcast by viewModel.latestBroadcast.collectAsState()
-    // Whether the QR sheet is showing.
-    var showQRDisplaySheet by remember { mutableStateOf(false) }
-    var showQRScanSheet by remember { mutableStateOf(false) }
-    var showHelpSheet by remember { mutableStateOf(false) }
-    var localMessage by remember { mutableStateOf<String?>(null) }
-    var locationPermissionGranted by remember {
-        mutableStateOf(locationPermissionCheck(context))
-    }
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    // Show a snackbar when any state carries a user-facing message.
-    val displayMessage = when (val state = uiState) {
-        is MapUiState.Idle -> state.message
-        is MapUiState.Error -> state.message
-        else -> localMessage
-    } ?: localMessage
-
-    DisposableEffect(lifecycleOwner, viewModel) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_START -> viewModel.startBackendMonitoring()
-                Lifecycle.Event.ON_RESUME -> {
-                    val granted = locationPermissionCheck(context)
-                    if (granted != locationPermissionGranted) {
-                        locationPermissionGranted = granted
-                        viewModel.onLocationPermissionChanged(granted, context)
-                    }
-                }
-                Lifecycle.Event.ON_STOP -> viewModel.stopBackendMonitoring()
-                else -> Unit
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-            viewModel.startBackendMonitoring()
-        }
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            viewModel.stopBackendMonitoring()
-        }
-    }
-
-    // Availability is independent of the map state, so the operation underneath is preserved.
-    if (backendAvailability.failingServices.isNotEmpty()) {
-        val activity = LocalContext.current as Activity
-        BackendUnavailableDialog(
-            failingServiceNames = backendAvailability.failingServices.map { it.displayName },
-            countdown = backendAvailability.retryCountdown,
-            onRetryNow = viewModel::retryNow,
-            onExit = {
-                viewModel.stopBackendMonitoring()
-                activity.finish()
-            },
-        )
-    }
-
-    // Show a dialog when an activity cannot be resumed.
-    if (uiState is MapUiState.RecoverableError) {
-        val error = uiState as MapUiState.RecoverableError
-        RecoverableErrorDialog(
-            message = error.message,
-            onRetry = error.onRetry,
-            onCancel = error.onCancel,
-        )
-    }
-    LaunchedEffect(displayMessage) {
-        displayMessage?.let {
-            snackbarHostState.showSnackbar(it)
-            if (localMessage == it) localMessage = null
-        }
-    }
-    LaunchedEffect(latestBroadcast) {
-        latestBroadcast?.let { snackbarHostState.showSnackbar("Alert: ${it.message}") }
-    }
-
-    // Permissions.
-
-    // Request camera permission, if needed.
-    var cameraPermissionGranted by remember { mutableStateOf(false) }
-    val onCameraPermissionResult: (Boolean) -> Unit = { isGranted ->
-        cameraPermissionGranted = isGranted
-        if (!isGranted) {
-            showQRScanSheet = false
-            localMessage = "Camera access is required to scan an activity QR code"
-        }
-    }
-    val cameraPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-        onResult = onCameraPermissionResult,
+    MapScreenCoordinator(
+        modifier = modifier,
+        viewModel = viewModel,
+        locationPermissionCheck = locationPermissionCheck,
+        openGlEsSupportCheck = openGlEsSupportCheck,
+        qrCustomization = qrCustomization.copy(
+            scanSheet = qrScanSheet ?: qrCustomization.scanSheet,
+        ),
     )
-    // Request location permissions, if needed.
-    val locationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { isGranted ->
-        locationPermissionGranted = isGranted
-        viewModel.onLocationPermissionChanged(isGranted, context)
-    }
-
-    val requestLocationPermission = {
-        locationPermissionRequest?.invoke { isGranted ->
-            locationPermissionGranted = isGranted
-            viewModel.onLocationPermissionChanged(isGranted, context)
-        } ?: locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-    }
-
-    // Request location permission when entering the map screen.
-    LaunchedEffect(Unit) {
-        if (!locationPermissionGranted) {
-            requestLocationPermission()
-        }
-    }
-
-    // Request notification permission (Android 13+) so operator broadcasts (UC-ACTIVITY-007)
-    // can be delivered as system notifications, not just the in-app banner above.
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) {}
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED
-        ) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
-
-    // Change the view when the ongoing activity changes.
-    LaunchedEffect(ongoingActivityId) {
-        ongoingActivityId?.let {
-            viewModel.triggerOngoingState(it, context)
-        } ?: run {
-            if (uiState !is MapUiState.Idle) {
-                viewModel.triggerIdleState()
-            }
-        }
-    }
-
-    // Poll for operator broadcasts (UC-ACTIVITY-007) while an activity is ongoing. Tied to
-    // composition rather than the ViewModel so it naturally stops when the screen leaves or
-    // ongoingActivityId changes.
-    LaunchedEffect(ongoingActivityId) {
-        if (ongoingActivityId != null) {
-            while (isActive) {
-                viewModel.pollBroadcastsOnce()
-                delay(BROADCAST_POLL_INTERVAL_MS)
-            }
-        }
-    }
-
-    if (showQRDisplaySheet) {
-        ongoingActivityId?.let {
-            QRDisplaySheet(
-                activityId = it,
-                onDismissRequest = { showQRDisplaySheet = false },
-            )
-        }
-    }
-
-    if (showQRScanSheet) {
-        // Request location permission when display the QR scan sheet.
-        LaunchedEffect(Unit) {
-            val hasCameraPermission = ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.CAMERA,
-            ) == PackageManager.PERMISSION_GRANTED
-
-            if (hasCameraPermission) {
-                cameraPermissionGranted = true
-            } else {
-                // API 29 test hosts return camera denial without displaying a dialog, so tests
-                // inject that system result while UC-01/02 cover real permission-dialog wiring.
-                cameraPermissionRequest?.invoke(onCameraPermissionResult)
-                    ?: cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-            }
-        }
-
-        if (cameraPermissionGranted) {
-            qrScanSheet(
-                { showQRScanSheet = false },
-                { code ->
-                    IturActivityId.from(code)?.let {
-                        viewModel.joinActivity(activityId = it, context = context)
-                        showQRScanSheet = false
-                    }
-                },
-            )
-        }
-    }
-
-    if (showHelpSheet) {
-        (uiState as? MapUiState.Ongoing)?.let { ongoingUiState ->
-            HelpSheet(
-                onDismissRequest = { showHelpSheet = false },
-                isOrganizer = ongoingUiState.organizer.id == currentUser?.id,
-            )
-        }
-    }
-
-    // The scaffold provides a snackbar host; the box inside holds the map and state overlays.
-    Scaffold(
-        snackbarHost = {
-            SnackbarHost(snackbarHostState) { data ->
-                Snackbar(snackbarData = data)
-            }
-        },
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .padding(paddingValues)
-                .fillMaxSize()
-                .testTag("map_screen"),
-        ) {
-            // The map is the persistent application surface. Permission controls only
-            // self-location; it never removes the basemap or other participants' markers.
-            if (LocalInspectionMode.current) {
-                NoMapView(modifier = modifier.testTag("persistent_map_surface"))
-            } else {
-                MapLibreView(
-                    styleUrl = viewModel.mapStyleConfig.styleUrl,
-                    isActivityOngoing = ongoingActivityId != null,
-                    locationPermissionGranted = locationPermissionGranted,
-                    organizerId = organizerId,
-                    currentUserId = currentUser?.id,
-                    participantLocations = participantLocations,
-                    modifier = modifier
-                        .fillMaxSize()
-                        .testTag("persistent_map_surface"),
-                    onMapReady = { map ->
-                        mapLibreMap = map
-                    },
-                )
-            }
-
-            when (uiState) {
-                is MapUiState.Loading -> IturProgressIndicator(
-                    label = "Preparing activity...",
-                    modifier = modifier.testTag("map_state_loading"),
-                )
-                is MapUiState.Error -> IdleState(
-                    onStartRequested = { viewModel.startActivity(context) },
-                    onSignInRequested = { viewModel.signIn(context) },
-                    onSignOutRequested = { viewModel.signOut() },
-                    onQRRequested = { showQRScanSheet = true },
-                    modifier = modifier.testTag("map_state_error"),
-                    isSignedIn = currentUser is User.RegisteredUser,
-                )
-                is MapUiState.Idle -> IdleState(
-                    onStartRequested = { viewModel.startActivity(context) },
-                    onSignInRequested = { viewModel.signIn(context) },
-                    onSignOutRequested = { viewModel.signOut() },
-                    onQRRequested = { showQRScanSheet = true },
-                    modifier = modifier.testTag("map_state_idle"),
-                    isSignedIn = currentUser is User.RegisteredUser,
-                )
-                is MapUiState.RecoverableError -> IdleState(
-                    onStartRequested = { viewModel.startActivity(context) },
-                    onSignInRequested = { viewModel.signIn(context) },
-                    onSignOutRequested = { viewModel.signOut() },
-                    onQRRequested = { showQRScanSheet = true },
-                    modifier = modifier.testTag("map_state_recoverable_error"),
-                    isSignedIn = currentUser is User.RegisteredUser,
-                )
-
-                is MapUiState.Ongoing -> {
-                    val ongoingUiState = (uiState as MapUiState.Ongoing)
-                    OngoingState(
-                        activity = ongoingUiState.activity,
-                        organizer = ongoingUiState.organizer,
-                        participantIds = ongoingUiState.participantIds,
-                        locations = ongoingUiState.locations,
-                        onStopRequested = viewModel::leaveActivity,
-                        onQRRequested = { showQRDisplaySheet = true },
-                        onTrackUserRequested = {
-                            Log.d("MapScreen", "Requested zoom on user")
-                            mapLibreMap?.let { map ->
-                                lastLocation?.let {
-                                    zoomOnUser(
-                                        map = map,
-                                        location = it,
-                                    )
-                                }
-                            }
-                        },
-                        onTrackGroupRequested = {
-                            Log.d("MapScreen", "Requested zoom on group")
-                            mapLibreMap?.let {
-                                zoomOnGroup(
-                                    map = it,
-                                    participantLocations = participantLocations,
-                                    currentLocation = lastLocation,
-                                )
-                            }
-                        },
-                        onAttentionRequest = viewModel::requestAttention,
-                        onHelpRequested = { showHelpSheet = true },
-                        isOrganizer = ongoingUiState.organizer.id == currentUser?.id,
-                        selfLocationAvailable = locationPermissionGranted,
-                        modifier = modifier.testTag("map_state_ongoing"),
-                    )
-                }
-            }
-
-            if (!locationPermissionGranted) {
-                LocationPermissionNotice(
-                    onRequestPermission = requestLocationPermission,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 72.dp),
-                )
-            }
-        }
-    }
 }
 
 private fun hasFineLocationPermission(context: Context): Boolean = ContextCompat.checkSelfPermission(
@@ -427,100 +64,19 @@ private fun hasFineLocationPermission(context: Context): Boolean = ContextCompat
     Manifest.permission.ACCESS_FINE_LOCATION,
 ) == PackageManager.PERMISSION_GRANTED
 
-@Composable
-private fun LocationPermissionNotice(
-    onRequestPermission: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier
-            .padding(16.dp)
-            .testTag("location_permission_notice"),
-        shape = MaterialTheme.shapes.medium,
-        tonalElevation = 4.dp,
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Location access is off. The map and group locations remain " +
-                    "available, but your location is not shared.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            TextButton(
-                onClick = onRequestPermission,
-                modifier = Modifier.align(Alignment.End),
-            ) {
-                Text("Enable location")
-            }
-        }
-    }
-}
-
-/**
- * A non-dismissible overlay shown whenever one or more required services are unavailable.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun BackendUnavailableDialog(
-    failingServiceNames: List<String>,
-    countdown: Int?,
-    onRetryNow: () -> Unit,
-    onExit: () -> Unit,
-) {
-    // Empty lambda: tapping outside or pressing back does nothing.
-    BasicAlertDialog(onDismissRequest = {}) {
-        Surface(
-            modifier = Modifier
-                .wrapContentWidth()
-                .wrapContentHeight()
-                .testTag("backend_unavailable_overlay"),
-            shape = MaterialTheme.shapes.large,
-            tonalElevation = AlertDialogDefaults.TonalElevation,
-        ) {
-            Column(modifier = Modifier.padding(24.dp)) {
-                Text(
-                    text = "Service unavailable",
-                    style = MaterialTheme.typography.headlineSmall,
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(text = "Failed connection to ${failingServiceNames.joinToString()}.")
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = countdown?.let { "Retrying in ${it}s\u2026" } ?: "Checking\u2026",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-                Row(modifier = Modifier.align(Alignment.End)) {
-                    TextButton(onClick = onExit) { Text("Exit") }
-                    TextButton(onClick = onRetryNow) { Text("Retry now") }
-                }
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModalAlert(text: String, onDismissRequest: () -> Unit) {
-    BasicAlertDialog(
-        onDismissRequest = onDismissRequest,
-    ) {
+    BasicAlertDialog(onDismissRequest = onDismissRequest) {
         Surface(
-            modifier = Modifier
-                .wrapContentWidth()
-                .wrapContentHeight(),
+            modifier = Modifier.wrapContentWidth().wrapContentHeight(),
             shape = MaterialTheme.shapes.large,
             tonalElevation = AlertDialogDefaults.TonalElevation,
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = text,
-                )
+                Text(text = text)
                 Spacer(modifier = Modifier.height(24.dp))
-                TextButton(
-                    onClick = onDismissRequest,
-                    modifier = Modifier.align(Alignment.End),
-                ) {
+                TextButton(onClick = onDismissRequest, modifier = Modifier.align(Alignment.End)) {
                     Text("Dismiss")
                 }
             }
@@ -533,10 +89,7 @@ fun ModalAlert(text: String, onDismissRequest: () -> Unit) {
 fun RecoverableErrorDialog(message: String, onRetry: () -> Unit, onCancel: () -> Unit) {
     BasicAlertDialog(onDismissRequest = onCancel) {
         Surface(
-            modifier = Modifier
-                .wrapContentWidth()
-                .wrapContentHeight()
-                .testTag("recoverable_error_overlay"),
+            modifier = Modifier.wrapContentWidth().wrapContentHeight(),
             shape = MaterialTheme.shapes.large,
             tonalElevation = AlertDialogDefaults.TonalElevation,
         ) {
@@ -552,10 +105,43 @@ fun RecoverableErrorDialog(message: String, onRetry: () -> Unit, onCancel: () ->
     }
 }
 
+/** A non-dismissible overlay shown while one or more required services are unavailable. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BackendUnavailableDialog(
+    failingServiceNames: List<String>,
+    countdown: Int?,
+    onRetryNow: () -> Unit,
+    onExit: () -> Unit,
+) {
+    BasicAlertDialog(onDismissRequest = {}) {
+        Surface(
+            modifier = Modifier.wrapContentWidth().wrapContentHeight(),
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = AlertDialogDefaults.TonalElevation,
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text("Service unavailable", style = MaterialTheme.typography.headlineSmall)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Failed connection to ${failingServiceNames.joinToString()}.")
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    countdown?.let { "Retrying in ${it}s…" } ?: "Checking…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(modifier = Modifier.align(Alignment.End)) {
+                    TextButton(onClick = onExit) { Text("Exit") }
+                    TextButton(onClick = onRetryNow) { Text("Retry now") }
+                }
+            }
+        }
+    }
+}
+
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun PreviewModalAlert() {
     ModalAlert("This is a modal alert.") {}
 }
-
-private const val BROADCAST_POLL_INTERVAL_MS = 15_000L

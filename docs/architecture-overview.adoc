@@ -69,7 +69,7 @@ core_auth: "core:auth" {
 core_model: "core:model" { IturActivity; User; Location; ParticipantLocation }
 core_domain: "core:domain" { UserId; IturActivityId }
 core_datastore: "core:datastore" { IturPreferencesDataStore }
-core_location: "core:location" { FusedLocationProviderClient }
+core_location: "core:location" { LocationClient; GmsLocationClient }
 core_ui: "core:ui" { IturTheme; IturIcons; IturButton }
 
 app.MainActivity -> app.IturNavHost
@@ -84,7 +84,8 @@ feature_map.MapScreen -> feature_map.QRDisplaySheet
 feature_map.MapViewModel -> core_data.ActivityRepository
 feature_map.MapViewModel -> core_data.UserRepository
 feature_map.MapViewModel -> core_data.LocationRepository
-feature_map.MapViewModel -> core_location.FusedLocationProviderClient
+feature_map.MapViewModel -> core_location.LocationClient
+core_location.GmsLocationClient -> core_location.LocationClient: {style.stroke-dash: 4}
 
 core_data.prod.FirebaseActivityRepository -> core_data.ActivityRepository: {style.stroke-dash: 4}
 core_data.demo.FakeActivityRepository -> core_data.ActivityRepository: {style.stroke-dash: 4}
@@ -125,7 +126,7 @@ core_data.demo.FakeLocationRepository -> core_data.LocationRepository: {style.st
 | Wire protobuf schema (`itur_preferences.proto`)
 
 | `core:location`
-| Hilt module providing `FusedLocationProviderClient`
+| GMS-free `LocationClient` contract plus the sole Play Services adapter, `GmsLocationClient`
 
 | `core:ui`
 | Shared Compose theme (Material3), icon set, reusable components (`IturButton`, `IturProgressIndicator`)
@@ -176,7 +177,7 @@ fun NavGraphBuilder.mapScreen() {
 | `core/auth/src/prod/di/` — provides `FirebaseAuth`
 
 | `LocationModule`
-| `core/location/di/` — provides `FusedLocationProviderClient`
+| `core/location/di/` — binds the GMS-backed `LocationClient`
 
 | `DataStoreModule`
 | `core/datastore/di/` — provides the proto `DataStore` singleton

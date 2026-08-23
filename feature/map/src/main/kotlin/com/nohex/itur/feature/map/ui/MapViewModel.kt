@@ -9,23 +9,21 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
-import android.os.Looper
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY
 import com.nohex.itur.core.data.health.BackendHealthCheck
+import com.nohex.itur.core.data.health.BackendHealthStatus
 import com.nohex.itur.core.data.health.BackendService
 import com.nohex.itur.core.data.repository.ActivityFilter
 import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.data.repository.DataResult
 import com.nohex.itur.core.data.repository.LocationRepository
+import com.nohex.itur.core.data.repository.SignInFailureReason
+import com.nohex.itur.core.data.repository.SignInResult
 import com.nohex.itur.core.data.repository.UserRepository
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
@@ -38,22 +36,20 @@ import com.nohex.itur.core.model.IturActivityStatus
 import com.nohex.itur.core.model.ParticipantLocation
 import com.nohex.itur.feature.map.config.LocationUpdateConfig
 import com.nohex.itur.feature.map.config.MapStyleConfig
+import com.nohex.itur.feature.map.health.BackendHealthRecoveryCoordinator
+import com.nohex.itur.feature.map.health.MapStyleRendererHealthReporter
 import com.nohex.itur.feature.map.notifications.BroadcastNotifier
 import com.nohex.itur.feature.map.ui.MapUiState.Ongoing
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
 import java.util.Date
 import javax.inject.Inject
 import com.nohex.itur.core.model.Location as IturLocation
@@ -68,7 +64,11 @@ constructor(
     private val broadcastNotifier: BroadcastNotifier,
     val mapStyleConfig: MapStyleConfig,
     private val locationUpdateConfig: LocationUpdateConfig,
-    private val backendHealthChecks: Set<@JvmSuppressWildcards BackendHealthCheck>,
+    backendHealthChecks: Set<@JvmSuppressWildcards BackendHealthCheck>,
+    private val backendHealthCoordinator: BackendHealthRecoveryCoordinator =
+        BackendHealthRecoveryCoordinator(backendHealthChecks),
+    private val mapStyleRendererHealthReporter: MapStyleRendererHealthReporter =
+        MapStyleRendererHealthReporter(dagger.Lazy { backendHealthCoordinator }),
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<MapUiState>(MapUiState.Idle())
     val uiState = _uiState.asStateFlow()
@@ -76,6 +76,9 @@ constructor(
     // The current user.
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser = _currentUser.asStateFlow()
+
+    private val _signInPresentation = MutableStateFlow<SignInFailurePresentation?>(null)
+    val signInPresentation = _signInPresentation.asStateFlow()
 
     // The current activity.
     private val _ongoingActivityId = MutableStateFlow<IturActivityId?>(null)
@@ -97,13 +100,14 @@ constructor(
 
     private val _backendAvailability = MutableStateFlow(BackendAvailabilityUiState())
     val backendAvailability = _backendAvailability.asStateFlow()
-    private var backendRetryAttempt = 0
-    private var backendRetryJob: Job? = null
-    private var backendCheckJob: Job? = null
-    private var backendCadenceJob: Job? = null
-    private var backendMonitoringActive = false
+    private var participantLocationMonitoringJob: Job? = null
     private var initialRestorePending = true
+    private var initialRestoreRunning = false
     private var locationUpdatesActive = false
+
+    fun reportMapStyleLoadFailed() = mapStyleRendererHealthReporter.styleLoadFailed()
+
+    fun reportMapStyleLoadSucceeded() = mapStyleRendererHealthReporter.styleLoadSucceeded()
 
     // The most recent operator broadcast (UC-ACTIVITY-007), for an in-app banner alongside
     // the system notification posted by [broadcastNotifier]. Polling itself is driven by the UI
@@ -115,7 +119,43 @@ constructor(
     private var lastBroadcastSeen: Date? = null
 
     init {
-        requestHealthCheck()
+        viewModelScope.launch {
+            combine(
+                backendHealthCoordinator.services,
+                backendHealthCoordinator.retryCountdown,
+                backendHealthCoordinator.checkGeneration,
+            ) { services, countdown, generation ->
+                BackendAvailabilityUiState(
+                    failingServices = if (generation == 0L) {
+                        emptyList()
+                    } else {
+                        services
+                            .filter { it.status != BackendHealthStatus.WORKING }
+                            .map { BackendService(it.id, it.name) }
+                    },
+                    retryCountdown = countdown,
+                )
+            }.collect { availability ->
+                _backendAvailability.value = availability
+            }
+        }
+        viewModelScope.launch {
+            backendHealthCoordinator.checkGeneration.collect { generation ->
+                if (
+                    generation > 0L &&
+                    initialRestorePending &&
+                    !initialRestoreRunning
+                ) {
+                    initialRestoreRunning = true
+                    try {
+                        restoreInitialState()
+                    } finally {
+                        initialRestoreRunning = false
+                    }
+                }
+            }
+        }
+        backendHealthCoordinator.checkOnce(viewModelScope)
     }
 
     /**
@@ -160,143 +200,53 @@ constructor(
      * Starts lifecycle-aware periodic monitoring. The Compose screen calls this on `ON_START`.
      */
     fun startBackendMonitoring() {
-        backendMonitoringActive = true
-        if (initialRestorePending) {
-            requestHealthCheck()
-        } else if (_backendAvailability.value.failingServices.isEmpty()) {
-            scheduleNextCadenceCheck()
-        } else {
-            scheduleBackendRetry()
-        }
+        backendHealthCoordinator.start(viewModelScope)
     }
 
     /**
      * Stops cadence, retries, and in-flight probes while the screen is inactive or exiting.
      */
     fun stopBackendMonitoring() {
-        backendMonitoringActive = false
-        backendCadenceJob?.cancel()
-        backendRetryJob?.cancel()
-        backendCheckJob?.cancel()
-    }
-
-    private fun scheduleNextCadenceCheck() {
-        backendCadenceJob?.cancel()
-        if (!backendMonitoringActive) return
-        backendCadenceJob = viewModelScope.launch {
-            delay(BACKEND_MONITOR_INTERVAL_MILLIS)
-            performHealthCheck()
-        }
-    }
-
-    private fun requestHealthCheck(resetBackoff: Boolean = false) {
-        if (resetBackoff) backendRetryAttempt = 0
-        backendRetryJob?.cancel()
-        backendCadenceJob?.cancel()
-        backendCheckJob?.cancel()
-        backendCheckJob = viewModelScope.launch {
-            performHealthCheck()
-        }
-    }
-
-    private suspend fun performHealthCheck() {
-        val failingServices = coroutineScope {
-            backendHealthChecks.map { check ->
-                async {
-                    try {
-                        withTimeout(BACKEND_PROBE_TIMEOUT_MILLIS) { check.probe() }
-                        null
-                    } catch (e: TimeoutCancellationException) {
-                        Log.w(
-                            "MapViewModel",
-                            "Backend probe timed out for ${check.service.id}",
-                            e,
-                        )
-                        check.service
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Log.w(
-                            "MapViewModel",
-                            "Backend probe failed for ${check.service.id}: ${e.message}",
-                            e,
-                        )
-                        check.service
-                    }
-                }
-            }.awaitAll().filterNotNull().sortedBy { it.id }
-        }
-
-        if (failingServices.isEmpty()) {
-            backendRetryJob?.cancel()
-            backendRetryAttempt = 0
-            _backendAvailability.value = BackendAvailabilityUiState()
-            if (initialRestorePending) restoreInitialState()
-            if (_backendAvailability.value.failingServices.isEmpty()) {
-                scheduleNextCadenceCheck()
-            }
-        } else {
-            _backendAvailability.value = BackendAvailabilityUiState(failingServices)
-            scheduleBackendRetry()
-        }
+        backendHealthCoordinator.stop()
     }
 
     /**
-     * Starts a countdown and then probes every service, preserving bounded exponential backoff.
+     * Refreshes participant markers independently of this device's own GPS callback while the
+     * map screen is visible. The optional interval keeps the cadence deterministic in tests.
      */
-    private fun scheduleBackendRetry() {
-        backendRetryJob?.cancel()
-        val failingServices = _backendAvailability.value.failingServices
-        if (failingServices.isEmpty() || !backendMonitoringActive) return
-        val delaySeconds =
-            RETRY_DELAYS_SECONDS.getOrElse(backendRetryAttempt) { RETRY_DELAYS_SECONDS.last() }
-        backendRetryJob = viewModelScope.launch {
-            for (remaining in delaySeconds downTo 1) {
-                _backendAvailability.value = BackendAvailabilityUiState(
-                    failingServices = _backendAvailability.value.failingServices,
-                    retryCountdown = remaining,
-                )
-                delay(1_000L)
+    fun startParticipantLocationMonitoring(
+        refreshIntervalMillis: Long = PARTICIPANT_LOCATION_REFRESH_INTERVAL_MILLIS,
+    ) {
+        if (participantLocationMonitoringJob?.isActive == true) return
+        participantLocationMonitoringJob = viewModelScope.launch {
+            while (true) {
+                delay(refreshIntervalMillis)
+                refreshParticipantLocations()
             }
-            backendRetryAttempt++
-            // The retry job is now the caller of performHealthCheck. Clear the field so a
-            // success or partial-failure transition does not cancel its own coroutine before
-            // restoration/probe work finishes.
-            backendRetryJob = null
-            performHealthCheck()
         }
+    }
+
+    /** Stops participant-marker polling while the map screen is not visible. */
+    fun stopParticipantLocationMonitoring() {
+        participantLocationMonitoringJob?.cancel()
+        participantLocationMonitoringJob = null
     }
 
     /**
      * Cancels the pending countdown and probes every service immediately.
      */
     fun retryNow() {
-        requestHealthCheck(resetBackoff = true)
+        backendHealthCoordinator.retryNow(viewModelScope)
     }
 
     private fun reportBackendFailure(
         cause: Throwable,
         assumeAllServices: Boolean = false,
-    ): Boolean {
-        val recognized = backendHealthChecks.filter { it.recognizes(cause) }
-        val failedChecks = when {
-            recognized.isNotEmpty() -> recognized
-            assumeAllServices -> backendHealthChecks.toList()
-            else -> {
-                requestHealthCheck()
-                return false
-            }
-        }
-        val failingById = _backendAvailability.value.failingServices
-            .associateBy { it.id }
-            .toMutableMap()
-        failedChecks.forEach { failingById[it.service.id] = it.service }
-        _backendAvailability.value = BackendAvailabilityUiState(
-            failingServices = failingById.values.sortedBy { it.id },
-        )
-        scheduleBackendRetry()
-        return failedChecks.isNotEmpty()
-    }
+    ): Boolean = backendHealthCoordinator.reportFailure(
+        cause,
+        assumeAllServices,
+        fallbackScope = viewModelScope,
+    )
 
     /**
      * The current user starts an activity, signing in first if they are anonymous.
@@ -308,22 +258,40 @@ constructor(
             try {
                 // Organisers must be signed in; trigger sign-in automatically if needed.
                 if (_currentUser.value !is User.RegisteredUser) {
-                    _currentUser.value = userRepository.signIn(context)
+                    val signedIn = performSignIn(context) { startActivity(context) }
+                    if (!signedIn) {
+                        _uiState.value = previousState
+                        return@launch
+                    }
                 }
                 val organizer = requireNotNull(_currentUser.value)
+
+                // MEMB-4B18/MEMB-7A05: starting a second activity while already an active member
+                // of one is rejected server-side; check first so the message is specific rather
+                // than a generic write failure.
+                if (isAlreadyActiveElsewhere(organizer.id, targetActivityId = null)) return@launch
+
                 val result = activityRepository.createActivity(organizerId = organizer.id)
                 when (result) {
                     is DataResult.Success -> triggerOngoingState(result.data, context)
                     is DataResult.Error -> {
-                        requestHealthCheck()
-                        _uiState.value = MapUiState.Error(result.message)
+                        if (!isAlreadyActiveElsewhere(organizer.id, targetActivityId = null)) {
+                            backendHealthCoordinator.recheckNow(viewModelScope)
+                            _uiState.value = MapUiState.Error(result.message)
+                        }
                     }
                     is DataResult.NotFound ->
                         _uiState.value = MapUiState.Error("Activity ${result.id} not found")
                 }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
             } catch (e: Exception) {
                 val message = e.message ?: "Failed to start an activity"
                 Log.e("MapViewModel", message, e)
+                val organizerId = (_currentUser.value as? User.RegisteredUser)?.id
+                if (organizerId != null && isAlreadyActiveElsewhere(organizerId, targetActivityId = null)) {
+                    return@launch
+                }
                 _uiState.value = if (reportBackendFailure(e)) {
                     previousState
                 } else {
@@ -334,17 +302,59 @@ constructor(
     }
 
     /**
+     * MEMB-4B18/MEMB-7A05: true (and, as a side effect, shows the "already in an activity"
+     * message) if [userId] is an active member of an `ONGOING` activity other than
+     * [targetActivityId] (`null` when starting a brand-new one, so any active membership blocks
+     * it). Used both pre-emptively, before attempting a write the backend would reject anyway,
+     * and after a write failure, to recognise that specific rejection (backend-agnostic --
+     * re-checks the same repository call rather than inspecting a Firebase-specific exception
+     * type) instead of showing a generic error.
+     */
+    private suspend fun isAlreadyActiveElsewhere(userId: UserId, targetActivityId: IturActivityId?): Boolean {
+        val activeElsewhere = when (val result = activityRepository.getActiveActivityId(userId)) {
+            is DataResult.Success -> result.data != null && result.data != targetActivityId
+            else -> false
+        }
+        if (activeElsewhere) {
+            triggerIdleState("You're already in an activity -- leave it first")
+        }
+        return activeElsewhere
+    }
+
+    /**
      * Explicitly signs in via Google.
      */
     fun signIn(context: Context) {
         viewModelScope.launch {
-            try {
-                _currentUser.value = userRepository.signIn(context)
-            } catch (e: Exception) {
-                val message = e.message ?: "Sign-in failed"
-                Log.e("MapViewModel", message, e)
-                if (!reportBackendFailure(e)) _uiState.value = MapUiState.Error(message)
-            }
+            performSignIn(context) { signIn(context) }
+        }
+    }
+
+    private suspend fun performSignIn(
+        context: Context,
+        retry: () -> Unit,
+    ): Boolean = when (val result = userRepository.signIn(context)) {
+        is SignInResult.Success -> {
+            _currentUser.value = result.user
+            _signInPresentation.value = null
+            true
+        }
+
+        SignInResult.Cancelled -> {
+            _signInPresentation.value = null
+            false
+        }
+
+        is SignInResult.Failure -> {
+            _signInPresentation.value = SignInFailurePresentation(
+                reason = result.reason,
+                onRetry = {
+                    _signInPresentation.value = null
+                    retry()
+                },
+                onDismiss = { _signInPresentation.value = null },
+            )
+            false
         }
     }
 
@@ -372,24 +382,37 @@ constructor(
             val previousState = _uiState.value
             _uiState.value = MapUiState.Loading
             try {
-                currentUser.value?.let {
-                    // Join the activity.
-                    val result = activityRepository.addParticipant(activityId, it.id)
-                    // Change the UI state.
-                    when (result) {
-                        is DataResult.Success -> triggerOngoingState(result.data, context)
-                        is DataResult.Error -> {
-                            requestHealthCheck()
+                val user = currentUser.value ?: userRepository.getCurrentUser().also {
+                    _currentUser.value = it
+                }
+
+                // MEMB-4B18/MEMB-7A05: joining a second, different ONGOING activity is rejected
+                // server-side; check first for a specific message. Already being a member of
+                // *this* activity is not a conflict.
+                if (isAlreadyActiveElsewhere(user.id, targetActivityId = activityId)) return@launch
+
+                // Join the activity.
+                val result = activityRepository.addParticipant(activityId, user.id)
+                // Change the UI state.
+                when (result) {
+                    is DataResult.Success -> triggerOngoingState(result.data, context)
+                    is DataResult.Error -> {
+                        if (!isAlreadyActiveElsewhere(user.id, targetActivityId = activityId)) {
+                            backendHealthCoordinator.recheckNow(viewModelScope)
                             _uiState.value = MapUiState.Error(result.message)
                         }
-                        is DataResult.NotFound ->
-                            _uiState.value =
-                                MapUiState.Error("Activity ${result.id} not found")
                     }
+                    is DataResult.NotFound ->
+                        _uiState.value =
+                            MapUiState.Error("Activity ${result.id} not found")
                 }
             } catch (e: Exception) {
                 val message = "Failed to join activity $activityId"
                 Log.e("MapViewModel", message, e)
+                val userId = _currentUser.value?.id
+                if (userId != null && isAlreadyActiveElsewhere(userId, targetActivityId = activityId)) {
+                    return@launch
+                }
                 _uiState.value = if (reportBackendFailure(e)) {
                     previousState
                 } else {
@@ -407,23 +430,24 @@ constructor(
             // If there is an ongoing activity...
             _ongoingActivityId.value?.let { activityId ->
                 try {
-                    // Stop requesting the location.
-                    stopLocationUpdates()
-
-                    // Clean up location data for the activity.
-                    // CAUTION: it needs to happen before removing the participant,
-                    // thus revoking write access.
-                    locationsRepository.removeForActivity(activityId)
-
                     currentUser.value?.let {
                         if (_organizerId.value == it.id) {
-                            // If it's the organiser, finish the activity for everyone.
+                            // If it's the organiser, finish the activity for everyone and clean
+                            // up every participant's location data.
+                            // CAUTION: it needs to happen before removing the participant,
+                            // thus revoking write access.
+                            locationsRepository.removeForActivity(activityId)
                             requireSuccessfulBackendWrite(
                                 activityRepository.updateActivityStatus(
                                     activityId,
                                     IturActivityStatus.FINISHED,
                                 ),
                             )
+                        } else {
+                            // Otherwise, only clean up this participant's own location data.
+                            // CAUTION: it needs to happen before removing the participant,
+                            // thus revoking write access.
+                            locationsRepository.removeForParticipant(it.id, activityId)
                         }
                         // Remove the participants from the activity.
                         requireSuccessfulBackendWrite(
@@ -448,7 +472,6 @@ constructor(
         _ongoingActivityId.value = null
         _participantLocations.value = emptyList()
         _uiState.value = MapUiState.Idle(message)
-        stopLocationUpdates()
         lastBroadcastSeen = null
         _latestBroadcast.value = null
     }
@@ -483,7 +506,7 @@ constructor(
 
             is DataResult.Error -> {
                 Log.e("MapViewModel", "Could not trigger the ongoing state: ${result.message}")
-                requestHealthCheck()
+                backendHealthCoordinator.recheckNow(viewModelScope)
                 _uiState.value = MapUiState.RecoverableError(
                     message = "The ongoing activity could not be resumed.",
                     onRetry = { viewModelScope.launch { triggerOngoingState(activityId, context) } },
@@ -500,6 +523,7 @@ constructor(
         // Select the joined activity as the current one.
         _ongoingActivityId.value = activity.id
         // Show the ongoing activity state.
+        _participantLocations.value = locations
         _uiState.value = Ongoing(
             activity = activity,
             organizer = userRepository.getAll(listOf(activity.organizerId))
@@ -507,8 +531,6 @@ constructor(
             participantIds = activity.participantIds,
             locations = locations,
         )
-        _participantLocations.value = locations
-
         // Start updating the location.
         startLocationUpdates(context)
         // Reset broadcast tracking for the new activity; the UI drives the actual polling
@@ -544,6 +566,18 @@ constructor(
         }
     }
 
+    private suspend fun refreshParticipantLocations() {
+        val activityId = _ongoingActivityId.value ?: return
+        try {
+            _participantLocations.value = locationsRepository.getForActivity(activityId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("MapViewModel", "Failed to refresh participant locations for $activityId", e)
+            reportBackendFailure(e)
+        }
+    }
+
     /**
      * Posts the location of the current user along with the activity.
      */
@@ -558,8 +592,7 @@ constructor(
                 activityId,
                 IturLocation(latitude = location.latitude, longitude = location.longitude),
             )
-            // Update the participants location list.
-            _participantLocations.value = locationsRepository.getForActivity(activityId)
+            refreshParticipantLocations()
         } catch (e: Exception) {
             Log.e(
                 "MapViewModel",
@@ -587,22 +620,18 @@ constructor(
     }
 
     // The callback to use when the device's location is received.
-    private val locationCallback = object : LocationCallback() {
-        override fun onLocationResult(locationResult: LocationResult) {
-            locationResult.locations.lastOrNull()?.let { location ->
-                _lastLocation.postValue(location)
-                // If there's an activity ID and a user,
-                // update the user's location for that activity.
-                ongoingActivityId.value?.let { activityId ->
-                    currentUser.value?.let { participant ->
-                        // Tied to viewModelScope (instead of an unmanaged CoroutineScope) so this
-                        // work is cancelled along with the rest of the ViewModel's work, rather
-                        // than continuing to run -- and potentially update now-stale state --
-                        // after the ViewModel is cleared.
-                        viewModelScope.launch(Dispatchers.IO) {
-                            updateUserLocation(participant.id, activityId, location)
-                        }
-                    }
+    private val locationCallback: (Location) -> Unit = { location ->
+        _lastLocation.postValue(location)
+        // If there's an activity ID and a user,
+        // update the user's location for that activity.
+        ongoingActivityId.value?.let { activityId ->
+            currentUser.value?.let { participant ->
+                // Tied to viewModelScope (instead of an unmanaged CoroutineScope) so this
+                // work is cancelled along with the rest of the ViewModel's work, rather
+                // than continuing to run -- and potentially update now-stale state --
+                // after the ViewModel is cleared.
+                viewModelScope.launch(Dispatchers.IO) {
+                    updateUserLocation(participant.id, activityId, location)
                 }
             }
         }
@@ -611,7 +640,8 @@ constructor(
     /**
      * Starts collecting the device's location.
      */
-    private fun startLocationUpdates(context: Context) {
+    fun startLocationUpdates(context: Context) {
+        if (locationUpdatesActive) return
         Log.d("MapScreen", "Checking location permissions")
         if (ActivityCompat.checkSelfPermission(
                 context,
@@ -621,9 +651,8 @@ constructor(
         ) {
             Log.d("MapScreen", "Requesting location updates")
             locationClient.requestUpdates(
-                LocationRequest.Builder(PRIORITY_HIGH_ACCURACY, locationUpdateConfig.updateIntervalMillis).build(),
+                locationUpdateConfig.updateIntervalMillis,
                 locationCallback,
-                Looper.getMainLooper(),
             )
             locationUpdatesActive = true
             Log.d("MapScreen", "Location updates requested successfully")
@@ -635,7 +664,8 @@ constructor(
     /**
      * Stops collecting the device's location.
      */
-    private fun stopLocationUpdates() {
+    fun stopLocationUpdates() {
+        if (!locationUpdatesActive) return
         locationClient.removeUpdates(locationCallback)
         locationUpdatesActive = false
     }
@@ -675,6 +705,27 @@ sealed interface MapUiState {
     ) : MapUiState
 }
 
+class SignInFailurePresentation(
+    val reason: SignInFailureReason,
+    val onRetry: () -> Unit,
+    val onDismiss: () -> Unit,
+) {
+    val message: String
+        get() = when (reason) {
+            SignInFailureReason.NO_ACCOUNT ->
+                "No Google account is available. Add an account and try again."
+            SignInFailureReason.NOT_CONFIGURED ->
+                "Sign-in isn't configured for this app."
+            SignInFailureReason.SERVICE_UNAVAILABLE ->
+                "Sign-in is temporarily unavailable. Check your connection and try again."
+            SignInFailureReason.UNEXPECTED ->
+                "Sign-in couldn't be completed. Try again."
+        }
+
+    val retryable: Boolean
+        get() = reason != SignInFailureReason.NOT_CONFIGURED
+}
+
 data class BackendAvailabilityUiState(
     val failingServices: List<BackendService> = emptyList(),
     val retryCountdown: Int? = null,
@@ -683,6 +734,4 @@ data class BackendAvailabilityUiState(
 private class BackendInitializationException(message: String) : Exception(message)
 private class BackendOperationException(message: String) : Exception(message)
 
-private val RETRY_DELAYS_SECONDS = listOf(5, 10, 20, 40, 60)
-private const val BACKEND_PROBE_TIMEOUT_MILLIS = 5_000L
-private const val BACKEND_MONITOR_INTERVAL_MILLIS = 30_000L
+private const val PARTICIPANT_LOCATION_REFRESH_INTERVAL_MILLIS = 15_000L

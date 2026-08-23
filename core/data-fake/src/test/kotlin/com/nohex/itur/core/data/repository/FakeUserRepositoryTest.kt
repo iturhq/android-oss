@@ -32,7 +32,7 @@ class FakeUserRepositoryTest {
     fun `GIVEN a signed-out state WHEN signing in THEN returns a registered user`() {
         runBlocking {
             val user = repository().signIn(context)
-            assertIs<User.RegisteredUser>(user)
+            assertIs<User.RegisteredUser>(assertIs<SignInResult.Success>(user).user)
         }
     }
 

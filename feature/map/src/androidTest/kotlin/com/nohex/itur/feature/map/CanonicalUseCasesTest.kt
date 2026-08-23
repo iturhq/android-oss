@@ -8,9 +8,12 @@ package com.nohex.itur.feature.map
 import android.Manifest
 import android.content.Context
 import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -19,13 +22,17 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.window.Dialog
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
 import com.nohex.itur.core.data.TestFixtures
+import com.nohex.itur.core.data.repository.SignInFailureReason
+import com.nohex.itur.core.data.repository.SignInResult
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.url
 import com.nohex.itur.core.model.IturActivityStatus
+import com.nohex.itur.core.model.ParticipantSignal
 import com.nohex.itur.core.ui.theme.IturTheme
 import com.nohex.itur.feature.map.ui.MapScreen
 import com.nohex.itur.feature.map.ui.components.map.LocalLocationRecencyThresholds
@@ -34,7 +41,6 @@ import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -93,6 +99,7 @@ class CanonicalUseCasesTest {
         scanCode: String? = null,
         initialTag: String = "join_activity_fab",
         recencyThresholds: LocationRecencyThresholds = LocationRecencyThresholds(),
+        readyTag: String? = null,
     ) {
         injectedScanCode = scanCode
         composeRule.setContent {
@@ -104,8 +111,18 @@ class CanonicalUseCasesTest {
                             SideEffect {
                                 scanCallback = onScanSuccess
                             }
-                            Column {
-                                Text("Scan an activity QR to join")
+                            Dialog(onDismissRequest = {}) {
+                                Column {
+                                    Text("Scan an activity QR to join")
+                                    scanCode?.let { code ->
+                                        Button(
+                                            onClick = { onScanSuccess(code) },
+                                            modifier = Modifier.testTag("emit_qr_scan"),
+                                        ) {
+                                            Text("Emit test scan")
+                                        }
+                                    }
+                                }
                             }
                         },
                     )
@@ -115,7 +132,7 @@ class CanonicalUseCasesTest {
         composeRule.waitUntil(timeoutMillis = 10_000) {
             activities.initialLookupComplete.get()
         }
-        waitForTag(initialTag)
+        waitForTag(readyTag ?: initialTag)
         composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
     }
 
@@ -131,6 +148,11 @@ class CanonicalUseCasesTest {
     }
 
     private fun startAsOrganizer() {
+        // The default fixture seeds an ONGOING activity already owned by this same organizer
+        // (needed by uc20's auto-resume scenario, which doesn't go through this helper) --
+        // clear it first so MEMB-4B18's single-active-activity rule doesn't block this
+        // "start a brand new activity" flow with a activity the test itself never asked for.
+        activities.replaceActivities(emptyList())
         signIn()
         composeRule.onNodeWithTag("start_activity_fab").performClick()
         waitForTag("show_qr_fab")
@@ -142,7 +164,8 @@ class CanonicalUseCasesTest {
         emitScan()
         composeRule.waitUntil(timeoutMillis = 10_000) {
             users.anonymous.id in
-                activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)?.participantIds.orEmpty()
+                activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)?.participantIds.orEmpty() ||
+                activities.addParticipantCount.get() == 1
         }
         waitForTag("hail_organiser_fab")
     }
@@ -164,15 +187,29 @@ class CanonicalUseCasesTest {
     }
 
     @Test
-    fun uc04_signInFailureStaysAnonymousAndShowsError() {
-        users.signInFailure = IllegalStateException("Sign-in failed: test service unavailable")
+    fun uc04_signInFailureStaysAnonymousAndShowsStableRetry() {
+        users.signInResult = SignInResult.Failure(SignInFailureReason.SERVICE_UNAVAILABLE)
         launch()
 
         composeRule.onNodeWithTag("sign_in_fab").performClick()
 
-        composeRule.onNodeWithText("Sign-in failed: test service unavailable").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            "Sign-in is temporarily unavailable. Check your connection and try again.",
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText("Try again").assertIsDisplayed()
         composeRule.onNodeWithTag("sign_in_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("start_activity_fab").assertDoesNotExist()
+        listOf(
+            "Requests from this Android client application com.nohex.itur.pro are blocked",
+            "FirebaseAuthException",
+            "api_key=provider-secret",
+            "token=provider-token",
+        ).forEach { rawDetail -> composeRule.onNodeWithText(rawDetail).assertDoesNotExist() }
+
+        users.signInResult = null
+        composeRule.onNodeWithText("Try again").performClick()
+        waitForTag("sign_out_fab")
+        assertEquals(users.registered, users.current)
     }
 
     @Test
@@ -209,6 +246,10 @@ class CanonicalUseCasesTest {
 
     @Test
     fun uc08_activityCreationFailureReturnsToIdleWithError() {
+        // See startAsOrganizer()'s comment: the default fixture seeds an ONGOING activity
+        // already owned by this organizer, which would otherwise trip MEMB-4B18's
+        // single-active-activity rule before this test's own induced failure ever runs.
+        activities.replaceActivities(emptyList())
         launch()
         signIn()
         activities.createFailure = "Activity creation failed"
@@ -342,11 +383,35 @@ class CanonicalUseCasesTest {
         composeRule.waitUntil { activities.attentionRequestCount.get() == 1 }
 
         assertEquals(1, activities.attentionRequestCount.get())
-        assertTrue(
-            users.anonymous.id in
-                activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)!!.attentionRequests,
+        assertEquals(
+            ParticipantSignal.NEEDS_HELP,
+            activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)!!
+                .participantSignals[users.anonymous.id],
         )
         composeRule.onNodeWithTag("hail_organiser_fab").assertIsDisplayed()
+    }
+
+    @Test
+    fun uc19_participantAttentionSignalIsClearedWhenLeaving() {
+        launch(TestFixtures.ONGOING_ACTIVITY_ID.url)
+        joinAsParticipant()
+        val participantId = users.anonymous.id
+
+        composeRule.onNodeWithTag("hail_organiser_fab").performClick()
+        composeRule.waitUntil {
+            activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)
+                ?.participantSignals
+                ?.get(participantId) == ParticipantSignal.NEEDS_HELP
+        }
+        composeRule.onNodeWithTag("stop_activity_fab").performClick()
+
+        waitForTag("join_activity_fab")
+        assertEquals(
+            null,
+            activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)
+                ?.participantSignals
+                ?.get(participantId),
+        )
     }
 
     @Test
@@ -382,15 +447,19 @@ class CanonicalUseCasesTest {
         activities.replaceActivities(
             listOf(
                 TestFixtures.ongoingActivity.copy(
-                    attentionRequests = listOf(TestFixtures.PARTICIPANT_1_ID),
+                    participantSignals = mapOf(
+                        TestFixtures.PARTICIPANT_1_ID to ParticipantSignal.NEEDS_HELP,
+                    ),
                 ),
             ),
         )
         launch(initialTag = "show_qr_fab")
         composeRule.onNodeWithTag("hail_organiser_fab").assertDoesNotExist()
         assertEquals(
-            listOf(TestFixtures.PARTICIPANT_1_ID),
-            activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)?.attentionRequests,
+            ParticipantSignal.NEEDS_HELP,
+            activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)
+                ?.participantSignals
+                ?.get(TestFixtures.PARTICIPANT_1_ID),
         )
     }
 

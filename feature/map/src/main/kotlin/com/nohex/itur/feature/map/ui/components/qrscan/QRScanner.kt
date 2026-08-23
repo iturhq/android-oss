@@ -63,7 +63,10 @@ fun QRScanner(
                             barcodeScanner.process(inputImage)
                                 .addOnSuccessListener { barcodes ->
                                     barcodes.firstOrNull()?.rawValue?.let { code ->
-                                        Log.d("QRScanner", "Found code: $code")
+                                        // Never log the scanned content: a join URL is not
+                                        // guaranteed to be free of sensitive query data (e.g. a
+                                        // commercial-flavor extension embedding key material).
+                                        Log.d("QRScanner", "Found a QR code")
                                         onScanSuccess(code)
                                     }
                                 }

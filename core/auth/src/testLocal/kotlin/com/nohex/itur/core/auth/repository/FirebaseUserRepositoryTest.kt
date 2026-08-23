@@ -15,9 +15,12 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
 import com.nohex.itur.core.auth.config.GoogleSignInConfig
+import com.nohex.itur.core.data.health.BackendHealthObservation
+import com.nohex.itur.core.data.health.BackendHealthReporter
 import com.nohex.itur.core.data.repository.FirestoreCollections
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.domain.model.User
+import dagger.Lazy
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -47,7 +50,16 @@ class FirebaseUserRepositoryTest {
     private val firebaseAuth = mockk<FirebaseAuth>(relaxed = true)
     private val context = mockk<Context>(relaxed = true)
     private val googleSignInConfig = GoogleSignInConfig(webClientId = "test-client-id")
-    private val repository = FirebaseUserRepository(firebaseAuth, context, googleSignInConfig)
+    private val repository = FirebaseUserRepository(
+        firebaseAuth,
+        context,
+        googleSignInConfig,
+        Lazy {
+            object : BackendHealthReporter {
+                override fun report(serviceId: String, observation: BackendHealthObservation) = Unit
+            }
+        },
+    )
 
     @BeforeTest
     fun setUp() {

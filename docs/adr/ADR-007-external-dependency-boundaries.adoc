@@ -1,0 +1,207 @@
+= ADR-007: External dependency boundaries
+
+:toc: left
+:toclevels: 2
+:sectnums:
+:sectnumlevels: 2
+:icons: font
+
+[cols="1,3"]
+|===
+| Status      | Accepted
+| Date        | 2026-08-07
+| Deciders    | Max Noé
+|===
+
+== Context
+
+Itur depends on vendor SDKs for maps, device location, Firebase services,
+camera/barcode recognition, persistence, and observability. Some capabilities
+already have useful Itur-owned seams: repository interfaces separate data
+consumers from Firebase implementations, `ObservabilityInitializer` has
+flavor-specific implementations, and device location has a `LocationClient`.
+Other seams are incomplete. For example, `feature:map` directly uses MapLibre
+types for renderer/camera coordination, and `LocationClient` exposes Google
+Play Services request and callback types despite being intended as the
+provider boundary.
+
+Direct coupling is inexpensive initially, but vendor types crossing a feature
+or module boundary make substitution, deterministic testing, publication, and
+dependency ownership harder. The opposite extreme -- wrapping every library
+in a generic interface before a concrete need exists -- creates parallel APIs,
+hides useful capabilities, and tends toward a lowest-common-denominator design
+that still does not make a future migration mechanical.
+
+The application is approaching its MVP. A broad architecture rewrite now
+would delay user-facing delivery and increase regression risk in behavior that
+has only recently gained canonical emulator coverage.
+
+== Decision
+
+External service and device-capability dependencies are contained behind
+small Itur-owned boundaries when their types would otherwise cross a feature,
+capability, publication, or product boundary.
+
+The boundary describes behavior Itur currently needs using Itur models, state,
+and user intents. Vendor SDK types stay inside a focused implementation adapter
+or renderer leaf. Public and cross-module signatures must not expose those
+types unless the module is explicitly the vendor adapter and consumers are
+intentionally opting into that implementation.
+
+Apply these rules incrementally:
+
+* Declare a dependency only in modules whose production source directly uses
+  it; remove unused and accidental transitive dependencies.
+* Put provider construction, callbacks, request objects, error translation,
+  and lifecycle adaptation in the implementation leaf.
+* Prefer an existing capability module when it provides a clear ownership
+  boundary. Create another Gradle module only when there is concrete value in
+  reuse, substitution, build isolation, independent evolution, or publication.
+* Keep provider-specific features available inside the adapter. Do not design
+  a universal map, authentication, location, or persistence API around
+  hypothetical future providers.
+* Prove a boundary with deterministic fakes or tests of the Itur contract and
+  retain integration/emulator coverage for the selected adapter.
+* Reassess the boundary when a second implementation is planned. Compatibility
+  with the current contract is evaluated then; changing an insufficient
+  contract is preferable to preserving a premature abstraction.
+
+=== Dependencies that remain direct
+
+Being supplied by a third party is not sufficient reason to add a wrapper.
+Kotlin, coroutines, Compose, AndroidX lifecycle/navigation, Hilt, and similar
+implementation foundations may remain direct dependencies where replacing
+them would amount to changing the application's programming model rather than
+selecting another provider for an Itur capability.
+
+Small pure utility libraries may also remain direct and private to their
+owning implementation. Their types must still stay out of unrelated public
+APIs, and a dependency that becomes a substantial capability is reconsidered
+under this ADR.
+
+=== Initial seams
+
+The first incremental passes cover:
+
+* Map rendering: keep MapLibre lifecycle, styling, layers, location component,
+  and native map types in a renderer leaf; express camera requests as Itur UI
+  intents.
+* QR capture and presentation: keep CameraX, ML Kit, and ZXing details behind
+  activity-code results and rendering inputs.
+* Backend health: separate probe implementations from reusable scheduling,
+  retry/backoff, aggregation, and observable service state.
+* Authentication: retain an Itur repository/use-case contract while containing
+  Firebase and provider-specific sign-in mechanics.
+* Device location: make the location contract provider-neutral and keep Google
+  Play Services request/callback types in the GMS adapter.
+* Activity lifecycle orchestration: move start, join, restore, leave, location
+  publication, and broadcasts out of map presentation so future surfaces can
+  reuse them without depending on a renderer.
+
+Existing Firebase data, DataStore/Wire, and observability boundaries are
+audited against the same rules before further modules are introduced.
+
+== Rationale
+
+. *Stable ownership without speculative portability.* Itur controls the API at
+  boundaries that affect multiple features or published consumers, while each
+  vendor adapter remains free to use its SDK fully.
+. *Migration cost is contained, not denied.* Swapping a map or authentication
+  provider still requires a real adapter and behavioral verification. It no
+  longer requires removing vendor types from unrelated presentation and
+  orchestration code at the same time.
+. *Testing follows behavior.* Provider-neutral contracts support deterministic
+  state and lifecycle tests; integration tests continue to prove the actual
+  SDK adapter rather than replacing it entirely with mocks.
+. *MVP focus is preserved.* The decision guides new work immediately, but
+  existing seams are refactored opportunistically after MVP delivery or when a
+  feature is already changing in that area.
+
+== Consequences
+
+* Positive: published and cross-feature APIs become smaller and less sensitive
+  to vendor SDK upgrades.
+* Positive: dependency graphs more accurately show which module owns each
+  external capability.
+* Positive: provider-independent behavior can be tested without initializing
+  native renderers, Firebase, cameras, or Play Services.
+* Neutral: not every external artifact receives its own interface or Gradle
+  module; boundaries follow capabilities and concrete ownership needs.
+* Negative: adapters add translation code, and a later provider can reveal
+  assumptions that require changing the Itur contract.
+* Negative: incremental adoption temporarily leaves a mixture of completed and
+  incomplete boundaries. Dependency audits and published-consumer verification
+  are required to keep that state explicit.
+
+== Alternatives considered
+
+=== Abstract every library immediately
+
+[cols="1,4"]
+|===
+| Criterion | Assessment
+
+| Strengths
+a|
+* Produces superficially uniform dependency direction at once
+* Makes every external import appear replaceable
+
+| Weaknesses
+a|
+* Delays the MVP with a broad refactor across recently stabilized behavior
+* Creates wrappers without a second implementation or demonstrated consumer
+* Encourages lowest-common-denominator APIs and duplicate framework concepts
+* Still cannot hide semantic differences between providers such as MapLibre
+  and Mapbox
+
+| Verdict
+| Rejected. Apply capability boundaries incrementally and only where they
+protect an actual Itur seam.
+|===
+
+=== Keep direct vendor coupling until a replacement is selected
+
+[cols="1,4"]
+|===
+| Criterion | Assessment
+
+| Strengths
+a|
+* Minimum code and design work today
+* Full vendor API remains directly accessible everywhere
+
+| Weaknesses
+a|
+* Provider types continue spreading through feature and published APIs
+* Unit tests require vendor callbacks and initialization details
+* A future replacement combines contract discovery, unrelated cleanup, and
+  migration in one risky change
+
+| Verdict
+| Rejected. Known cross-boundary leakage is cheap to prevent as adjacent code
+changes, even while the full cleanup remains deferred.
+|===
+
+=== One generic platform-services facade
+
+[cols="1,4"]
+|===
+| Criterion | Assessment
+
+| Strengths
+a|
+* Gives features one apparent entry point for external capabilities
+* Centralizes construction
+
+| Weaknesses
+a|
+* Couples unrelated maps, auth, health, location, camera, storage, and
+  observability lifecycles
+* Becomes a service locator with broad change impact and poor capability
+  ownership
+* Makes focused testing and optional publication harder
+
+| Verdict
+| Rejected. Use small capability-owned boundaries with composition at the
+application edge.
+|===

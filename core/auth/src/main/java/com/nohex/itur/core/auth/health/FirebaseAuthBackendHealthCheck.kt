@@ -9,6 +9,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
 import com.nohex.itur.core.data.health.BackendHealthCheck
 import com.nohex.itur.core.data.health.BackendService
+import com.nohex.itur.core.data.health.BackendServiceIds
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
@@ -22,10 +23,16 @@ import javax.inject.Inject
 class FirebaseAuthBackendHealthCheck @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
 ) : BackendHealthCheck {
+    private companion object {
+        const val DIAGNOSTIC_ORDER = 30
+    }
+
     override val service = BackendService(
-        id = "firebase-auth",
+        id = BackendServiceIds.FIREBASE_AUTH,
         displayName = "Firebase Authentication",
     )
+    override val diagnosticOrder = DIAGNOSTIC_ORDER
+    override val successDetail = "Authentication session reachable"
 
     override suspend fun probe() {
         firebaseAuth.currentUser?.getIdToken(true)?.await()

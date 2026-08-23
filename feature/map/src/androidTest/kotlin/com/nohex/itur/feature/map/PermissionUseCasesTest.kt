@@ -23,9 +23,9 @@ import com.nohex.itur.feature.map.ui.MapScreen
 import com.nohex.itur.feature.map.ui.components.map.PERSISTENT_MAP_NATIVE_VIEW_TAG
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
-import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.maplibre.android.MapLibre

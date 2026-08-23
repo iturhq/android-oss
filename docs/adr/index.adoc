@@ -14,3 +14,5 @@ include::ADR-004-network-security-policy.adoc[leveloffset=+1]
 include::ADR-005-datastore-proto-wire.adoc[leveloffset=+1]
 
 include::ADR-006-static-analysis-policy.adoc[leveloffset=+1]
+
+include::ADR-007-external-dependency-boundaries.adoc[leveloffset=+1]

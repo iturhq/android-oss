@@ -6,12 +6,20 @@
 The app has one physical screen (`MapScreen`).
 All UI variation is expressed through overlay composables driven by `MapUiState`.
 
+When location permission is available, the map starts collecting the device position while the
+screen is visible. The first GPS fix centres the camera at zoom level 15 exactly once; later fixes
+do not override participant pan or zoom gestures. A configured MapTiler build uses the
+`outdoor-v4` Outdoors style.
+
 == Screen: map screen
 
 *File:* `feature/map/ui/MapScreen.kt`
 
 The map view is always present in the background.
-The overlay composable rendered on top changes with `MapUiState`.
+The overlay composable rendered on top changes with `MapUiState`. MapLibre
+load, shader, and fully-rendered callbacks contribute fixed map-style
+degradation and recovery observations to the shared health registry without
+replacing the map with an error surface.
 
 [cols="2,3,2"]
 |===

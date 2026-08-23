@@ -5,15 +5,16 @@
 
 package com.nohex.itur.core.location
 
-import android.os.Looper
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
+import android.location.Location
 
 /**
- * Abstraction over location update subscriptions, allowing a controllable
- * fake to be substituted in tests instead of the real [FusedLocationProviderClient].
+ * Platform-neutral boundary for device location updates.
+ *
+ * Play Services request, callback, priority, and result types deliberately stay behind this
+ * contract so feature modules can substitute a deterministic fake without depending on GMS.
  */
 interface LocationClient {
-    fun requestUpdates(request: LocationRequest, callback: LocationCallback, looper: Looper)
-    fun removeUpdates(callback: LocationCallback)
+    fun requestUpdates(intervalMillis: Long, onLocation: (Location) -> Unit)
+
+    fun removeUpdates(onLocation: (Location) -> Unit)
 }

@@ -12,11 +12,19 @@ import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.Transaction
+import com.google.firebase.functions.FirebaseFunctions
+import com.nohex.itur.core.data.health.BackendHealthReporter
+import com.nohex.itur.core.data.health.NoOpBackendHealthReporter
+import com.nohex.itur.core.data.health.observeFirestoreMutation
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.model.Broadcast
 import com.nohex.itur.core.model.IturActivity
 import com.nohex.itur.core.model.IturActivityStatus
+import com.nohex.itur.core.model.ParticipantSignal
+import dagger.Lazy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -25,13 +33,92 @@ import java.util.Date
 import javax.inject.Inject
 
 private const val TAG = "FBActivityRepo"
+private const val ACTIVE_ACTIVITY_ID = "activeActivityId"
+private const val PARTICIPANT_SIGNALS = "participantSignals"
+private const val SIGNAL = "signal"
 
 class FirebaseActivityRepository
-@Inject
-constructor(
-    firestore: FirebaseFirestore,
+private constructor(
+    private val firestore: FirebaseFirestore,
+    private val backendHealthReporter: Lazy<BackendHealthReporter>,
+    private val transactionExecutor: FirestoreTransactionExecutor,
+    private val admissionGateway: ActivityAdmissionGateway,
+    private val canonicalSignalsLoader: suspend (DocumentReference) -> Map<String, String?>,
 ) : ActivityRepository {
+    @Inject
+    constructor(
+        firestore: FirebaseFirestore,
+        backendHealthReporter: Lazy<BackendHealthReporter>,
+        functions: FirebaseFunctions,
+    ) : this(
+        firestore,
+        backendHealthReporter,
+        FirebaseFirestoreTransactionExecutor(firestore),
+        FirebaseFunctionsActivityAdmissionGateway(functions),
+        ::loadCanonicalSignals,
+    )
+
+    constructor(firestore: FirebaseFirestore) : this(
+        firestore,
+        Lazy { NoOpBackendHealthReporter },
+        FirebaseFirestoreTransactionExecutor(firestore),
+        FirebaseFunctionsActivityAdmissionGateway(FirebaseFunctions.getInstance()),
+        ::loadCanonicalSignals,
+    )
+
+    constructor(
+        firestore: FirebaseFirestore,
+        functions: FirebaseFunctions,
+    ) : this(
+        firestore,
+        Lazy { NoOpBackendHealthReporter },
+        FirebaseFirestoreTransactionExecutor(firestore),
+        FirebaseFunctionsActivityAdmissionGateway(functions),
+        ::loadCanonicalSignals,
+    )
+
+    constructor(
+        firestore: FirebaseFirestore,
+        backendHealthReporter: BackendHealthReporter,
+    ) : this(
+        firestore,
+        Lazy { backendHealthReporter },
+        FirebaseFirestoreTransactionExecutor(firestore),
+        FirebaseFunctionsActivityAdmissionGateway(FirebaseFunctions.getInstance()),
+        ::loadCanonicalSignals,
+    )
+
+    internal constructor(
+        firestore: FirebaseFirestore,
+        backendHealthReporter: BackendHealthReporter,
+        transactionExecutor: FirestoreTransactionExecutor,
+        admissionGateway: ActivityAdmissionGateway,
+        canonicalSignalsLoader: suspend (DocumentReference) -> Map<String, String?> = { emptyMap() },
+    ) : this(
+        firestore,
+        Lazy { backendHealthReporter },
+        transactionExecutor,
+        admissionGateway,
+        canonicalSignalsLoader,
+    )
+
     private val activitiesCollection = firestore.collection(FirestoreCollections.ACTIVITIES)
+    private val usersCollection = firestore.collection(FirestoreCollections.USERS)
+    val participantSignalRepository: ParticipantSignalRepository = FirebaseParticipantSignalRepository(
+        admissionGateway = admissionGateway,
+        activityLoader = ::getActivity,
+    )
+
+    override suspend fun getActiveActivityId(userId: UserId): DataResult<IturActivityId?> = try {
+        withContext(Dispatchers.IO) {
+            val snapshot = usersCollection.document(userId.value).get().await()
+            val activeActivityId = if (snapshot.exists()) snapshot.getString("activeActivityId") else null
+            DataResult.Success(activeActivityId?.let { IturActivityId(it) })
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to read active-activity record for ${userId.value}", e)
+        DataResult.Error(e.message ?: "Failed to read active-activity record")
+    }
 
     override suspend fun getActivity(activityId: IturActivityId): DataResult<IturActivity> {
         val reference = activitiesCollection.document(activityId.value)
@@ -46,7 +133,8 @@ constructor(
                 }
 
                 // Convert to domain object.
-                val activity = snapshot.toObject(IturActivityDTO::class.java)?.toDomain()
+                val signals = canonicalSignalsLoader(reference)
+                val activity = snapshot.toObject(IturActivityDTO::class.java)?.toDomain(signals)
 
                 // Convert to result.
                 activity?.let { DataResult.Success(it) }
@@ -101,19 +189,21 @@ constructor(
         id: IturActivityId,
         newStatus: IturActivityStatus,
     ): DataResult<IturActivity> {
+        if (newStatus == IturActivityStatus.ONGOING) {
+            return when (val admitted = admissionGateway.start(id)) {
+                is DataResult.Success -> getActivity(admitted.data)
+                is DataResult.Error -> admitted
+                is DataResult.NotFound -> admitted
+            }
+        }
         val reference = activitiesCollection.document(id.value)
 
         return try {
             withContext(Dispatchers.IO) {
-                // Update the activity status.
-                val updates = mutableMapOf<String, Any>("status" to newStatus.name)
-                if (newStatus == IturActivityStatus.FINISHED || newStatus == IturActivityStatus.CANCELLED) {
-                    updates["finishedOn"] = FieldValue.serverTimestamp()
+                val updated = backendHealthReporter.get().observeFirestoreMutation {
+                    transactionExecutor.run { transaction -> transaction.changeStatus(reference, id, newStatus) }
                 }
-                reference.update(updates).await()
-
-                // Return the updated activity.
-                getActivity(id)
+                DataResult.Success(updated.toDomain())
             }
         } catch (e: Exception) {
             Log.e(TAG, e.message, e)
@@ -121,37 +211,11 @@ constructor(
         }
     }
 
-    override suspend fun createActivity(organizerId: UserId): DataResult<IturActivity> {
-        // Generate a new document reference.
-        val reference = activitiesCollection.document()
-
-        // Create the activity.
-        val newActivity = IturActivity(
-            id = IturActivityId(reference.id),
-            organizerId = organizerId,
-            createdOn = Calendar.getInstance().time,
-            // The activity is ongoing.
-            status = IturActivityStatus.ONGOING,
-            // Add the organizer as a participant.
-            participantIds = listOf(organizerId),
-        )
-
-        return try {
-            withContext(Dispatchers.IO) {
-                // Store the activity.
-                reference
-                    .set(newActivity.toDto())
-                    .await()
-
-                // Add the organiser as a participant.
-
-                // Return the successfully created activity
-                DataResult.Success(newActivity)
-            }
-        } catch (e: Exception) {
-            Log.e("FirestoreActivityRepo", "Failed to create the activity", e)
-            throw e
-        }
+    @Suppress("MaxLineLength")
+    override suspend fun createActivity(organizerId: UserId): DataResult<IturActivity> = when (val admitted = admissionGateway.start()) {
+        is DataResult.Success -> getActivity(admitted.data)
+        is DataResult.Error -> admitted
+        is DataResult.NotFound -> admitted
     }
 
     override suspend fun deleteActivity(activityId: IturActivityId): DataResult<IturActivity> {
@@ -159,14 +223,21 @@ constructor(
 
         return try {
             withContext(Dispatchers.IO) {
-                // Retrieve the document.
-                val snapshot = reference.get().await()
-                if (snapshot.exists()) {
-                    // Delete the document.
-                    reference.delete().await()
+                val deleted = backendHealthReporter.get().observeFirestoreMutation {
+                    transactionExecutor.run { transaction ->
+                        val before = transaction.get(reference).toObject(IturActivityDTO::class.java)
+                            ?: return@run null
+                        val memberIds = if (before.status == IturActivityStatus.ONGOING.name) {
+                            (listOf(before.organizerId) + before.participantIds).distinct().map(::UserId)
+                        } else {
+                            emptyList()
+                        }
+                        transaction.delete(reference)
+                        memberIds.forEach { userId -> transaction.clearExistingReservation(userId) }
+                        before
+                    }
                 }
-
-                snapshot.toObject(IturActivityDTO::class.java)?.toDomain()?.let {
+                deleted?.toDomain()?.let {
                     DataResult.Success(it)
                 } ?: DataResult.NotFound(activityId.value)
             }
@@ -206,49 +277,27 @@ constructor(
     }
 
     override suspend fun requestAttention(activityId: IturActivityId, userId: UserId) {
-        try {
-            withContext(Dispatchers.IO) {
-                activitiesCollection.document(activityId.value)
-                    .update("attentionRequests", FieldValue.arrayUnion(userId.value))
-                    .await()
-                Log.d(TAG, "User ${userId.value} requested attention in activity ${activityId.value}")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to request attention for activity ${activityId.value}", e)
-            throw e
-        }
+        participantSignalRepository
+            .setParticipantSignal(activityId, userId, ParticipantSignal.NEEDS_HELP)
+            .requireSuccess()
     }
 
     override suspend fun addParticipant(
         activityId: IturActivityId,
         userId: UserId,
-    ): DataResult<IturActivity> = updateParticipants(activityId) { FieldValue.arrayUnion(userId.value) }
+    ): DataResult<IturActivity> = when (val admitted = admissionGateway.join(activityId)) {
+        is DataResult.Success -> getActivity(admitted.data)
+        is DataResult.Error -> admitted
+        is DataResult.NotFound -> admitted
+    }
 
     override suspend fun removeParticipant(
         activityId: IturActivityId,
         userId: UserId,
-    ): DataResult<IturActivity> = updateParticipants(activityId) { FieldValue.arrayRemove(userId.value) }
-
-    private suspend fun updateParticipants(
-        activityId: IturActivityId,
-        function: () -> FieldValue,
-    ): DataResult<IturActivity> {
-        val reference = activitiesCollection.document(activityId.value)
-
-        return try {
-            withContext(Dispatchers.IO) {
-                // Update the participant's ID.
-                reference.update("participantIds", function.invoke()).await()
-
-                reference.get().await().toObject(IturActivityDTO::class.java)?.toDomain()
-                    ?.let { updatedActivity ->
-                        DataResult.Success(updatedActivity)
-                    } ?: DataResult.Error("Document updated but DTO conversion failed")
-            }
-        } catch (e: Exception) {
-            Log.e("FirestoreActivityRepo", "Could not update participant", e)
-            DataResult.Error(e.message ?: "")
-        }
+    ): DataResult<IturActivity> = when (val departed = admissionGateway.leave(activityId)) {
+        is DataResult.Success -> getActivity(departed.data)
+        is DataResult.Error -> departed
+        is DataResult.NotFound -> departed
     }
 
     override suspend fun getBroadcastsSince(activityId: IturActivityId, since: Date?): List<Broadcast> {
@@ -268,7 +317,171 @@ constructor(
             throw e
         }
     }
+
+    private fun Transaction.reserve(userId: UserId, activityId: IturActivityId) {
+        set(
+            usersCollection.document(userId.value),
+            mapOf(ACTIVE_ACTIVITY_ID to activityId.value),
+            SetOptions.merge(),
+        )
+    }
+
+    private fun Transaction.requireReservationAvailable(
+        existingActivityId: String?,
+        userId: UserId,
+        targetActivityId: IturActivityId,
+    ) {
+        if (existingActivityId == null || existingActivityId == targetActivityId.value) return
+        val existing = get(activitiesCollection.document(existingActivityId))
+            .toObject(IturActivityDTO::class.java)
+        val stillActive = existing?.status == IturActivityStatus.ONGOING.name &&
+            (existing.organizerId == userId.value || userId.value in existing.participantIds)
+        check(!stillActive) { "User is already active in another activity" }
+    }
+
+    private fun Transaction.changeStatus(
+        reference: DocumentReference,
+        activityId: IturActivityId,
+        newStatus: IturActivityStatus,
+    ): IturActivityDTO {
+        val before = get(reference).toObject(IturActivityDTO::class.java)
+            ?: error("Activity ${activityId.value} not found")
+        val transition = membershipTransition(before, newStatus)
+        val reservations = if (transition.entersOngoing) {
+            readReservations(listOf(UserId(before.organizerId)))
+        } else {
+            emptyMap()
+        }
+        if (transition.entersOngoing) {
+            requireReservationsAvailable(reservations, activityId)
+        }
+
+        update(reference, statusUpdates(newStatus))
+        applyReservationTransition(transition, activityId)
+        return before.withStatus(newStatus)
+    }
+
+    private fun membershipTransition(
+        before: IturActivityDTO,
+        newStatus: IturActivityStatus,
+    ): MembershipTransition {
+        val wasOngoing = before.status == IturActivityStatus.ONGOING.name
+        val willBeOngoing = newStatus == IturActivityStatus.ONGOING
+        val members = when {
+            !wasOngoing && willBeOngoing ->
+                (listOf(before.organizerId) + before.participantIds).distinct().map(::UserId)
+            wasOngoing && !willBeOngoing ->
+                (listOf(before.organizerId) + before.participantIds).distinct().map(::UserId)
+            else -> emptyList()
+        }
+        return MembershipTransition(members, !wasOngoing && willBeOngoing, wasOngoing && !willBeOngoing)
+    }
+
+    @Suppress("MaxLineLength")
+    private fun Transaction.readReservations(members: List<UserId>): Map<UserId, String?> = members.associateWith { userId ->
+        get(usersCollection.document(userId.value)).getString(ACTIVE_ACTIVITY_ID)
+    }
+
+    private fun Transaction.requireReservationsAvailable(
+        reservations: Map<UserId, String?>,
+        activityId: IturActivityId,
+    ) {
+        reservations.forEach { (userId, existingActivityId) ->
+            requireReservationAvailable(existingActivityId, userId, activityId)
+        }
+    }
+
+    @Suppress("MaxLineLength")
+    private fun statusUpdates(newStatus: IturActivityStatus): Map<String, Any> = mutableMapOf<String, Any>("status" to newStatus.name).apply {
+        if (newStatus.isTerminal()) {
+            this["finishedOn"] = FieldValue.serverTimestamp()
+            this["participantSignals"] = emptyMap<String, String>()
+            this["attentionRequests"] = emptyList<String>()
+        }
+    }
+
+    private fun Transaction.applyReservationTransition(
+        transition: MembershipTransition,
+        activityId: IturActivityId,
+    ) {
+        when {
+            transition.entersOngoing -> transition.members.forEach { reserve(it, activityId) }
+            transition.leavesOngoing -> transition.members.forEach { userId -> clearExistingReservation(userId) }
+        }
+    }
+
+    private fun Transaction.clearExistingReservation(userId: UserId) {
+        update(usersCollection.document(userId.value), ACTIVE_ACTIVITY_ID, null)
+    }
 }
+
+@Suppress("MaxLineLength")
+private fun IturActivityStatus.isTerminal(): Boolean = this == IturActivityStatus.FINISHED || this == IturActivityStatus.CANCELLED
+
+private data class MembershipTransition(
+    val members: List<UserId>,
+    val entersOngoing: Boolean,
+    val leavesOngoing: Boolean,
+)
+
+private fun IturActivityDTO.withStatus(newStatus: IturActivityStatus): IturActivityDTO = copy(
+    status = newStatus.name,
+    finishedOn = if (newStatus.isTerminal()) Date() else finishedOn,
+    participantSignals = if (newStatus.isTerminal()) emptyMap() else participantSignals,
+    attentionRequests = if (newStatus.isTerminal()) emptyList() else attentionRequests,
+)
+
+internal interface FirestoreTransactionExecutor {
+    suspend fun <T> run(operation: (Transaction) -> T): T
+}
+
+private class FirebaseFirestoreTransactionExecutor(
+    private val firestore: FirebaseFirestore,
+) : FirestoreTransactionExecutor {
+    @Suppress("MaxLineLength")
+    override suspend fun <T> run(operation: (Transaction) -> T): T = firestore.runTransaction(Transaction.Function(operation)).await()
+}
+
+private class FirebaseParticipantSignalRepository(
+    private val admissionGateway: ActivityAdmissionGateway,
+    private val activityLoader: suspend (IturActivityId) -> DataResult<IturActivity>,
+) : ParticipantSignalRepository {
+    override suspend fun setParticipantSignal(
+        activityId: IturActivityId,
+        userId: UserId,
+        signal: ParticipantSignal,
+    ): DataResult<IturActivity> = updateParticipantSignal(activityId, userId, signal)
+
+    override suspend fun clearParticipantSignal(
+        activityId: IturActivityId,
+        userId: UserId,
+    ): DataResult<IturActivity> = updateParticipantSignal(activityId, userId, null)
+
+    private suspend fun updateParticipantSignal(
+        activityId: IturActivityId,
+        @Suppress("UNUSED_PARAMETER") userId: UserId,
+        signal: ParticipantSignal?,
+    ): DataResult<IturActivity> = when (val updated = admissionGateway.setParticipantSignal(activityId, signal)) {
+        is DataResult.Success -> activityLoader(updated.data)
+        is DataResult.Error -> updated
+        is DataResult.NotFound -> updated
+    }
+}
+
+private fun DataResult<IturActivity>.requireSuccess() {
+    when (this) {
+        is DataResult.Success -> Unit
+        is DataResult.NotFound -> error("Activity $id not found")
+        is DataResult.Error -> error(message)
+    }
+}
+
+private suspend fun loadCanonicalSignals(reference: DocumentReference): Map<String, String?> = reference
+    .collection(PARTICIPANT_SIGNALS)
+    .get()
+    .await()
+    .documents
+    .associate { signal -> signal.id to signal.getString(SIGNAL) }
 
 data class IturActivityDTO(
     var id: String = "",
@@ -279,32 +492,60 @@ data class IturActivityDTO(
     var startTime: Date = createdOn,
     var finishedOn: Date? = null,
     var listed: Boolean = false,
+    var participantSignals: Map<String, String> = emptyMap(),
+    // Legacy binary requests are read as NEEDS_HELP until that participant is rewritten/cleared.
     var attentionRequests: List<String> = emptyList(),
 )
 
-private fun IturActivityDTO.toDomain(): IturActivity = IturActivity(
-    id = IturActivityId(id),
-    status = IturActivityStatus.valueOf(status),
-    organizerId = UserId(organizerId),
-    participantIds = participantIds.map { UserId(it) },
-    createdOn = createdOn,
-    startTime = startTime,
-    finishedOn = finishedOn,
-    listed = listed,
-    attentionRequests = attentionRequests.map { UserId(it) },
-)
+private fun IturActivityDTO.toDomain(canonicalSignals: Map<String, String?> = emptyMap()): IturActivity {
+    val organizerUserId = UserId(organizerId)
+    val participantUserIds = participantIds.map { UserId(it) }
+    val signalEligibleIds = participantUserIds.toSet() - organizerUserId
+    val signals = attentionRequests
+        .map { UserId(it) }
+        .filter { it in signalEligibleIds }
+        .associateWith { ParticipantSignal.NEEDS_HELP }
+        .toMutableMap()
+    signals.applyLegacySignals(participantSignals, signalEligibleIds)
+    signals.applyCanonicalSignals(canonicalSignals, organizerUserId)
+    return IturActivity(
+        id = IturActivityId(id),
+        status = IturActivityStatus.valueOf(status),
+        organizerId = organizerUserId,
+        participantIds = participantUserIds,
+        createdOn = createdOn,
+        startTime = startTime,
+        finishedOn = finishedOn,
+        listed = listed,
+        participantSignals = signals,
+    )
+}
 
-private fun IturActivity.toDto(): IturActivityDTO = IturActivityDTO(
-    id = id.value,
-    organizerId = organizerId.value,
-    participantIds = participantIds.map { it.value },
-    status = status.name,
-    createdOn = createdOn,
-    startTime = startTime,
-    finishedOn = finishedOn,
-    listed = listed,
-    attentionRequests = attentionRequests.map { it.value },
-)
+private fun MutableMap<UserId, ParticipantSignal>.applyLegacySignals(
+    storedSignals: Map<String, String>,
+    eligibleIds: Set<UserId>,
+) = storedSignals.forEach { (userId, storedSignal) ->
+    val participantId = UserId(userId)
+    if (participantId in eligibleIds) {
+        storedSignal.toSignalOrNull()?.let { this[participantId] = it }
+    }
+}
+
+private fun MutableMap<UserId, ParticipantSignal>.applyCanonicalSignals(
+    storedSignals: Map<String, String?>,
+    organizerId: UserId,
+) = storedSignals.forEach { (userId, storedSignal) ->
+    val participantId = UserId(userId)
+    if (participantId == organizerId) return@forEach
+
+    if (storedSignal == null) {
+        remove(participantId)
+    } else {
+        storedSignal.toSignalOrNull()?.let { this[participantId] = it }
+    }
+}
+
+private fun String.toSignalOrNull(): ParticipantSignal? = runCatching { ParticipantSignal.valueOf(this) }.getOrNull()
 
 data class BroadcastDTO(
     @DocumentId

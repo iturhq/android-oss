@@ -18,4 +18,12 @@ interface UserSettingsRepository {
      * Set the authenticated user's email.
      */
     suspend fun setUserEmail(email: String)
+
+    /** Atomically returns the persisted participant name or stores a generated one. */
+    @Suppress("MaxLineLength")
+    suspend fun getOrCreateParticipantDisplayName(generate: () -> String): String = throw UnsupportedOperationException("Participant display-name storage is unavailable")
+
+    /** Replaces the persisted participant display name. */
+    @Suppress("MaxLineLength")
+    suspend fun setParticipantDisplayName(name: String): Unit = throw UnsupportedOperationException("Participant display-name storage is unavailable")
 }

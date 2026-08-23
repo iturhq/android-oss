@@ -52,6 +52,7 @@ dependencies {
     // Firestore (this module's own DataModule constructs the FirebaseFirestore instance)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore.ktx)
+    implementation(libs.firebase.functions)
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlin.test.junit)

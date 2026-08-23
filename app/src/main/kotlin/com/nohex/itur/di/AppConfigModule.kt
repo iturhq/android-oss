@@ -25,7 +25,7 @@ object AppConfigModule {
 
     @Provides
     fun provideMapStyleConfig(): MapStyleConfig = MapStyleConfig(
-        styleUrl = "https://api.maptiler.com/maps/streets/style.json?key=${BuildConfig.MAPTILER_API_KEY}",
+        styleUrl = "https://api.maptiler.com/maps/outdoor-v4/style.json?key=${BuildConfig.MAPTILER_API_KEY}",
     )
 
     @Provides

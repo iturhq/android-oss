@@ -5,10 +5,10 @@
 
 package com.nohex.itur.feature.map
 
+import com.nohex.itur.core.data.health.BackendHealthCheck
 import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.data.repository.LocationRepository
 import com.nohex.itur.core.data.repository.UserRepository
-import com.nohex.itur.core.data.health.BackendHealthCheck
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -26,8 +26,7 @@ object TestDataModule {
 
     @Provides
     @Singleton
-    fun provideScenarioBackendHealthCheck(): ScenarioBackendHealthCheck =
-        ScenarioBackendHealthCheck()
+    fun provideScenarioBackendHealthCheck(): ScenarioBackendHealthCheck = ScenarioBackendHealthCheck()
 
     @Provides
     @IntoSet

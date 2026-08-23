@@ -10,6 +10,7 @@ import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.model.Broadcast
 import com.nohex.itur.core.model.IturActivity
 import com.nohex.itur.core.model.IturActivityStatus
+import com.nohex.itur.core.model.ParticipantSignal
 import kotlinx.coroutines.runBlocking
 import java.util.Date
 import kotlin.test.Test
@@ -98,6 +99,37 @@ class FakeActivityRepositoryTest {
         assertEquals(listOf(ACTIVITY), result.data)
     }
 
+    // --- getActiveActivityId ---
+
+    @Test
+    fun `GIVEN an ongoing activity WHEN getting the organizer's active activity THEN returns its ID`() = runBlocking {
+        val result = repository(ACTIVITY).getActiveActivityId(ORGANIZER_ID)
+        assertIs<DataResult.Success<IturActivityId?>>(result)
+        assertEquals(ACTIVITY_ID, result.data)
+    }
+
+    @Test
+    fun `GIVEN an ongoing activity WHEN getting a participant's active activity THEN returns its ID`() = runBlocking {
+        val result = repository(ACTIVITY).getActiveActivityId(PARTICIPANT_ID)
+        assertIs<DataResult.Success<IturActivityId?>>(result)
+        assertEquals(ACTIVITY_ID, result.data)
+    }
+
+    @Test
+    fun `GIVEN no membership anywhere WHEN getting the active activity THEN returns null`() = runBlocking {
+        val result = repository(ACTIVITY).getActiveActivityId(UserId("unrelated-user"))
+        assertIs<DataResult.Success<IturActivityId?>>(result)
+        assertEquals(null, result.data)
+    }
+
+    @Test
+    fun `GIVEN membership only in a DRAFT activity WHEN getting the active activity THEN returns null`() = runBlocking {
+        val draft = ACTIVITY.copy(id = OTHER_ID, status = IturActivityStatus.DRAFT)
+        val result = repository(draft).getActiveActivityId(ORGANIZER_ID)
+        assertIs<DataResult.Success<IturActivityId?>>(result)
+        assertEquals(null, result.data)
+    }
+
     // --- createActivity ---
 
     @Test
@@ -140,9 +172,13 @@ class FakeActivityRepositoryTest {
 
     @Test
     fun `GIVEN an activity WHEN removing a participant THEN they are absent from the participant list`() = runBlocking {
-        val result = repository(ACTIVITY).removeParticipant(ACTIVITY_ID, PARTICIPANT_ID)
+        val withSignal = ACTIVITY.copy(
+            participantSignals = mapOf(PARTICIPANT_ID to ParticipantSignal.DELAYED),
+        )
+        val result = repository(withSignal).removeParticipant(ACTIVITY_ID, PARTICIPANT_ID)
         assertIs<DataResult.Success<IturActivity>>(result)
         assertTrue(PARTICIPANT_ID !in result.data.participantIds)
+        assertTrue(PARTICIPANT_ID !in result.data.participantSignals)
     }
 
     @Test
@@ -157,10 +193,14 @@ class FakeActivityRepositoryTest {
 
     @Test
     fun `GIVEN an activity WHEN updating its status THEN the new status is reflected`() = runBlocking {
-        val result = repository(ACTIVITY)
+        val withSignal = ACTIVITY.copy(
+            participantSignals = mapOf(PARTICIPANT_ID to ParticipantSignal.NEEDS_HELP),
+        )
+        val result = repository(withSignal)
             .updateActivityStatus(ACTIVITY_ID, IturActivityStatus.FINISHED)
         assertIs<DataResult.Success<IturActivity>>(result)
         assertEquals(IturActivityStatus.FINISHED, result.data.status)
+        assertTrue(result.data.participantSignals.isEmpty())
     }
 
     @Test
@@ -198,11 +238,94 @@ class FakeActivityRepositoryTest {
         }
     }
 
-    // --- requestAttention ---
+    // --- participant signals ---
 
     @Test
-    fun `GIVEN an activity WHEN requesting attention THEN no exception is thrown`() = runBlocking {
-        repository(ACTIVITY).requestAttention(ACTIVITY_ID, PARTICIPANT_ID)
+    fun `GIVEN a current participant WHEN setting and replacing a signal THEN the latest state is stored`() = runBlocking {
+        val repo = repository(ACTIVITY)
+
+        val delayed = repo.participantSignalRepository.setParticipantSignal(
+            ACTIVITY_ID,
+            PARTICIPANT_ID,
+            ParticipantSignal.DELAYED,
+        )
+        assertIs<DataResult.Success<IturActivity>>(delayed)
+        assertEquals(ParticipantSignal.DELAYED, delayed.data.participantSignals[PARTICIPANT_ID])
+
+        val needsHelp = repo.participantSignalRepository.setParticipantSignal(
+            ACTIVITY_ID,
+            PARTICIPANT_ID,
+            ParticipantSignal.NEEDS_HELP,
+        )
+        assertIs<DataResult.Success<IturActivity>>(needsHelp)
+        assertEquals(ParticipantSignal.NEEDS_HELP, needsHelp.data.participantSignals[PARTICIPANT_ID])
+    }
+
+    @Test
+    fun `GIVEN two participant signals WHEN replacing one THEN the other is preserved`() = runBlocking {
+        val otherParticipant = UserId("participant2")
+        val seeded = ACTIVITY.copy(
+            participantIds = ACTIVITY.participantIds + otherParticipant,
+            participantSignals = mapOf(
+                PARTICIPANT_ID to ParticipantSignal.DELAYED,
+                otherParticipant to ParticipantSignal.NEEDS_HELP,
+            ),
+        )
+
+        val result = repository(seeded).participantSignalRepository.setParticipantSignal(
+            ACTIVITY_ID,
+            PARTICIPANT_ID,
+            ParticipantSignal.NEEDS_HELP,
+        )
+
+        assertIs<DataResult.Success<IturActivity>>(result)
+        assertEquals(ParticipantSignal.NEEDS_HELP, result.data.participantSignals[PARTICIPANT_ID])
+        assertEquals(ParticipantSignal.NEEDS_HELP, result.data.participantSignals[otherParticipant])
+    }
+
+    @Test
+    fun `GIVEN a stored signal WHEN clearing twice THEN absence remains the okay state`() = runBlocking {
+        val repo = repository(
+            ACTIVITY.copy(
+                participantSignals = mapOf(PARTICIPANT_ID to ParticipantSignal.DELAYED),
+            ),
+        )
+
+        val first = repo.participantSignalRepository.clearParticipantSignal(ACTIVITY_ID, PARTICIPANT_ID)
+        val second = repo.participantSignalRepository.clearParticipantSignal(ACTIVITY_ID, PARTICIPANT_ID)
+
+        assertIs<DataResult.Success<IturActivity>>(first)
+        assertIs<DataResult.Success<IturActivity>>(second)
+        assertTrue(first.data.participantSignals.isEmpty())
+        assertTrue(second.data.participantSignals.isEmpty())
+    }
+
+    @Test
+    fun `GIVEN organiser nonmember or terminal membership WHEN setting a signal THEN it is rejected`() = runBlocking {
+        val repo = repository(ACTIVITY).participantSignalRepository
+        assertIs<DataResult.Error>(
+            repo.setParticipantSignal(ACTIVITY_ID, ORGANIZER_ID, ParticipantSignal.NEEDS_HELP),
+        )
+        assertIs<DataResult.Error>(
+            repo.setParticipantSignal(ACTIVITY_ID, UserId("outsider"), ParticipantSignal.DELAYED),
+        )
+
+        val finishedRepo = repository(ACTIVITY.copy(status = IturActivityStatus.FINISHED))
+            .participantSignalRepository
+        assertIs<DataResult.Error>(
+            finishedRepo.setParticipantSignal(ACTIVITY_ID, PARTICIPANT_ID, ParticipantSignal.DELAYED),
+        )
+        Unit
+    }
+
+    @Test
+    fun `GIVEN legacy attention API WHEN requested THEN it maps to needs help`() = runBlocking {
+        val repo = repository(ACTIVITY)
+        repo.requestAttention(ACTIVITY_ID, PARTICIPANT_ID)
+
+        val result = repo.getActivity(ACTIVITY_ID)
+        assertIs<DataResult.Success<IturActivity>>(result)
+        assertEquals(ParticipantSignal.NEEDS_HELP, result.data.participantSignals[PARTICIPANT_ID])
     }
 
     // --- getBroadcastsSince ---

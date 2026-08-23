@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Itur © 2025 by Max Noé <code@itur.cat>
+  ~ SPDX-License-Identifier: GPL-3.0-or-later
+  -->
+<resources>
+    <!-- Consumers with a separate account surface may override this in their app resources. -->
+    <bool name="feature_map_show_sign_out_on_map">true</bool>
+</resources>

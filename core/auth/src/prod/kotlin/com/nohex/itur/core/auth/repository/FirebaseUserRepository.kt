@@ -11,21 +11,33 @@ import androidx.core.content.edit
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialProviderConfigurationException
+import androidx.credentials.exceptions.GetCredentialUnsupportedException
 import androidx.credentials.exceptions.NoCredentialException
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
 import com.nohex.itur.core.auth.config.GoogleSignInConfig
+import com.nohex.itur.core.auth.health.reportFirebaseAuthFailed
+import com.nohex.itur.core.auth.health.reportFirebaseAuthSucceeded
+import com.nohex.itur.core.data.health.BackendHealthReporter
 import com.nohex.itur.core.data.repository.FirestoreCollections
+import com.nohex.itur.core.data.repository.SignInFailureReason
+import com.nohex.itur.core.data.repository.SignInResult
 import com.nohex.itur.core.data.repository.UserRepository
 import com.nohex.itur.core.domain.id.UserId
 import com.nohex.itur.core.domain.model.User
+import dagger.Lazy
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import javax.inject.Inject
@@ -37,6 +49,7 @@ class FirebaseUserRepository @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
     @ApplicationContext private val context: Context,
     private val googleSignInConfig: GoogleSignInConfig,
+    private val backendHealthReporter: Lazy<BackendHealthReporter>,
 ) : UserRepository {
     private var currentUser: User? = null
 
@@ -82,7 +95,11 @@ class FirebaseUserRepository @Inject constructor(
         }
     }
 
-    override suspend fun signIn(context: Context): User {
+    override suspend fun signIn(context: Context): SignInResult {
+        if (googleSignInConfig.webClientId.isBlank()) {
+            backendHealthReporter.get().reportFirebaseAuthFailed(SignInFailureReason.NOT_CONFIGURED)
+            return SignInResult.Failure(SignInFailureReason.NOT_CONFIGURED)
+        }
         val credentialManager = CredentialManager.create(context)
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
@@ -92,36 +109,62 @@ class FirebaseUserRepository @Inject constructor(
             .addCredentialOption(googleIdOption)
             .build()
 
-        val result = try {
-            credentialManager.getCredential(context = context, request = request)
-        } catch (e: NoCredentialException) {
-            throw Exception("Google sign-in is unavailable. Make sure a Google account is available in this device and try again.")
-        }
-        val credential = result.credential
+        return try {
+            val result =
+                credentialManager.getCredential(context = context, request = request)
+            val credential = result.credential
 
-        if (credential is CustomCredential &&
-            credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-        ) {
-            val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
-            val firebaseCredential =
-                GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
-            val authResult = firebaseAuth.signInWithCredential(firebaseCredential).await()
+            if (credential is CustomCredential &&
+                credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+            ) {
+                val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                val firebaseCredential =
+                    GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
+                val authResult = firebaseAuth.signInWithCredential(firebaseCredential).await()
 
-            return authResult.user?.let { firebaseUser ->
-                User.RegisteredUser(
-                    id = UserId(firebaseUser.uid),
-                    name = firebaseUser.displayName,
-                    email = firebaseUser.email,
-                ).also { currentUser = it }
-            } ?: throw IllegalStateException("Authentication succeeded but no user was returned")
-        } else {
-            throw IllegalStateException("Unexpected credential type: ${credential.type}")
+                authResult.user?.let { firebaseUser ->
+                    User.RegisteredUser(
+                        id = UserId(firebaseUser.uid),
+                        name = firebaseUser.displayName,
+                        email = firebaseUser.email,
+                    ).also { currentUser = it }
+                }?.also {
+                    backendHealthReporter.get().reportFirebaseAuthSucceeded("Google sign-in completed")
+                }?.let(SignInResult::Success)
+                    ?: SignInFailureReason.UNEXPECTED.asReportedFailure()
+            } else {
+                SignInFailureReason.UNEXPECTED.asReportedFailure()
+            }
+        } catch (_: GetCredentialCancellationException) {
+            SignInResult.Cancelled
+        } catch (_: NoCredentialException) {
+            SignInResult.Failure(SignInFailureReason.NO_ACCOUNT)
+        } catch (_: GetCredentialProviderConfigurationException) {
+            SignInResult.Failure(SignInFailureReason.NOT_CONFIGURED)
+        } catch (_: GetCredentialUnsupportedException) {
+            SignInResult.Failure(SignInFailureReason.NOT_CONFIGURED)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: FirebaseNetworkException) {
+            SignInFailureReason.SERVICE_UNAVAILABLE.asReportedFailure()
+        } catch (failure: FirebaseAuthException) {
+            failure.toSignInFailureReason().asReportedFailure()
+        } catch (_: Exception) {
+            SignInFailureReason.UNEXPECTED.asReportedFailure()
         }
     }
 
     override suspend fun signOut() {
-        firebaseAuth.signOut()
-        currentUser = null
+        try {
+            firebaseAuth.signOut()
+            currentUser = null
+            backendHealthReporter.get().reportFirebaseAuthSucceeded("Sign-out completed")
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            backendHealthReporter.get().reportFirebaseAuthFailed(SignInFailureReason.UNEXPECTED)
+            throw failure
+        }
     }
 
     override suspend fun getAll(ids: List<UserId>): List<User> {
@@ -140,4 +183,21 @@ class FirebaseUserRepository @Inject constructor(
             User.RegisteredUser(id, name, email)
         }
     }
+
+    private fun SignInFailureReason.asReportedFailure(): SignInResult.Failure {
+        backendHealthReporter.get().reportFirebaseAuthFailed(this)
+        return SignInResult.Failure(this)
+    }
 }
+
+private fun FirebaseAuthException.toSignInFailureReason(): SignInFailureReason = if (errorCode in CONFIGURATION_ERROR_CODES) {
+    SignInFailureReason.NOT_CONFIGURED
+} else {
+    SignInFailureReason.UNEXPECTED
+}
+
+private val CONFIGURATION_ERROR_CODES = setOf(
+    "ERROR_APP_NOT_AUTHORIZED",
+    "ERROR_API_NOT_AVAILABLE",
+    "ERROR_INVALID_CREDENTIAL",
+)

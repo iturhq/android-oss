@@ -7,7 +7,7 @@ package com.nohex.itur.core.datastore.di
 
 import android.content.Context
 import androidx.datastore.core.DataStore
-import androidx.datastore.core.DataStoreFactory
+import androidx.datastore.core.MultiProcessDataStoreFactory
 import androidx.datastore.dataStoreFile
 import com.nohex.itur.core.datastore.AndroidKeystoreEmailCipher
 import com.nohex.itur.core.datastore.EmailCipher
@@ -32,7 +32,7 @@ object DataStoreModule {
     internal fun providesUserSettingsDataStore(
         @ApplicationContext context: Context,
         iturSettingsSerializer: IturSettingsSerializer,
-    ): DataStore<IturPreferences> = DataStoreFactory.create(
+    ): DataStore<IturPreferences> = MultiProcessDataStoreFactory.create(
         serializer = iturSettingsSerializer,
         scope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
     ) {

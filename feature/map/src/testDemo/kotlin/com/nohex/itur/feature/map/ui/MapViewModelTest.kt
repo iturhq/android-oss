@@ -10,11 +10,15 @@ import android.os.Looper
 import com.nohex.itur.core.data.TestFixtures
 import com.nohex.itur.core.data.health.BackendHealthCheck
 import com.nohex.itur.core.data.health.BackendService
+import com.nohex.itur.core.data.repository.ActivityFilter
 import com.nohex.itur.core.data.repository.ActivityRepository
 import com.nohex.itur.core.data.repository.DataResult
 import com.nohex.itur.core.data.repository.FakeActivityRepository
 import com.nohex.itur.core.data.repository.FakeLocationRepository
 import com.nohex.itur.core.data.repository.FakeUserRepository
+import com.nohex.itur.core.data.repository.LocationRepository
+import com.nohex.itur.core.data.repository.SignInFailureReason
+import com.nohex.itur.core.data.repository.SignInResult
 import com.nohex.itur.core.data.repository.UserRepository
 import com.nohex.itur.core.domain.id.IturActivityId
 import com.nohex.itur.core.domain.id.UserId
@@ -23,15 +27,19 @@ import com.nohex.itur.core.location.LocationClient
 import com.nohex.itur.core.model.Broadcast
 import com.nohex.itur.core.model.IturActivity
 import com.nohex.itur.core.model.IturActivityStatus
+import com.nohex.itur.core.model.Location
 import com.nohex.itur.feature.map.config.LocationUpdateConfig
 import com.nohex.itur.feature.map.config.MapStyleConfig
 import com.nohex.itur.feature.map.notifications.BroadcastNotifier
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -41,12 +49,14 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import java.util.Date
+import kotlin.math.abs
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
@@ -57,6 +67,11 @@ private val PARTICIPANT_ACTIVITY = TestFixtures.ongoingActivity.copy(
     organizerId = UserId("other-organizer"),
     participantIds = emptyList(),
 )
+
+// A generous threshold (~111m) for distinguishing an unchanged stored location (which only
+// moves by FakeLocationRepository's small "GPS noise" jitter, a few meters) from a location
+// regenerated from scratch after removal (which lands near a different, unrelated fallback).
+private const val LOCATION_UNCHANGED_THRESHOLD_DEGREES = 0.001
 
 @RunWith(JUnit4::class)
 class MapViewModelTest {
@@ -89,10 +104,11 @@ class MapViewModelTest {
         activityRepo: ActivityRepository = activityRepo(),
         userRepo: UserRepository = userRepo(),
         healthChecks: Set<BackendHealthCheck> = emptySet(),
+        locationRepo: LocationRepository = locationRepo(activityRepo),
     ) = MapViewModel(
         activityRepository = activityRepo,
         userRepository = userRepo,
-        locationsRepository = locationRepo(activityRepo),
+        locationsRepository = locationRepo,
         locationClient = locationClient,
         broadcastNotifier = broadcastNotifier,
         mapStyleConfig = MapStyleConfig(styleUrl = "https://example.invalid/style.json"),
@@ -153,6 +169,70 @@ class MapViewModelTest {
         }
     }
 
+    @Test
+    fun `GIVEN user cancellation WHEN signing in THEN prior state is preserved and no failure is presented`() = runTest {
+        val vm = viewModel(userRepo = ScriptedSignInUserRepository(SignInResult.Cancelled))
+        val previousState = vm.uiState.value
+
+        vm.signIn(context)
+
+        assertSame(previousState, vm.uiState.value)
+        assertNull(vm.signInPresentation.value)
+        assertIs<User.AnonymousUser>(vm.currentUser.value)
+    }
+
+    @Test
+    fun `GIVEN classified failures WHEN signing in THEN stable product copy replaces provider detail`() = runTest {
+        val expected = mapOf(
+            SignInFailureReason.NO_ACCOUNT to
+                "No Google account is available. Add an account and try again.",
+            SignInFailureReason.NOT_CONFIGURED to
+                "Sign-in isn't configured for this app.",
+            SignInFailureReason.SERVICE_UNAVAILABLE to
+                "Sign-in is temporarily unavailable. Check your connection and try again.",
+            SignInFailureReason.UNEXPECTED to
+                "Sign-in couldn't be completed. Try again.",
+        )
+
+        expected.forEach { (reason, message) ->
+            val vm = viewModel(
+                userRepo = ScriptedSignInUserRepository(SignInResult.Failure(reason)),
+            )
+            val previousState = vm.uiState.value
+
+            vm.signIn(context)
+
+            val presentation = assertNotNull(vm.signInPresentation.value)
+            assertSame(previousState, vm.uiState.value)
+            assertEquals(message, presentation.message)
+            assertEquals(reason != SignInFailureReason.NOT_CONFIGURED, presentation.retryable)
+            listOf(
+                "Requests from this Android client application com.nohex.itur.pro are blocked",
+                "FirebaseAuthException",
+                "api_key=provider-secret",
+                "token=provider-token",
+            ).forEach { rawDetail -> assertFalse(rawDetail in presentation.message) }
+        }
+    }
+
+    @Test
+    fun `GIVEN a retryable sign-in failure WHEN retrying THEN success updates the user`() = runTest {
+        val registered = User.RegisteredUser(UserId("2"), "Test User", "test@example.com")
+        val vm = viewModel(
+            userRepo = ScriptedSignInUserRepository(
+                SignInResult.Failure(SignInFailureReason.SERVICE_UNAVAILABLE),
+                SignInResult.Success(registered),
+            ),
+        )
+        vm.signIn(context)
+
+        assertNotNull(vm.signInPresentation.value).onRetry()
+        runCurrent()
+
+        assertEquals(registered, vm.currentUser.value)
+        assertNull(vm.signInPresentation.value)
+    }
+
     // --- signOut ---
 
     @Test
@@ -184,6 +264,28 @@ class MapViewModelTest {
             vm.startActivity(context)
             assertIs<User.RegisteredUser>(vm.currentUser.value)
         }
+    }
+
+    @Test
+    fun `GIVEN automatic sign-in is unavailable WHEN retrying THEN prior state is preserved until activity starts`() = runTest {
+        val registered = User.RegisteredUser(UserId("2"), "Test User", "test@example.com")
+        val vm = viewModel(
+            userRepo = ScriptedSignInUserRepository(
+                SignInResult.Failure(SignInFailureReason.SERVICE_UNAVAILABLE),
+                SignInResult.Success(registered),
+            ),
+        )
+        val previousState = vm.uiState.value
+
+        vm.startActivity(context)
+
+        assertSame(previousState, vm.uiState.value)
+        assertNotNull(vm.signInPresentation.value).onRetry()
+        runCurrent()
+
+        assertEquals(registered, vm.currentUser.value)
+        assertOngoing(vm)
+        assertNull(vm.signInPresentation.value)
     }
 
     @Test
@@ -231,7 +333,169 @@ class MapViewModelTest {
         }
     }
 
+    @Test
+    fun `GIVEN session restoration is pending WHEN joining THEN current user is resolved`() {
+        runTest {
+            val healthGate = CompletableDeferred<Unit>()
+            val delayedHealthCheck = object : BackendHealthCheck {
+                override val service = BackendService("delayed", "Delayed test service")
+
+                override suspend fun probe() {
+                    healthGate.await()
+                }
+
+                override fun recognizes(cause: Throwable): Boolean = false
+            }
+            val activityRepo = activityRepo(TestFixtures.ongoingActivity)
+            val vm = viewModel(
+                activityRepo = activityRepo,
+                healthChecks = setOf(delayedHealthCheck),
+            )
+            runCurrent()
+            assertNull(vm.currentUser.value)
+
+            vm.joinActivity(TestFixtures.ONGOING_ACTIVITY_ID, context)
+            runCurrent()
+
+            assertOngoing(vm)
+            healthGate.complete(Unit)
+            runCurrent()
+        }
+    }
+
+    // --- MEMB-7A05: single-active-activity blocking ---
+
+    @Test
+    fun `GIVEN the organizer already has an ongoing activity WHEN starting another THEN uiState becomes Idle with a specific message`() {
+        runTest {
+            val userRepo = userRepo()
+            userRepo.signIn(context)
+            val activityRepo = activityRepo(TestFixtures.ongoingActivity)
+            val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
+
+            vm.startActivity(context)
+
+            val state = vm.uiState.value
+            assertIs<MapUiState.Idle>(state)
+            assertEquals("You're already in an activity -- leave it first", state.message)
+        }
+    }
+
+    @Test
+    fun `GIVEN the organizer already has an ongoing activity WHEN starting another THEN no new activity is created`() {
+        runTest {
+            val userRepo = userRepo()
+            userRepo.signIn(context)
+            val activityRepo = activityRepo(TestFixtures.ongoingActivity)
+            val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
+
+            vm.startActivity(context)
+
+            val activities = activityRepo.getActivities(ActivityFilter.ByOrganizer(TestFixtures.ORGANIZER_ID))
+            assertIs<DataResult.Success<List<IturActivity>>>(activities)
+            assertEquals(1, activities.data.size)
+        }
+    }
+
+    @Test
+    fun `GIVEN a participant already active in a different ongoing activity WHEN joining another THEN uiState becomes Idle with a specific message`() {
+        runTest {
+            val userRepo = userRepo()
+            userRepo.signIn(context)
+            val activityRepo = activityRepo(TestFixtures.ongoingActivity, PARTICIPANT_ACTIVITY)
+            val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
+
+            vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+
+            val state = vm.uiState.value
+            assertIs<MapUiState.Idle>(state)
+            assertEquals("You're already in an activity -- leave it first", state.message)
+        }
+    }
+
+    @Test
+    fun `GIVEN a participant already active in a different ongoing activity WHEN joining another THEN they are not added as a participant`() {
+        runTest {
+            val userRepo = userRepo()
+            userRepo.signIn(context)
+            val activityRepo = activityRepo(TestFixtures.ongoingActivity, PARTICIPANT_ACTIVITY)
+            val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
+
+            vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+
+            val updated = activityRepo.getActivity(PARTICIPANT_ACTIVITY.id)
+            assertIs<DataResult.Success<IturActivity>>(updated)
+            assertTrue(TestFixtures.ORGANIZER_ID !in updated.data.participantIds)
+        }
+    }
+
+    @Test
+    fun `GIVEN a user already an active member of an activity WHEN re-joining that same activity THEN it is not blocked`() {
+        runTest {
+            val userRepo = userRepo()
+            userRepo.signIn(context)
+            val activityRepo = activityRepo(TestFixtures.ongoingActivity)
+            val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
+
+            vm.joinActivity(TestFixtures.ONGOING_ACTIVITY_ID, context)
+
+            assertOngoing(vm)
+        }
+    }
+
+    @Test
+    fun `GIVEN the organizer's only membership is a DRAFT activity WHEN starting a new one THEN it is not blocked`() {
+        runTest {
+            val userRepo = userRepo()
+            userRepo.signIn(context)
+            val activityRepo = activityRepo(TestFixtures.draftActivity)
+            val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
+
+            vm.startActivity(context)
+
+            assertOngoing(vm)
+        }
+    }
+
     // --- leaveActivity ---
+
+    @Test
+    fun `GIVEN no local GPS fix WHEN the participant refresh interval elapses THEN markers refresh`() = runTest {
+        val activityRepo = activityRepo(TestFixtures.ongoingActivity)
+        val initialLocations = TestFixtures.ongoingActivityLocations
+        val refreshedLocations = initialLocations.dropLast(1)
+        val locationRepo = mockk<LocationRepository>()
+        coEvery { locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns
+            initialLocations andThen refreshedLocations
+        val userRepo = userRepo().also { it.signIn(context) }
+        val vm = viewModel(
+            activityRepo = activityRepo,
+            userRepo = userRepo,
+            locationRepo = locationRepo,
+        )
+        vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+        assertEquals(initialLocations, vm.participantLocations.value)
+
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        try {
+            advanceTimeBy(999L)
+            runCurrent()
+            assertEquals(initialLocations, vm.participantLocations.value)
+
+            advanceTimeBy(2L)
+            runCurrent()
+            assertEquals(refreshedLocations, vm.participantLocations.value)
+            coVerify(exactly = 0) {
+                locationRepo.updateForParticipant(
+                    TestFixtures.ORGANIZER_ID,
+                    TestFixtures.ONGOING_ACTIVITY_ID,
+                    any(),
+                )
+            }
+        } finally {
+            vm.stopParticipantLocationMonitoring()
+        }
+    }
 
     @Test
     fun `GIVEN no ongoing activity WHEN leaving THEN uiState remains Idle`() {
@@ -264,7 +528,7 @@ class MapViewModelTest {
     fun `GIVEN an ongoing activity as participant WHEN leaving THEN participant is removed and uiState is Idle`() {
         runTest {
             val userRepo = userRepo()
-            val signedInUser = userRepo.signIn(context)
+            val signedInUser = assertIs<SignInResult.Success>(userRepo.signIn(context)).user
             val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
             val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
 
@@ -280,6 +544,73 @@ class MapViewModelTest {
             // The participant is no longer in the list.
             assertFalse(signedInUser.id in result.data.participantIds)
             assertIs<MapUiState.Idle>(vm.uiState.value)
+        }
+    }
+
+    @Test
+    fun `GIVEN an ongoing activity as participant WHEN leaving THEN other participants' locations are not cleared`() {
+        runTest {
+            // A second, still-in-the-activity participant whose location must survive.
+            val otherParticipantId = TestFixtures.PARTICIPANT_2_ID
+            val otherParticipantLocation = Location(latitude = 51.0, longitude = 0.0)
+
+            val userRepo = userRepo()
+            val signedInUser = assertIs<SignInResult.Success>(userRepo.signIn(context)).user
+            val activityRepo = activityRepo(PARTICIPANT_ACTIVITY.copy(participantIds = listOf(otherParticipantId)))
+            val locationRepo = locationRepo(activityRepo)
+            val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo, locationRepo = locationRepo)
+
+            vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+            assertOngoing(vm)
+
+            locationRepo.updateForParticipant(otherParticipantId, PARTICIPANT_ACTIVITY.id, otherParticipantLocation)
+            locationRepo.updateForParticipant(
+                signedInUser.id,
+                PARTICIPANT_ACTIVITY.id,
+                Location(latitude = 52.0, longitude = 1.0),
+            )
+
+            vm.leaveActivity()
+
+            // The other participant's stored location is unchanged (within the fake repo's
+            // small "GPS noise" jitter), proving it was not wiped by the leaving participant.
+            val survivingLocation = locationRepo.getForActivity(PARTICIPANT_ACTIVITY.id)
+                .first { it.userId == otherParticipantId }
+                .location
+            assertTrue(abs(survivingLocation.latitude - otherParticipantLocation.latitude) < LOCATION_UNCHANGED_THRESHOLD_DEGREES)
+            assertTrue(abs(survivingLocation.longitude - otherParticipantLocation.longitude) < LOCATION_UNCHANGED_THRESHOLD_DEGREES)
+        }
+    }
+
+    @Test
+    fun `GIVEN an ongoing activity as organizer WHEN leaving THEN all participants' locations are cleared`() {
+        runTest {
+            val activityRepo = activityRepo()
+            val locationRepo = locationRepo(activityRepo)
+            val vm = viewModel(activityRepo = activityRepo, locationRepo = locationRepo)
+            // startActivity auto-signs in and creates an activity with the current user as organizer.
+            vm.startActivity(context)
+            val activityId = vm.ongoingActivityId.value!!
+            val organizerId = vm.currentUser.value!!.id
+
+            // Add another participant to the activity and seed a location for them.
+            val otherParticipantId = UserId("other-participant")
+            activityRepo.addParticipant(activityId, otherParticipantId)
+            val otherParticipantLocation = Location(latitude = 51.0, longitude = 0.0)
+            locationRepo.updateForParticipant(otherParticipantId, activityId, otherParticipantLocation)
+            locationRepo.updateForParticipant(organizerId, activityId, Location(latitude = 52.0, longitude = 1.0))
+
+            vm.leaveActivity()
+
+            // With no stored location left, getForActivity regenerates a fresh position from
+            // scratch (near the default fallback location), which lands far away from the
+            // location that was seeded above -- proving the original record was cleared.
+            val regeneratedLocation = locationRepo.getForActivity(activityId)
+                .first { it.userId == otherParticipantId }
+                .location
+            assertTrue(
+                abs(regeneratedLocation.latitude - otherParticipantLocation.latitude) > LOCATION_UNCHANGED_THRESHOLD_DEGREES,
+            )
         }
     }
 
@@ -510,6 +841,96 @@ class MapViewModelTest {
     }
 
     @Test
+    fun `GIVEN a persistent outage WHEN virtual time advances THEN retries use bounded exponential backoff`() = runTest {
+        val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore", false)
+        val vm = viewModel(healthChecks = setOf(firestore))
+        vm.startBackendMonitoring()
+        var expectedProbes = firestore.probeCount
+
+        listOf(5, 10, 20, 40, 60).forEachIndexed { index, delaySeconds ->
+            mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(delaySeconds * 1_000L + 1L)
+            runCurrent()
+
+            expectedProbes++
+            assertEquals(expectedProbes, firestore.probeCount)
+            assertEquals(
+                listOf(10, 20, 40, 60, 60)[index],
+                vm.backendAvailability.value.retryCountdown,
+            )
+        }
+        vm.stopBackendMonitoring()
+    }
+
+    @Test
+    fun `GIVEN monitoring is stopped WHEN resumed THEN one retry loop is scheduled`() = runTest {
+        val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore", false)
+        val vm = viewModel(healthChecks = setOf(firestore))
+        vm.startBackendMonitoring()
+        vm.stopBackendMonitoring()
+        val probesWhileInactive = firestore.probeCount
+
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(60_000L)
+        runCurrent()
+
+        assertEquals(probesWhileInactive, firestore.probeCount)
+        vm.startBackendMonitoring()
+        val probesAfterResume = firestore.probeCount
+        vm.startBackendMonitoring()
+        val probesAfterRepeatedStart = firestore.probeCount
+
+        assertEquals(probesAfterResume, probesAfterRepeatedStart)
+
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(5_001L)
+        runCurrent()
+
+        assertEquals(probesAfterRepeatedStart + 1, firestore.probeCount)
+        vm.stopBackendMonitoring()
+    }
+
+    @Test
+    fun `GIVEN manual retry and recovery THEN backoff resets and healthy cadence is thirty seconds`() = runTest {
+        val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore", false)
+        val vm = viewModel(healthChecks = setOf(firestore))
+        vm.startBackendMonitoring()
+
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(5_001L)
+        runCurrent()
+        assertEquals(10, vm.backendAvailability.value.retryCountdown)
+
+        vm.retryNow()
+        assertEquals(5, vm.backendAvailability.value.retryCountdown)
+
+        firestore.available = true
+        vm.retryNow()
+        val probesAfterRecovery = firestore.probeCount
+        assertEquals(BackendAvailabilityUiState(), vm.backendAvailability.value)
+
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(29_999L)
+        runCurrent()
+        assertEquals(probesAfterRecovery, firestore.probeCount)
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(1L)
+        runCurrent()
+        assertEquals(probesAfterRecovery + 1, firestore.probeCount)
+        vm.stopBackendMonitoring()
+    }
+
+    @Test
+    fun `GIVEN one of two services recovers WHEN scheduled retry runs THEN only the remaining outage retries`() = runTest {
+        val auth = FakeBackendHealthCheck("auth", "Firebase Authentication", false)
+        val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore", false)
+        val vm = viewModel(healthChecks = setOf(auth, firestore))
+        vm.startBackendMonitoring()
+        auth.available = true
+
+        mainDispatcherRule.testDispatcher.scheduler.advanceTimeBy(5_001L)
+        runCurrent()
+
+        assertEquals(listOf(firestore.service), vm.backendAvailability.value.failingServices)
+        assertEquals(10, vm.backendAvailability.value.retryCountdown)
+        vm.stopBackendMonitoring()
+    }
+
+    @Test
     fun `GIVEN an ongoing activity WHEN a service fails THEN the operation state is preserved and resumes`() = runTest {
         val firestore = FakeBackendHealthCheck("firestore", "Cloud Firestore")
         val userRepo = userRepo().also { it.signIn(context) }
@@ -542,6 +963,7 @@ class MapViewModelTest {
         )
         val activityRepo = mockk<ActivityRepository>()
         coEvery { activityRepo.getActivities(any()) } returns DataResult.Success(emptyList())
+        coEvery { activityRepo.getActiveActivityId(TestFixtures.ORGANIZER_ID) } returns DataResult.Success(null)
         coEvery {
             activityRepo.addParticipant(
                 TestFixtures.ONGOING_ACTIVITY_ID,
@@ -647,6 +1069,7 @@ class MapViewModelTest {
         runTest {
             val activityRepo = mockk<ActivityRepository>()
             coEvery { activityRepo.getActivities(any()) } returns DataResult.Success(emptyList())
+            coEvery { activityRepo.getActiveActivityId(TestFixtures.ORGANIZER_ID) } returns DataResult.Success(null)
             coEvery { activityRepo.createActivity(TestFixtures.ORGANIZER_ID) } returns DataResult.Error("quota exceeded")
 
             val vm = viewModel(activityRepo = activityRepo)
@@ -655,6 +1078,25 @@ class MapViewModelTest {
             val state = assertIs<MapUiState.Error>(vm.uiState.value)
             assertEquals("quota exceeded", state.message)
         }
+    }
+}
+
+private class ScriptedSignInUserRepository(
+    vararg results: SignInResult,
+) : UserRepository {
+    private val results = ArrayDeque(results.toList())
+    private var current: User = User.AnonymousUser(UserId("1"))
+
+    override suspend fun getCurrentUser(): User = current
+
+    override suspend fun getAll(ids: List<UserId>): List<User> = listOf(current).filter { it.id in ids }
+
+    override suspend fun signIn(context: Context): SignInResult = results.removeFirst().also {
+        if (it is SignInResult.Success) current = it.user
+    }
+
+    override suspend fun signOut() {
+        current = User.AnonymousUser(UserId("1"))
     }
 }
 

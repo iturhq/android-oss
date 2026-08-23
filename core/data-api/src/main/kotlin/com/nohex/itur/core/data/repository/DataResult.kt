@@ -16,5 +16,14 @@ sealed class DataResult<out T> {
     data class NotFound(val id: String) : DataResult<Nothing>()
 
     // The operation could be be completed, details in the message.
-    data class Error(val message: String) : DataResult<Nothing>()
+    data class Error(
+        val message: String,
+        val code: DataErrorCode? = null,
+    ) : DataResult<Nothing>()
+}
+
+/** Stable, backend-neutral reasons that a data operation was rejected. */
+enum class DataErrorCode {
+    ACTIVITY_FULL,
+    ACTIVITY_START_LIMIT_REACHED,
 }

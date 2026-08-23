@@ -3,70 +3,31 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>ComplexCondition:MapLibreView.kt$locationPermissionGranted &amp;&amp; styleLoaded &amp;&amp; map != null &amp;&amp; style != null</ID>
-    <ID>CyclomaticComplexMethod:MapLibreView.kt$@Composable fun MapLibreView( styleUrl: String, isActivityOngoing: Boolean, locationPermissionGranted: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, )</ID>
-    <ID>CyclomaticComplexMethod:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MapScreen( modifier: Modifier = Modifier, viewModel: MapViewModel = hiltViewModel(), locationPermissionCheck: (Context) -&gt; Boolean = ::hasFineLocationPermission, locationPermissionRequest: (((Boolean) -&gt; Unit) -&gt; Unit)? = null, cameraPermissionRequest: (((Boolean) -&gt; Unit) -&gt; Unit)? = null, qrScanSheet: @Composable ( onDismissRequest: () -&gt; Unit, onScanSuccess: (String) -&gt; Unit, ) -&gt; Unit = { onDismissRequest, onScanSuccess -&gt; QRScanSheet( onDismissRequest = onDismissRequest, onScanSuccess = onScanSuccess, ) }, )</ID>
-    <ID>FunctionNaming:ErrorState.kt$@Composable fun ErrorState( modifier: Modifier = Modifier, message: String? = null, )</ID>
-    <ID>FunctionNaming:ErrorState.kt$@Preview(showBackground = true, showSystemUi = true) @Composable private fun MapErrorPreview()</ID>
-    <ID>FunctionNaming:FABs.kt$@Composable internal fun FabSideColumn( horizontalAlignment: Alignment.Horizontal, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -&gt; Unit, )</ID>
-    <ID>FunctionNaming:FABs.kt$@Composable internal fun HelpFABs(onHelpRequested: () -&gt; Unit)</ID>
-    <ID>FunctionNaming:FABs.kt$@Composable internal fun TrackingFABs( onTrackUserRequested: () -&gt; Unit, selfLocationAvailable: Boolean, content: @Composable () -&gt; Unit, )</ID>
-    <ID>FunctionNaming:FABs.kt$@Composable internal fun UserFABs( onSignInRequested: () -&gt; Unit, onSignOutRequested: () -&gt; Unit, isSignedIn: Boolean, )</ID>
-    <ID>FunctionNaming:HelpSheet.kt$@Composable private fun HelpItem(icon: ImageVector, description: String)</ID>
-    <ID>FunctionNaming:HelpSheet.kt$@Composable private fun HelpSheetContent(isOrganizer: Boolean)</ID>
-    <ID>FunctionNaming:HelpSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun HelpSheet( onDismissRequest: () -&gt; Unit, isOrganizer: Boolean, )</ID>
-    <ID>FunctionNaming:HelpSheet.kt$@Preview(showBackground = true) @Composable private fun HelpSheetOrganizerPreview()</ID>
-    <ID>FunctionNaming:HelpSheet.kt$@Preview(showBackground = true) @Composable private fun HelpSheetParticipantPreview()</ID>
-    <ID>FunctionNaming:IdleState.kt$@Composable fun IdleState( onStartRequested: () -&gt; Unit, onSignInRequested: () -&gt; Unit, onSignOutRequested: () -&gt; Unit, onQRRequested: () -&gt; Unit, modifier: Modifier = Modifier, isSignedIn: Boolean, )</ID>
-    <ID>FunctionNaming:IdleState.kt$@Composable private fun ActivityFABs( // A (signed-in) user requests the creation of an activity. onStartRequested: () -&gt; Unit, // The QR button was pressed. onQRRequested: () -&gt; Unit, // Whether the user is registered or anonymous. isSignedIn: Boolean, )</ID>
-    <ID>FunctionNaming:IdleState.kt$@Preview(showBackground = true) @Composable private fun IdleMapPreview()</ID>
-    <ID>FunctionNaming:MapLibreView.kt$@Composable fun MapLibreView( styleUrl: String, isActivityOngoing: Boolean, locationPermissionGranted: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, )</ID>
-    <ID>FunctionNaming:MapScreen.kt$@Composable private fun LocationPermissionNotice( onRequestPermission: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
-    <ID>FunctionNaming:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun BackendUnavailableDialog( failingServiceNames: List&lt;String&gt;, countdown: Int?, onRetryNow: () -&gt; Unit, onExit: () -&gt; Unit, )</ID>
-    <ID>FunctionNaming:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MapScreen( modifier: Modifier = Modifier, viewModel: MapViewModel = hiltViewModel(), locationPermissionCheck: (Context) -&gt; Boolean = ::hasFineLocationPermission, locationPermissionRequest: (((Boolean) -&gt; Unit) -&gt; Unit)? = null, cameraPermissionRequest: (((Boolean) -&gt; Unit) -&gt; Unit)? = null, qrScanSheet: @Composable ( onDismissRequest: () -&gt; Unit, onScanSuccess: (String) -&gt; Unit, ) -&gt; Unit = { onDismissRequest, onScanSuccess -&gt; QRScanSheet( onDismissRequest = onDismissRequest, onScanSuccess = onScanSuccess, ) }, )</ID>
-    <ID>FunctionNaming:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ModalAlert(text: String, onDismissRequest: () -&gt; Unit)</ID>
-    <ID>FunctionNaming:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun RecoverableErrorDialog(message: String, onRetry: () -&gt; Unit, onCancel: () -&gt; Unit)</ID>
-    <ID>FunctionNaming:MapScreen.kt$@Preview(showBackground = true, showSystemUi = true) @Composable fun PreviewModalAlert()</ID>
-    <ID>FunctionNaming:NoMapView.kt$@Composable fun NoMapView( modifier: Modifier = Modifier, )</ID>
-    <ID>FunctionNaming:OngoingState.kt$@Composable internal fun OngoingState( activity: IturActivity, organizer: User, participantIds: List&lt;UserId&gt;, locations: List&lt;ParticipantLocation&gt;, isOrganizer: Boolean, onStopRequested: () -&gt; Unit, onQRRequested: () -&gt; Unit, onTrackUserRequested: () -&gt; Unit, onTrackGroupRequested: () -&gt; Unit, onAttentionRequest: () -&gt; Unit, onHelpRequested: () -&gt; Unit, selfLocationAvailable: Boolean, modifier: Modifier = Modifier, )</ID>
-    <ID>FunctionNaming:OngoingState.kt$@Composable private fun OngoingActivityFABs( onStopRequested: () -&gt; Unit, onAttentionRequest: () -&gt; Unit, onQRRequested: () -&gt; Unit, // Whether the user is the organiser. isOrganizer: Boolean, )</ID>
-    <ID>FunctionNaming:OngoingState.kt$@Preview(showBackground = true, showSystemUi = true) @Composable private fun OrganizerOngoingStatePreview()</ID>
-    <ID>FunctionNaming:QRDisplaySheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun QRDisplaySheet( activityId: IturActivityId, onDismissRequest: () -&gt; Unit, )</ID>
-    <ID>FunctionNaming:QRImage.kt$@Composable fun QRImage(qrURL: String, size: Dp = 300.dp)</ID>
-    <ID>FunctionNaming:QRImage.kt$@Preview @Composable private fun PreviewQRImage()</ID>
-    <ID>FunctionNaming:QRScanSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun QRScanSheet( onDismissRequest: () -&gt; Unit, onScanSuccess: (String) -&gt; Unit, )</ID>
-    <ID>FunctionNaming:QRScanner.kt$@OptIn(ExperimentalGetImage::class) @Composable fun QRScanner( onScanSuccess: (String) -&gt; Unit, modifier: Modifier = Modifier, )</ID>
-    <ID>LongMethod:MapLibreView.kt$@Composable fun MapLibreView( styleUrl: String, isActivityOngoing: Boolean, locationPermissionGranted: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, )</ID>
-    <ID>LongMethod:MapScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MapScreen( modifier: Modifier = Modifier, viewModel: MapViewModel = hiltViewModel(), locationPermissionCheck: (Context) -&gt; Boolean = ::hasFineLocationPermission, locationPermissionRequest: (((Boolean) -&gt; Unit) -&gt; Unit)? = null, cameraPermissionRequest: (((Boolean) -&gt; Unit) -&gt; Unit)? = null, qrScanSheet: @Composable ( onDismissRequest: () -&gt; Unit, onScanSuccess: (String) -&gt; Unit, ) -&gt; Unit = { onDismissRequest, onScanSuccess -&gt; QRScanSheet( onDismissRequest = onDismissRequest, onScanSuccess = onScanSuccess, ) }, )</ID>
-    <ID>LongParameterList:IdleState.kt$( onStartRequested: () -&gt; Unit, onSignInRequested: () -&gt; Unit, onSignOutRequested: () -&gt; Unit, onQRRequested: () -&gt; Unit, modifier: Modifier = Modifier, isSignedIn: Boolean, )</ID>
-    <ID>LongParameterList:MapLibreView.kt$( styleUrl: String, isActivityOngoing: Boolean, locationPermissionGranted: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, )</ID>
-    <ID>LongParameterList:MapScreen.kt$( modifier: Modifier = Modifier, viewModel: MapViewModel = hiltViewModel(), locationPermissionCheck: (Context) -&gt; Boolean = ::hasFineLocationPermission, locationPermissionRequest: (((Boolean) -&gt; Unit) -&gt; Unit)? = null, cameraPermissionRequest: (((Boolean) -&gt; Unit) -&gt; Unit)? = null, qrScanSheet: @Composable ( onDismissRequest: () -&gt; Unit, onScanSuccess: (String) -&gt; Unit, ) -&gt; Unit = { onDismissRequest, onScanSuccess -&gt; QRScanSheet( onDismissRequest = onDismissRequest, onScanSuccess = onScanSuccess, ) }, )</ID>
-    <ID>LongParameterList:MapViewModel.kt$MapViewModel$( private val activityRepository: ActivityRepository, private val userRepository: UserRepository, private val locationsRepository: LocationRepository, private val locationClient: LocationClient, private val broadcastNotifier: BroadcastNotifier, val mapStyleConfig: MapStyleConfig, private val locationUpdateConfig: LocationUpdateConfig, private val backendHealthChecks: Set&lt;@JvmSuppressWildcards BackendHealthCheck&gt;, )</ID>
-    <ID>LongParameterList:OngoingState.kt$( activity: IturActivity, organizer: User, participantIds: List&lt;UserId&gt;, locations: List&lt;ParticipantLocation&gt;, isOrganizer: Boolean, onStopRequested: () -&gt; Unit, onQRRequested: () -&gt; Unit, onTrackUserRequested: () -&gt; Unit, onTrackGroupRequested: () -&gt; Unit, onAttentionRequest: () -&gt; Unit, onHelpRequested: () -&gt; Unit, selfLocationAvailable: Boolean, modifier: Modifier = Modifier, )</ID>
-    <ID>MagicNumber:ErrorState.kt$.3f</ID>
-    <ID>MagicNumber:ErrorState.kt$.6f</ID>
+    <ID>CyclomaticComplexMethod:MapLibreView.kt$@Composable fun MapLibreView( styleUrl: String, isActivityOngoing: Boolean, locationPermissionGranted: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, onStyleLoadFailed: () -&gt; Unit = {}, onStyleLoadSucceeded: () -&gt; Unit = {}, )</ID>
+    <ID>LongMethod:MapLibreView.kt$@Composable fun MapLibreView( styleUrl: String, isActivityOngoing: Boolean, locationPermissionGranted: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, onStyleLoadFailed: () -&gt; Unit = {}, onStyleLoadSucceeded: () -&gt; Unit = {}, )</ID>
+    <ID>LongParameterList:IdleState.kt$( onStartRequested: () -&gt; Unit, onSignInRequested: () -&gt; Unit, onSignOutRequested: () -&gt; Unit, onQRRequested: () -&gt; Unit, onHelpRequested: () -&gt; Unit, modifier: Modifier = Modifier, isSignedIn: Boolean, authenticationActionsEnabled: Boolean = true, activityActionsEnabled: Boolean = true, )</ID>
+    <ID>LongParameterList:MapLibreView.kt$( styleUrl: String, isActivityOngoing: Boolean, locationPermissionGranted: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, onStyleLoadFailed: () -&gt; Unit = {}, onStyleLoadSucceeded: () -&gt; Unit = {}, )</ID>
+    <ID>LongParameterList:MapScreen.kt$( modifier: Modifier = Modifier, viewModel: MapViewModel = hiltViewModel(), locationPermissionCheck: (Context) -&gt; Boolean = ::hasFineLocationPermission, locationPermissionRequest: (((Boolean) -&gt; Unit) -&gt; Unit)? = null, cameraPermissionRequest: (((Boolean) -&gt; Unit) -&gt; Unit)? = null, qrScanSheet: ( @Composable ( onDismissRequest: () -&gt; Unit, onScanSuccess: (String) -&gt; Unit, ) -&gt; Unit )? = null, openGlEsSupportCheck: (Context) -&gt; OpenGlEsSupport = ::checkOpenGlEsSupport, qrCustomization: QrCustomization = QrCustomization(), )</ID>
+    <ID>LongParameterList:MapViewModel.kt$MapViewModel$( private val activityRepository: ActivityRepository, private val userRepository: UserRepository, private val locationsRepository: LocationRepository, private val locationClient: LocationClient, private val broadcastNotifier: BroadcastNotifier, val mapStyleConfig: MapStyleConfig, private val locationUpdateConfig: LocationUpdateConfig, backendHealthChecks: Set&lt;@JvmSuppressWildcards BackendHealthCheck&gt;, private val backendHealthCoordinator: BackendHealthRecoveryCoordinator = BackendHealthRecoveryCoordinator(backendHealthChecks), private val mapStyleRendererHealthReporter: MapStyleRendererHealthReporter = MapStyleRendererHealthReporter(dagger.Lazy { backendHealthCoordinator }), )</ID>
+    <ID>MagicNumber:BackendHealthRecoveryCoordinator.kt$BackendHealthRecoveryCoordinator$1_000L</ID>
+    <ID>MagicNumber:HelpOverlay.kt$1000f</ID>
+    <ID>MagicNumber:HelpOverlay.kt$24f</ID>
+    <ID>MagicNumber:HelpOverlay.kt$56f</ID>
+    <ID>MagicNumber:HelpOverlay.kt$900f</ID>
     <ID>MagicNumber:MapLibreView.kt$1000</ID>
     <ID>MagicNumber:MapLibreView.kt$5000</ID>
     <ID>MagicNumber:MapUtils.kt$15.0</ID>
-    <ID>MagicNumber:MapViewModel.kt$10</ID>
-    <ID>MagicNumber:MapViewModel.kt$20</ID>
-    <ID>MagicNumber:MapViewModel.kt$40</ID>
-    <ID>MagicNumber:MapViewModel.kt$5</ID>
-    <ID>MagicNumber:MapViewModel.kt$60</ID>
-    <ID>MagicNumber:MapViewModel.kt$MapViewModel$1_000L</ID>
     <ID>MagicNumber:NoMapView.kt$.3f</ID>
     <ID>MatchingDeclarationName:MapNavigation.kt$MapRoute</ID>
     <ID>MaxLineLength:QRImageTest.kt$QRImageTest$fun</ID>
     <ID>ReturnCount:QRImage.kt$internal fun String.isValidQrUrl(): Boolean</ID>
+    <ID>TooGenericExceptionCaught:BackendHealthRecoveryCoordinator.kt$BackendHealthRecoveryCoordinator$failure: Exception</ID>
     <ID>TooGenericExceptionCaught:MapUtils.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:MapViewModel.kt$MapViewModel$e: Exception</ID>
+    <ID>TooManyFunctions:BackendHealthRecoveryCoordinator.kt$BackendHealthRecoveryCoordinator : BackendHealthReporter</ID>
     <ID>TooManyFunctions:MapViewModel.kt$MapViewModel : ViewModel</ID>
-    <ID>UnusedParameter:OngoingState.kt$activity: IturActivity</ID>
-    <ID>UnusedParameter:OngoingState.kt$locations: List&lt;ParticipantLocation&gt;</ID>
-    <ID>UnusedParameter:OngoingState.kt$organizer: User</ID>
-    <ID>UnusedParameter:OngoingState.kt$participantIds: List&lt;UserId&gt;</ID>
     <ID>UnusedPrivateMember:ErrorState.kt$@Preview(showBackground = true, showSystemUi = true) @Composable private fun MapErrorPreview()</ID>
-    <ID>UnusedPrivateMember:HelpSheet.kt$@Preview(showBackground = true) @Composable private fun HelpSheetOrganizerPreview()</ID>
-    <ID>UnusedPrivateMember:HelpSheet.kt$@Preview(showBackground = true) @Composable private fun HelpSheetParticipantPreview()</ID>
+    <ID>UnusedPrivateMember:HelpOverlay.kt$@Preview(showBackground = true, showSystemUi = true) @Composable private fun HelpOverlayPreview()</ID>
     <ID>UnusedPrivateMember:IdleState.kt$@Preview(showBackground = true) @Composable private fun IdleMapPreview()</ID>
     <ID>UnusedPrivateMember:OngoingState.kt$@Preview(showBackground = true, showSystemUi = true) @Composable private fun OrganizerOngoingStatePreview()</ID>
     <ID>UnusedPrivateMember:QRImage.kt$@Preview @Composable private fun PreviewQRImage()</ID>
