@@ -17,8 +17,6 @@ import android.os.Messenger
 import androidx.datastore.core.MultiProcessDataStoreFactory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import java.io.File
-import java.util.UUID
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +31,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
+import java.util.UUID
 
 /** Proves one atomic winner while two OS processes update the same physical DataStore file. */
 @RunWith(AndroidJUnit4::class)
@@ -72,11 +72,10 @@ class IturPreferencesDataStoreMultiProcessTest {
         }
     }
 
-    private fun createStore(file: File, scope: CoroutineScope) =
-        MultiProcessDataStoreFactory.create(
-            serializer = IturSettingsSerializer(),
-            scope = scope,
-        ) { file }
+    private fun createStore(file: File, scope: CoroutineScope) = MultiProcessDataStoreFactory.create(
+        serializer = IturSettingsSerializer(),
+        scope = scope,
+    ) { file }
 }
 
 private class RemoteProcessClient(private val context: Context) : AutoCloseable {
@@ -86,21 +85,23 @@ private class RemoteProcessClient(private val context: Context) : AutoCloseable 
         private set
 
     private val connected = CompletableDeferred<Messenger>()
-    private val replies = Messenger(Handler(Looper.getMainLooper()) { message ->
-        when (message.what) {
-            DataStoreProcessProtocol.GENERATOR_ENTERED -> {
-                remotePid = message.arg1
-                generatorEntered.complete(Unit)
+    private val replies = Messenger(
+        Handler(Looper.getMainLooper()) { message ->
+            when (message.what) {
+                DataStoreProcessProtocol.GENERATOR_ENTERED -> {
+                    remotePid = message.arg1
+                    generatorEntered.complete(Unit)
+                }
+                DataStoreProcessProtocol.COMPLETED -> completed.complete(
+                    requireNotNull(message.data.getString(DataStoreProcessProtocol.RESULT)),
+                )
+                DataStoreProcessProtocol.FAILED -> completed.completeExceptionally(
+                    AssertionError(message.data.getString(DataStoreProcessProtocol.RESULT)),
+                )
             }
-            DataStoreProcessProtocol.COMPLETED -> completed.complete(
-                requireNotNull(message.data.getString(DataStoreProcessProtocol.RESULT)),
-            )
-            DataStoreProcessProtocol.FAILED -> completed.completeExceptionally(
-                AssertionError(message.data.getString(DataStoreProcessProtocol.RESULT)),
-            )
-        }
-        true
-    })
+            true
+        },
+    )
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
             connected.complete(Messenger(service))

@@ -2,29 +2,30 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>LongMethod:MapLibreView.kt$@Composable fun MapLibreView( styleUrl: String, isActivityOngoing: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, )</ID>
-    <ID>LongParameterList:IdleState.kt$( onStartRequested: () -&gt; Unit, onSignInRequested: () -&gt; Unit, onSignOutRequested: () -&gt; Unit, onQRRequested: () -&gt; Unit, modifier: Modifier = Modifier, isSignedIn: Boolean, authenticationActionsEnabled: Boolean = true, activityActionsEnabled: Boolean = true, )</ID>
-    <ID>LongParameterList:MapLibreView.kt$( styleUrl: String, isActivityOngoing: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, )</ID>
-    <ID>LongParameterList:MapViewModel.kt$MapViewModel$( private val activityRepository: ActivityRepository, private val userRepository: UserRepository, private val locationsRepository: LocationRepository, private val locationClient: LocationClient, private val broadcastNotifier: BroadcastNotifier, val mapStyleConfig: MapStyleConfig, private val locationUpdateConfig: LocationUpdateConfig, private val backendHealthChecks: Set&lt;@JvmSuppressWildcards BackendHealthCheck&gt;, )</ID>
+    <ID>CyclomaticComplexMethod:MapLibreView.kt$@Composable fun MapLibreView( styleUrl: String, isActivityOngoing: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, onStyleLoadFailed: () -&gt; Unit = {}, onStyleLoadSucceeded: () -&gt; Unit = {}, )</ID>
+    <ID>LongMethod:MapLibreView.kt$@Composable fun MapLibreView( styleUrl: String, isActivityOngoing: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, onStyleLoadFailed: () -&gt; Unit = {}, onStyleLoadSucceeded: () -&gt; Unit = {}, )</ID>
+    <ID>LongParameterList:IdleState.kt$( onStartRequested: () -&gt; Unit, onSignInRequested: () -&gt; Unit, onSignOutRequested: () -&gt; Unit, onQRRequested: () -&gt; Unit, onHelpRequested: () -&gt; Unit, modifier: Modifier = Modifier, isSignedIn: Boolean, authenticationActionsEnabled: Boolean = true, activityActionsEnabled: Boolean = true, )</ID>
+    <ID>LongParameterList:MapLibreView.kt$( styleUrl: String, isActivityOngoing: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, onStyleLoadFailed: () -&gt; Unit = {}, onStyleLoadSucceeded: () -&gt; Unit = {}, )</ID>
+    <ID>LongParameterList:MapViewModel.kt$MapViewModel$( private val activityRepository: ActivityRepository, private val userRepository: UserRepository, private val locationsRepository: LocationRepository, private val locationClient: LocationClient, private val broadcastNotifier: BroadcastNotifier, val mapStyleConfig: MapStyleConfig, private val locationUpdateConfig: LocationUpdateConfig, backendHealthChecks: Set&lt;@JvmSuppressWildcards BackendHealthCheck&gt;, private val backendHealthCoordinator: BackendHealthRecoveryCoordinator = BackendHealthRecoveryCoordinator(backendHealthChecks), private val mapStyleRendererHealthReporter: MapStyleRendererHealthReporter = MapStyleRendererHealthReporter(dagger.Lazy { backendHealthCoordinator }), )</ID>
+    <ID>MagicNumber:BackendHealthRecoveryCoordinator.kt$BackendHealthRecoveryCoordinator$1_000L</ID>
+    <ID>MagicNumber:HelpOverlay.kt$1000f</ID>
+    <ID>MagicNumber:HelpOverlay.kt$24f</ID>
+    <ID>MagicNumber:HelpOverlay.kt$56f</ID>
+    <ID>MagicNumber:HelpOverlay.kt$900f</ID>
     <ID>MagicNumber:MapLibreView.kt$1000</ID>
     <ID>MagicNumber:MapLibreView.kt$5000</ID>
     <ID>MagicNumber:MapUtils.kt$15.0</ID>
-    <ID>MagicNumber:MapViewModel.kt$10</ID>
-    <ID>MagicNumber:MapViewModel.kt$20</ID>
-    <ID>MagicNumber:MapViewModel.kt$40</ID>
-    <ID>MagicNumber:MapViewModel.kt$5</ID>
-    <ID>MagicNumber:MapViewModel.kt$60</ID>
-    <ID>MagicNumber:MapViewModel.kt$MapViewModel$1_000L</ID>
     <ID>MagicNumber:NoMapView.kt$.3f</ID>
     <ID>MatchingDeclarationName:MapNavigation.kt$MapRoute</ID>
     <ID>MaxLineLength:QRImageTest.kt$QRImageTest$fun</ID>
     <ID>ReturnCount:QRImage.kt$internal fun String.isValidQrUrl(): Boolean</ID>
+    <ID>TooGenericExceptionCaught:BackendHealthRecoveryCoordinator.kt$BackendHealthRecoveryCoordinator$failure: Exception</ID>
     <ID>TooGenericExceptionCaught:MapUtils.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:MapViewModel.kt$MapViewModel$e: Exception</ID>
+    <ID>TooManyFunctions:BackendHealthRecoveryCoordinator.kt$BackendHealthRecoveryCoordinator : BackendHealthReporter</ID>
     <ID>TooManyFunctions:MapViewModel.kt$MapViewModel : ViewModel</ID>
     <ID>UnusedPrivateMember:ErrorState.kt$@Preview(showBackground = true, showSystemUi = true) @Composable private fun MapErrorPreview()</ID>
-    <ID>UnusedPrivateMember:HelpSheet.kt$@Preview(showBackground = true) @Composable private fun HelpSheetOrganizerPreview()</ID>
-    <ID>UnusedPrivateMember:HelpSheet.kt$@Preview(showBackground = true) @Composable private fun HelpSheetParticipantPreview()</ID>
+    <ID>UnusedPrivateMember:HelpOverlay.kt$@Preview(showBackground = true, showSystemUi = true) @Composable private fun HelpOverlayPreview()</ID>
     <ID>UnusedPrivateMember:IdleState.kt$@Preview(showBackground = true) @Composable private fun IdleMapPreview()</ID>
     <ID>UnusedPrivateMember:OngoingState.kt$@Preview(showBackground = true, showSystemUi = true) @Composable private fun OrganizerOngoingStatePreview()</ID>
     <ID>UnusedPrivateMember:QRImage.kt$@Preview @Composable private fun PreviewQRImage()</ID>

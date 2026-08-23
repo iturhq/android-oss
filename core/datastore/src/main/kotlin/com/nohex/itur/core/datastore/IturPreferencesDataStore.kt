@@ -34,14 +34,14 @@ class IturPreferencesDataStore @Inject constructor(
     }
 
     /** Uses DataStore's transaction so concurrent processes generate at most one winner. */
-    suspend fun getOrCreateParticipantDisplayName(generate: () -> String): String =
-        iturPreferences.updateData { currentPreferences ->
-            if (currentPreferences.participant_display_name.isNotBlank()) {
-                currentPreferences
-            } else {
-                currentPreferences.copy(participant_display_name = generate())
-            }
-        }.participant_display_name
+    @Suppress("MaxLineLength")
+    suspend fun getOrCreateParticipantDisplayName(generate: () -> String): String = iturPreferences.updateData { currentPreferences ->
+        if (currentPreferences.participant_display_name.isNotBlank()) {
+            currentPreferences
+        } else {
+            currentPreferences.copy(participant_display_name = generate())
+        }
+    }.participant_display_name
 
     suspend fun setParticipantDisplayName(name: String) {
         iturPreferences.updateData { currentPreferences ->

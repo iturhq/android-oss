@@ -1,3 +1,8 @@
+/*
+ * Itur © 2025 by Max Noé <code@itur.cat>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 package com.nohex.itur.core.datastore
 
 import android.app.Service
@@ -8,13 +13,13 @@ import android.os.Looper
 import android.os.Message
 import android.os.Messenger
 import androidx.datastore.core.MultiProcessDataStoreFactory
-import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import java.io.File
 
 /** Test-only service hosted in a distinct OS process by the androidTest manifest. */
 class RemoteDataStoreService : Service() {
@@ -52,9 +57,11 @@ class RemoteDataStoreService : Service() {
                     TestEmailCipher,
                 )
                 dataStore.getOrCreateParticipantDisplayName {
-                    replies.send(Message.obtain(null, DataStoreProcessProtocol.GENERATOR_ENTERED).apply {
-                        arg1 = android.os.Process.myPid()
-                    })
+                    replies.send(
+                        Message.obtain(null, DataStoreProcessProtocol.GENERATOR_ENTERED).apply {
+                            arg1 = android.os.Process.myPid()
+                        },
+                    )
                     runBlockingRelease()
                     "Remote generated name"
                 }
@@ -69,8 +76,10 @@ class RemoteDataStoreService : Service() {
     private fun runBlockingRelease() = kotlinx.coroutines.runBlocking { release.await() }
 
     private fun reply(replies: Messenger, what: Int, result: String) {
-        replies.send(Message.obtain(null, what).apply {
-            data.putString(DataStoreProcessProtocol.RESULT, result)
-        })
+        replies.send(
+            Message.obtain(null, what).apply {
+                data.putString(DataStoreProcessProtocol.RESULT, result)
+            },
+        )
     }
 }

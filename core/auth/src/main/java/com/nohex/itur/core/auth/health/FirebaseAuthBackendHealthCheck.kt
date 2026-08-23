@@ -23,11 +23,15 @@ import javax.inject.Inject
 class FirebaseAuthBackendHealthCheck @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
 ) : BackendHealthCheck {
+    private companion object {
+        const val DIAGNOSTIC_ORDER = 30
+    }
+
     override val service = BackendService(
         id = BackendServiceIds.FIREBASE_AUTH,
         displayName = "Firebase Authentication",
     )
-    override val diagnosticOrder = 30
+    override val diagnosticOrder = DIAGNOSTIC_ORDER
     override val successDetail = "Authentication session reachable"
 
     override suspend fun probe() {

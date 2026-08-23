@@ -26,12 +26,12 @@ class FakeUserSettingsRepository : UserSettingsRepository {
         _userSettings.update { it.copy(email = email) }
     }
 
-    override suspend fun getOrCreateParticipantDisplayName(generate: () -> String): String =
-        participantNameMutex.withLock {
-            _userSettings.value.participantDisplayName ?: generate().also { generated ->
-                _userSettings.update { it.copy(participantDisplayName = generated) }
-            }
+    @Suppress("MaxLineLength")
+    override suspend fun getOrCreateParticipantDisplayName(generate: () -> String): String = participantNameMutex.withLock {
+        _userSettings.value.participantDisplayName ?: generate().also { generated ->
+            _userSettings.update { it.copy(participantDisplayName = generated) }
         }
+    }
 
     override suspend fun setParticipantDisplayName(name: String) {
         _userSettings.update { it.copy(participantDisplayName = name) }

@@ -15,9 +15,10 @@ internal class OfflineFirstUserSettingsRepository @Inject constructor(
 ) : UserSettingsRepository {
     override val userSettings: Flow<UserSettings> = iturPreferencesDataSource.preferences
     override suspend fun setUserEmail(email: String) = iturPreferencesDataSource.setUserEmail(email)
-    override suspend fun getOrCreateParticipantDisplayName(generate: () -> String): String =
-        iturPreferencesDataSource.getOrCreateParticipantDisplayName(generate)
 
-    override suspend fun setParticipantDisplayName(name: String) =
-        iturPreferencesDataSource.setParticipantDisplayName(name)
+    @Suppress("MaxLineLength")
+    override suspend fun getOrCreateParticipantDisplayName(generate: () -> String): String = iturPreferencesDataSource.getOrCreateParticipantDisplayName(generate)
+
+    @Suppress("MaxLineLength")
+    override suspend fun setParticipantDisplayName(name: String) = iturPreferencesDataSource.setParticipantDisplayName(name)
 }

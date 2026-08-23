@@ -18,12 +18,16 @@ import javax.inject.Inject
 class FirestoreBackendHealthCheck @Inject constructor(
     private val firestore: FirebaseFirestore,
 ) : BackendHealthCheck {
+    private companion object {
+        const val DIAGNOSTIC_ORDER = 40
+    }
+
     override val service = BackendService(
         id = BackendServiceIds.FIREBASE_FIRESTORE,
         displayName = "Cloud Firestore",
     )
     override val prerequisiteServiceIds = setOf(BackendServiceIds.FIREBASE_AUTH)
-    override val diagnosticOrder = 40
+    override val diagnosticOrder = DIAGNOSTIC_ORDER
     override val successDetail = "Bounded server read completed"
 
     override suspend fun probe() {
