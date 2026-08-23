@@ -198,6 +198,7 @@ private constructor(
         }
     }
 
+    @Suppress("MaxLineLength")
     override suspend fun createActivity(organizerId: UserId): DataResult<IturActivity> = when (val admitted = admissionGateway.start()) {
         is DataResult.Success -> getActivity(admitted.data)
         is DataResult.Error -> admitted
@@ -312,14 +313,6 @@ private constructor(
         )
     }
 
-    private fun Transaction.clearReservation(userId: UserId) {
-        set(
-            usersCollection.document(userId.value),
-            mapOf(ACTIVE_ACTIVITY_ID to null),
-            SetOptions.merge(),
-        )
-    }
-
     private fun Transaction.requireReservationAvailable(
         existingActivityId: String?,
         userId: UserId,
@@ -351,7 +344,7 @@ private constructor(
         }
 
         update(reference, statusUpdates(newStatus))
-        applyReservationTransition(transition, reservations, activityId)
+        applyReservationTransition(transition, activityId)
         return before.withStatus(newStatus)
     }
 
@@ -371,6 +364,7 @@ private constructor(
         return MembershipTransition(members, !wasOngoing && willBeOngoing, wasOngoing && !willBeOngoing)
     }
 
+    @Suppress("MaxLineLength")
     private fun Transaction.readReservations(members: List<UserId>): Map<UserId, String?> = members.associateWith { userId ->
         get(usersCollection.document(userId.value)).getString(ACTIVE_ACTIVITY_ID)
     }
@@ -384,6 +378,7 @@ private constructor(
         }
     }
 
+    @Suppress("MaxLineLength")
     private fun statusUpdates(newStatus: IturActivityStatus): Map<String, Any> = mutableMapOf<String, Any>("status" to newStatus.name).apply {
         if (newStatus.isTerminal()) {
             this["finishedOn"] = FieldValue.serverTimestamp()
@@ -394,7 +389,6 @@ private constructor(
 
     private fun Transaction.applyReservationTransition(
         transition: MembershipTransition,
-        reservations: Map<UserId, String?>,
         activityId: IturActivityId,
     ) {
         when {
@@ -408,6 +402,7 @@ private constructor(
     }
 }
 
+@Suppress("MaxLineLength")
 private fun IturActivityStatus.isTerminal(): Boolean = this == IturActivityStatus.FINISHED || this == IturActivityStatus.CANCELLED
 
 private data class MembershipTransition(
@@ -430,6 +425,7 @@ internal interface FirestoreTransactionExecutor {
 private class FirebaseFirestoreTransactionExecutor(
     private val firestore: FirebaseFirestore,
 ) : FirestoreTransactionExecutor {
+    @Suppress("MaxLineLength")
     override suspend fun <T> run(operation: (Transaction) -> T): T = firestore.runTransaction(Transaction.Function(operation)).await()
 }
 
@@ -558,18 +554,6 @@ private fun IturActivityDTO.toDomain(): IturActivity {
         participantSignals = signals,
     )
 }
-
-private fun IturActivity.toDto(): IturActivityDTO = IturActivityDTO(
-    id = id.value,
-    organizerId = organizerId.value,
-    participantIds = participantIds.map { it.value },
-    status = status.name,
-    createdOn = createdOn,
-    startTime = startTime,
-    finishedOn = finishedOn,
-    listed = listed,
-    participantSignals = participantSignals.mapKeys { it.key.value }.mapValues { it.value.name },
-)
 
 data class BroadcastDTO(
     @DocumentId

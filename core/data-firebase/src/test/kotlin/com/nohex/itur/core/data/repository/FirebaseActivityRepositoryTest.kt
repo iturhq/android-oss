@@ -14,7 +14,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
-import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.Transaction
 import com.nohex.itur.core.data.health.BackendHealthObservation
 import com.nohex.itur.core.data.health.BackendHealthReporter
@@ -93,6 +92,7 @@ private fun reservationSnapshot(activeActivityId: String?): DocumentSnapshot = m
     every { getString("activeActivityId") } returns activeActivityId
 }
 
+@Suppress("LargeClass")
 class FirebaseActivityRepositoryTest {
     private val activitiesCollection = mockk<CollectionReference>()
     private val usersCollection = mockk<CollectionReference>()
@@ -583,10 +583,12 @@ class FirebaseActivityRepositoryTest {
     fun `WHEN removing a participant THEN trusted departure runs and the stored activity is returned`() = runBlocking {
         val docRef = mockk<DocumentReference>()
         every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
-        every { docRef.get() } returns successfulTask(mockk {
-            every { exists() } returns true
-            every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
-        })
+        every { docRef.get() } returns successfulTask(
+            mockk {
+                every { exists() } returns true
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
+            },
+        )
         admissionGateway.leaveResult = DataResult.Success(ACTIVITY_ID)
 
         val result = repository.removeParticipant(ACTIVITY_ID, PARTICIPANT_ID)

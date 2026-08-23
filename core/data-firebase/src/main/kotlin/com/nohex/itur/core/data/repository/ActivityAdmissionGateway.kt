@@ -22,12 +22,16 @@ internal interface ActivityAdmissionGateway {
 internal class FirebaseFunctionsActivityAdmissionGateway(
     private val functions: FirebaseFunctions,
 ) : ActivityAdmissionGateway {
+    @Suppress("MaxLineLength")
     override suspend fun start(activityId: IturActivityId?): DataResult<IturActivityId> = call("startActivity", activityId)
 
+    @Suppress("MaxLineLength")
     override suspend fun join(activityId: IturActivityId): DataResult<IturActivityId> = call("joinActivity", activityId)
 
+    @Suppress("MaxLineLength")
     override suspend fun leave(activityId: IturActivityId): DataResult<IturActivityId> = call("leaveActivity", activityId)
 
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun call(
         functionName: String,
         activityId: IturActivityId?,
