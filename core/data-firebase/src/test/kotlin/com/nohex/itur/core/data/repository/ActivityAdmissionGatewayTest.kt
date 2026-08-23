@@ -9,6 +9,7 @@ import com.google.android.gms.tasks.Tasks
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.functions.FirebaseFunctionsException
 import com.google.firebase.functions.HttpsCallableReference
+import com.google.firebase.functions.HttpsCallableResult
 import com.nohex.itur.core.domain.id.IturActivityId
 import io.mockk.every
 import io.mockk.mockk
@@ -59,9 +60,11 @@ class ActivityAdmissionGatewayTest {
     fun `WHEN leaving THEN trusted leave callable receives the activity id`() = runBlocking {
         every { functions.getHttpsCallable("leaveActivity") } returns callable
         every { callable.call(mapOf("activityId" to "Activity000000000001")) } returns
-            Tasks.forResult(mockk {
-                every { data } returns mapOf("activityId" to "Activity000000000001")
-            })
+            Tasks.forResult(
+                HttpsCallableResult::class.java
+                    .getConstructor(Any::class.java)
+                    .newInstance(mapOf("activityId" to "Activity000000000001")),
+            )
 
         val result = gateway.leave(IturActivityId("Activity000000000001"))
 
