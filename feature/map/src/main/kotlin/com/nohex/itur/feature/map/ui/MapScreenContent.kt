@@ -14,9 +14,9 @@ import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.testTag
 import com.nohex.itur.core.domain.model.User
 import com.nohex.itur.core.ui.components.IturProgressIndicator
-import com.nohex.itur.feature.map.ui.components.map.BlockingState
 import com.nohex.itur.feature.map.ui.components.map.ErrorState
 import com.nohex.itur.feature.map.ui.components.map.IdleState
 import com.nohex.itur.feature.map.ui.components.map.MapLibreView
@@ -57,10 +57,6 @@ private fun MapContent(
                 "${environment.openGlEsSupport.reportedVersion}.",
             modifier = environment.modifier,
         )
-        !interaction.locationPermissionGranted -> BlockingState(
-            title = "Location permission required",
-            message = "Allow location access to show the map and share your position during an activity.",
-        )
         else -> MapReadyContent(viewModel, environment, presentation, interaction)
     }
 }
@@ -73,7 +69,7 @@ private fun MapReadyContent(
     interaction: MapInteractionState,
 ) {
     if (environment.isInspection) {
-        NoMapView()
+        NoMapView(modifier = environment.modifier.testTag("persistent_map_surface"))
     } else {
         MapLibreView(
             styleUrl = viewModel.mapStyleConfig.styleUrl,
@@ -82,7 +78,9 @@ private fun MapReadyContent(
             organizerId = presentation.organizerId,
             currentUserId = presentation.currentUser?.id,
             participantLocations = presentation.participantLocations,
-            modifier = environment.modifier.fillMaxSize(),
+            modifier = environment.modifier
+                .fillMaxSize()
+                .testTag("persistent_map_surface"),
             onMapReady = { interaction.mapLibreMap = it },
             onStyleLoadFailed = viewModel::reportMapStyleLoadFailed,
             onStyleLoadSucceeded = viewModel::reportMapStyleLoadSucceeded,
