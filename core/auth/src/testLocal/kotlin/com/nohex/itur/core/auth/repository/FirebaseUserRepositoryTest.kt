@@ -24,14 +24,18 @@ import dagger.Lazy
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
+import io.mockk.slot
 import io.mockk.unmockkStatic
 import io.mockk.verify
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -64,6 +68,9 @@ class FirebaseUserRepositoryTest {
     @BeforeTest
     fun setUp() {
         mockkStatic(FirebaseFirestore::class)
+        every { firebaseAuth.addAuthStateListener(any()) } answers {
+            firstArg<FirebaseAuth.AuthStateListener>().onAuthStateChanged(firebaseAuth)
+        }
     }
 
     @AfterTest
@@ -88,6 +95,27 @@ class FirebaseUserRepositoryTest {
         assertEquals(UserId("uid-1"), user.id)
         assertEquals("Jane Doe", user.name)
         assertEquals("jane@example.com", user.email)
+    }
+
+    @Test
+    fun `GIVEN Firebase is rehydrating a persisted session WHEN getting the current user THEN waits for auth state`() = runBlocking {
+        val listener = slot<FirebaseAuth.AuthStateListener>()
+        every { firebaseAuth.addAuthStateListener(capture(listener)) } returns Unit
+        val firebaseUser = mockk<FirebaseUser> {
+            every { uid } returns "restored-uid"
+            every { displayName } returns "Restored User"
+            every { email } returns "restored@example.com"
+        }
+        every { firebaseAuth.currentUser } returns firebaseUser
+
+        val result = async(start = CoroutineStart.UNDISPATCHED) { repository.getCurrentUser() }
+
+        assertFalse(result.isCompleted)
+        listener.captured.onAuthStateChanged(firebaseAuth)
+
+        val user = assertIs<User.RegisteredUser>(result.await())
+        assertEquals(UserId("restored-uid"), user.id)
+        verify(exactly = 1) { firebaseAuth.removeAuthStateListener(listener.captured) }
     }
 
     // --- signOut ---
