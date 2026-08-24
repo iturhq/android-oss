@@ -176,6 +176,24 @@ constructor(
 
     private suspend fun findOngoingActivity(): IturActivity? {
         val user = _currentUser.value ?: return null
+
+        // Current admission writes the caller's canonical active reservation and participant
+        // membership to separate documents, leaving the legacy participantIds array frozen.
+        // Resolve that exact activity first; the queries below remain as compatibility fallback
+        // for pre-reservation installs and legacy activity records.
+        val reservedActivityId = when (val result = activityRepository.getActiveActivityId(user.id)) {
+            is DataResult.Success -> result.data
+            is DataResult.Error -> throw BackendInitializationException(result.message)
+            is DataResult.NotFound -> null
+        }
+        if (reservedActivityId != null) {
+            when (val result = activityRepository.getActivity(reservedActivityId)) {
+                is DataResult.Success -> if (result.data.status == IturActivityStatus.ONGOING) return result.data
+                is DataResult.Error -> throw BackendInitializationException(result.message)
+                is DataResult.NotFound -> Unit
+            }
+        }
+
         val organized = when (
             val result = activityRepository.getActivities(
                 ActivityFilter.OngoingByOrganizer(user.id),

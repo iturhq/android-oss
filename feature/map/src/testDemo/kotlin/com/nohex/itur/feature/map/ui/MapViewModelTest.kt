@@ -158,6 +158,23 @@ class MapViewModelTest {
         }
     }
 
+    @Test
+    fun `GIVEN a modern participant reservation WHEN ViewModel is created THEN ongoing activity restores without the legacy array query`() = runTest {
+        val participantId = UserId("modern-participant")
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        coEvery { userRepo.getCurrentUser() } returns User.RegisteredUser(participantId, null, null)
+        val activityRepo = mockk<ActivityRepository>(relaxed = true)
+        coEvery { activityRepo.getActiveActivityId(participantId) } returns
+            DataResult.Success(PARTICIPANT_ACTIVITY.id)
+        coEvery { activityRepo.getActivity(PARTICIPANT_ACTIVITY.id) } returns
+            DataResult.Success(PARTICIPANT_ACTIVITY)
+
+        val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
+
+        assertEquals(PARTICIPANT_ACTIVITY.id, vm.ongoingActivityId.value)
+        coVerify(exactly = 0) { activityRepo.getActivities(any()) }
+    }
+
     // --- signIn ---
 
     @Test
@@ -1084,11 +1101,13 @@ class MapViewModelTest {
         runTest {
             val activityRepo = mockk<ActivityRepository>()
             coEvery { activityRepo.getActivities(any()) } returns DataResult.Success(emptyList())
-            coEvery { activityRepo.getActiveActivityId(TestFixtures.ORGANIZER_ID) } returns DataResult.Success(null)
+            coEvery { activityRepo.getActiveActivityId(any()) } returns DataResult.Success(null)
             coEvery { activityRepo.createActivity(TestFixtures.ORGANIZER_ID) } returns DataResult.Error("quota exceeded")
 
             val vm = viewModel(activityRepo = activityRepo)
+            runCurrent()
             vm.startActivity(context)
+            runCurrent()
 
             val state = assertIs<MapUiState.Error>(vm.uiState.value)
             assertEquals("quota exceeded", state.message)
