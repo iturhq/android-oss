@@ -524,10 +524,21 @@ constructor(
         _ongoingActivityId.value = activity.id
         // Show the ongoing activity state.
         _participantLocations.value = locations
+        val organizer = try {
+            userRepository.getAll(listOf(activity.organizerId))
+                .firstOrNull() ?: AnonymousUser(activity.organizerId)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            // User profiles are not required to restore the activity. In particular, a
+            // participant can read their activity without being allowed to read the organizer's
+            // private profile; preserve the backend-derived ongoing state with an ID-only label.
+            Log.w("MapViewModel", "Organizer profile unavailable; using its activity ID", failure)
+            AnonymousUser(activity.organizerId)
+        }
         _uiState.value = Ongoing(
             activity = activity,
-            organizer = userRepository.getAll(listOf(activity.organizerId))
-                .firstOrNull() ?: AnonymousUser(activity.organizerId),
+            organizer = organizer,
             participantIds = activity.participantIds,
             locations = locations,
         )

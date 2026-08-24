@@ -1012,6 +1012,21 @@ class MapViewModelTest {
     // --- triggerOngoingState(activityId, context) recoverable errors ---
 
     @Test
+    fun `GIVEN organizer profile access is denied WHEN restoring an activity THEN ongoing state uses an ID-only organizer`() = runTest {
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        coEvery { userRepo.getCurrentUser() } returns User.AnonymousUser(UserId("participant"))
+        coEvery { userRepo.getAll(any()) } throws IllegalStateException("profile access denied")
+        val activityRepo = activityRepo(TestFixtures.ongoingActivity)
+        val vm = viewModel(activityRepo = activityRepo, userRepo = userRepo)
+
+        vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+
+        val state = assertIs<MapUiState.Ongoing>(vm.uiState.value)
+        val organizer = assertIs<User.AnonymousUser>(state.organizer)
+        assertEquals(TestFixtures.ORGANIZER_ID, organizer.id)
+    }
+
+    @Test
     fun `GIVEN an activity that can no longer be found WHEN triggering its ongoing state THEN uiState becomes a RecoverableError`() {
         runTest {
             val activityRepo = mockk<ActivityRepository>()
