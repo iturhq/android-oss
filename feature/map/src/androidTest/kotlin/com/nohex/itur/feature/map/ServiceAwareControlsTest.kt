@@ -31,7 +31,7 @@ class ServiceAwareControlsTest {
                 UserFABs(
                     onSignInRequested = {},
                     onSignOutRequested = {},
-                    isSignedIn = true,
+                    isSignedIn = false,
                     authenticationActionsEnabled = true,
                     showSignOutOnMap = false,
                 )
@@ -106,7 +106,7 @@ class ServiceAwareControlsTest {
                     onSignOutRequested = {},
                     onQRRequested = {},
                     onHelpRequested = {},
-                    isSignedIn = false,
+                    isSignedIn = true,
                     authenticationActionsEnabled = true,
                     activityActionsEnabled = false,
                 )
