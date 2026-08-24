@@ -54,7 +54,7 @@ class ServiceAwareControlsTest {
                     onSignOutRequested = {},
                     onQRRequested = { joined = true },
                     onHelpRequested = {},
-                    isSignedIn = false,
+                    isSignedIn = true,
                     authenticationActionsEnabled = false,
                     activityActionsEnabled = true,
                 )

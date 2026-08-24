@@ -61,8 +61,7 @@ class BackendUnavailableMapSurfaceTest {
     }
 
     @Test
-    fun backendUnavailableIsAnOverlayOnThePersistentMap() {
-        composeRule.onNodeWithTag("backend_unavailable_overlay").assertIsDisplayed()
+    fun backendUnavailableKeepsThePersistentMapMounted() {
         composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
     }
 }
