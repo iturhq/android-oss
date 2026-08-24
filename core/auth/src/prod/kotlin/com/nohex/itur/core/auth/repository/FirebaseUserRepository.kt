@@ -38,9 +38,11 @@ import com.nohex.itur.core.domain.model.User
 import dagger.Lazy
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import javax.inject.Inject
+import kotlin.coroutines.resume
 
 /**
  * A [com.nohex.itur.core.data.repository.UserRepository] that uses Firebase Authentication.
@@ -54,9 +56,14 @@ class FirebaseUserRepository @Inject constructor(
     private var currentUser: User? = null
 
     override suspend fun getCurrentUser(): User {
-        // Return the current user.
-        // If not set, check Firebase Auth.
-        return currentUser ?: firebaseAuth.currentUser?.let {
+        // Firebase restores a persisted session asynchronously during process startup. Reading
+        // currentUser before its first auth-state callback can transiently return null and make a
+        // signed-in organizer look anonymous for the rest of MapViewModel's one-shot restore.
+        // The listener is guaranteed an initial callback, including for a genuinely signed-out
+        // session, so wait for that authoritative snapshot before choosing the anonymous path.
+        currentUser?.let { return it }
+        val firebaseUser = awaitInitialAuthState()
+        return firebaseUser?.let {
             // There is a Firebase Auth user, return this.
             Log.d("FirebaseUserRepo", "Registered user found: ${it.uid}")
             User.RegisteredUser(
@@ -93,6 +100,18 @@ class FirebaseUserRepository @Inject constructor(
             Log.d("FirebaseUserRepo", "Anonymous user found: $deviceId")
             User.AnonymousUser(id = UserId(deviceId))
         }
+    }
+
+    private suspend fun awaitInitialAuthState() = suspendCancellableCoroutine { continuation ->
+        lateinit var listener: FirebaseAuth.AuthStateListener
+        listener = FirebaseAuth.AuthStateListener { auth ->
+            auth.removeAuthStateListener(listener)
+            if (continuation.isActive) continuation.resume(auth.currentUser)
+        }
+        continuation.invokeOnCancellation {
+            firebaseAuth.removeAuthStateListener(listener)
+        }
+        firebaseAuth.addAuthStateListener(listener)
     }
 
     override suspend fun signIn(context: Context): SignInResult {
