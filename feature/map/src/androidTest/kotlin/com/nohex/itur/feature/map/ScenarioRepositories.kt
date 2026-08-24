@@ -133,7 +133,7 @@ class ScenarioActivityRepository :
             activity.status == IturActivityStatus.ONGOING &&
                 (activity.organizerId == userId || userId in activity.participantIds)
         }?.id,
-    )
+    ).also { initialLookupComplete.set(true) }
 
     override suspend fun createActivity(organizerId: UserId): DataResult<IturActivity> {
         createGate?.await()

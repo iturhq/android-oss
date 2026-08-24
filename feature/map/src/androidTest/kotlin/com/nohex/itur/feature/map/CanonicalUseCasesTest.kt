@@ -467,7 +467,7 @@ class CanonicalUseCasesTest {
     fun uc23_autoResumeFailureCanRetry() {
         users.current = users.registered
         activities.getActivityFailuresRemaining = 1
-        launch()
+        launch(initialTag = "map_state_recoverable_error")
 
         composeRule.onNodeWithText("The ongoing activity could not be resumed.")
             .assertIsDisplayed()
