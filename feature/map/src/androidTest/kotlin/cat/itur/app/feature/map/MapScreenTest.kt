@@ -30,10 +30,9 @@ import org.maplibre.android.WellKnownTileServer
 import javax.inject.Inject
 
 /**
- * Instrumented tests for [MapScreen], exercising it through the demo flavor's real Hilt graph
- * with [FakeLocationClient] (via [TestLocationModule]) standing in for GPS hardware, and the
- * demo flavor's own `core:data-fake` repositories standing in for Firebase. Tracked as
- * `AOSS-45FE`.
+ * Instrumented tests for [MapScreen], using [FakeLocationClient] (via [TestLocationModule])
+ * and scenario repositories from [TestDataModule] in place of device and backend services.
+ * Tracked as `AOSS-45FE`.
  */
 @HiltAndroidTest
 class MapScreenTest {
@@ -101,11 +100,9 @@ class MapScreenTest {
     }
 
     /**
-     * The demo flavor's [cat.itur.app.core.data.di.FakeDataModule] seeds an ONGOING activity
-     * already owned by the same organizer identity `sign_in_fab` signs in as (so the demo app
-     * has something to show out of the box). MEMB-4B18's single-active-activity rule now blocks
-     * that same organizer from starting a *second* one -- clear the seed first so these
-     * "start a brand new activity" scenarios exercise a genuinely fresh state.
+     * The scenario repository seeds an ONGOING activity already owned by the same organizer
+     * identity `sign_in_fab` signs in as. MEMB-4B18's single-active-activity rule now blocks
+     * that organizer from starting a *second* one, so clear the seed first.
      */
     private fun startAsOrganizer() {
         runBlocking {
