@@ -11,7 +11,7 @@ Each use case covers a single user scenario and specifies preconditions, steps, 
 // coverage-ledger: UC-AUTH-001 | E2E | CanonicalUseCasesTest.uc03_signInHappyPath
 // coverage-ledger: UC-ACTIVITY-001 | E2E | CanonicalUseCasesTest.uc06_startActivityHappyPath
 // coverage-ledger: UC-ACTIVITY-002 | E2E | CanonicalUseCasesTest.uc09_joinActivityFromValidQr
-// coverage-ledger: UC-ACTIVITY-003 | Unit | FirebaseLocationRepositoryTest.updating a participant location
+// coverage-ledger: UC-ACTIVITY-003 | Unit | FirebaseLocationRepositoryTest.GIVEN no existing record WHEN updating a participant's location THEN a new document is added
 // coverage-ledger: UC-ACTIVITY-004 | E2E | CanonicalUseCasesTest.uc18_trackGroupWithKnownLocationsKeepsOngoingState
 // coverage-ledger: UC-ACTIVITY-005 | E2E | CanonicalUseCasesTest.uc19_participantHailsOrganizerExactlyOnce
 // coverage-ledger: UC-ACTIVITY-006 | E2E | CanonicalUseCasesTest.uc14_organizerStopsActivityForEveryone
