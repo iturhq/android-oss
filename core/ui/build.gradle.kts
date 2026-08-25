@@ -8,7 +8,7 @@ plugins {
 }
 
 android {
-    namespace = "com.nohex.itur.core.ui"
+    namespace = "cat.itur.app.core.ui"
     compileSdk = 36
     buildFeatures {
         compose = true

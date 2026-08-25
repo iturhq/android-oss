@@ -15,13 +15,13 @@ plugins {
 }
 
 android {
-    namespace = "com.nohex.itur.feature.map"
+    namespace = "cat.itur.app.feature.map"
     compileSdk = 36
 
     defaultConfig {
         minSdk = 24
         multiDexEnabled = true
-        testInstrumentationRunner = "com.nohex.itur.feature.map.HiltTestRunner"
+        testInstrumentationRunner = "cat.itur.app.feature.map.HiltTestRunner"
         testInstrumentationRunnerArguments["clearPackageData"] = "true"
     }
 

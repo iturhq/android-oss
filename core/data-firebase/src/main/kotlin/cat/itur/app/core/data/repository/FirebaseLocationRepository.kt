@@ -1,0 +1,166 @@
+/*
+ * Itur © 2025 by Max Noé <code@itur.cat>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+package cat.itur.app.core.data.repository
+
+import android.util.Log
+import cat.itur.app.core.data.health.BackendHealthReporter
+import cat.itur.app.core.data.health.NoOpBackendHealthReporter
+import cat.itur.app.core.data.health.observeFirestoreMutation
+import cat.itur.app.core.domain.id.IturActivityId
+import cat.itur.app.core.domain.id.UserId
+import cat.itur.app.core.model.Location
+import cat.itur.app.core.model.ParticipantLocation
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.GeoPoint
+import dagger.Lazy
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import javax.inject.Inject
+
+class FirebaseLocationRepository
+@Inject
+constructor(
+    firestore: FirebaseFirestore,
+    private val userRepository: UserRepository,
+    private val backendHealthReporter: Lazy<BackendHealthReporter>,
+) : LocationRepository {
+    constructor(
+        firestore: FirebaseFirestore,
+        userRepository: UserRepository,
+    ) : this(firestore, userRepository, Lazy { NoOpBackendHealthReporter })
+
+    constructor(
+        firestore: FirebaseFirestore,
+        userRepository: UserRepository,
+        backendHealthReporter: BackendHealthReporter,
+    ) : this(firestore, userRepository, Lazy { backendHealthReporter })
+
+    private val locationsCollection = firestore.collection(FirestoreCollections.LOCATIONS)
+    override suspend fun getForActivity(activityId: IturActivityId): List<ParticipantLocation> = withContext(Dispatchers.IO) {
+        val querySnapshot =
+            locationsCollection.whereEqualTo("activityId", activityId.value)
+                .get()
+                .await()
+
+        val dtoList = querySnapshot.toObjects(ParticipantLocationDTO::class.java)
+
+        val userIds = dtoList.map { UserId(it.userId) }.distinct()
+        val namesById = if (userIds.isEmpty()) {
+            emptyMap()
+        } else {
+            userRepository.getAll(userIds).associateBy { it.id }
+        }
+
+        return@withContext dtoList.map {
+            val userId = UserId(it.userId)
+            ParticipantLocation(
+                activityId = IturActivityId(it.activityId),
+                userId = userId,
+                userName = namesById[userId]?.name ?: "<Not available>",
+                location = Location(
+                    latitude = it.location.latitude,
+                    longitude = it.location.longitude,
+                ),
+                recordedAt = it.updatedOn.toDate(),
+            )
+        }
+    }
+
+    override suspend fun removeForActivity(activityId: IturActivityId) {
+        withContext(Dispatchers.IO) {
+            val querySnapshot = locationsCollection
+                .whereEqualTo("activityId", activityId.value)
+                .get()
+                .await()
+            if (querySnapshot.documents.isNotEmpty()) {
+                backendHealthReporter.get().observeFirestoreMutation {
+                    querySnapshot.documents.forEach { it.reference.delete().await() }
+                }
+            }
+            Log.d(
+                "FirestoreLocationRepo",
+                "Removed ${querySnapshot.size()} location(s) for activity ${activityId.value}",
+            )
+        }
+    }
+
+    override suspend fun removeForParticipant(userId: UserId, activityId: IturActivityId) {
+        withContext(Dispatchers.IO) {
+            val querySnapshot = locationsCollection
+                .whereEqualTo("activityId", activityId.value)
+                .whereEqualTo("userId", userId.value)
+                .get()
+                .await()
+            if (querySnapshot.documents.isNotEmpty()) {
+                backendHealthReporter.get().observeFirestoreMutation {
+                    querySnapshot.documents.forEach { it.reference.delete().await() }
+                }
+            }
+            Log.d(
+                "FirestoreLocationRepo",
+                "Removed ${querySnapshot.size()} location(s) for user ${userId.value} in activity ${activityId.value}",
+            )
+        }
+    }
+
+    override suspend fun updateForParticipant(
+        userId: UserId,
+        activityId: IturActivityId,
+        location: Location,
+    ): Unit = withContext(Dispatchers.IO) {
+        val querySnapshot = locationsCollection
+            .whereEqualTo("activityId", activityId.value)
+            .whereEqualTo("userId", userId.value)
+            .get()
+            .await()
+
+        val firebaseLocation = GeoPoint(location.latitude, location.longitude)
+
+        // If there is no record of this user and activity...
+        if (querySnapshot.isEmpty) {
+            // ... create new location record...
+            val newRecord = ParticipantLocationDTO(
+                activityId = activityId.value,
+                userId = userId.value,
+                location = firebaseLocation,
+                updatedOn = Timestamp.now(),
+            )
+            val newReference = backendHealthReporter.get().observeFirestoreMutation {
+                locationsCollection.add(newRecord).await()
+            }
+
+            Log.d(
+                "FirestoreLocationRepo",
+                "Created location ${newReference.id} for user ${userId.value} in activity ${activityId.value}",
+            )
+        } else {
+            // ...otherwise update the existing record.
+            val documentId = querySnapshot.documents.first().id
+            backendHealthReporter.get().observeFirestoreMutation {
+                locationsCollection.document(documentId).update(
+                    mapOf(
+                        "location" to firebaseLocation,
+                        "updatedOn" to Timestamp.now(),
+                    ),
+                ).await()
+            }
+
+            Log.d(
+                "FirestoreLocationRepo",
+                "Updated location $documentId for user ${userId.value} in activity ${activityId.value}",
+            )
+        }
+    }
+}
+
+data class ParticipantLocationDTO(
+    var activityId: String = "",
+    var userId: String = "",
+    var location: GeoPoint = GeoPoint(0.0, 0.0),
+    var updatedOn: Timestamp = Timestamp.now(),
+)

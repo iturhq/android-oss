@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-package com.nohex.itur.core.auth.health
+package cat.itur.app.core.auth.health
 
-import com.nohex.itur.core.data.health.BackendDiagnosticEvidence
-import com.nohex.itur.core.data.health.BackendHealthObservation
-import com.nohex.itur.core.data.health.BackendHealthReporter
-import com.nohex.itur.core.data.health.BackendServiceIds
-import com.nohex.itur.core.data.repository.SignInFailureReason
+import cat.itur.app.core.data.health.BackendDiagnosticEvidence
+import cat.itur.app.core.data.health.BackendHealthObservation
+import cat.itur.app.core.data.health.BackendHealthReporter
+import cat.itur.app.core.data.health.BackendServiceIds
+import cat.itur.app.core.data.repository.SignInFailureReason
 
 internal fun BackendHealthReporter.reportFirebaseAuthSucceeded(detail: String) {
     runCatching {

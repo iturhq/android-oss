@@ -7,7 +7,7 @@ plugins {
     alias(libs.plugins.wire)
 }
 
-group = "com.nohex.itur.core"
+group = "cat.itur.app.core"
 version = "1.0"
 
 java {
