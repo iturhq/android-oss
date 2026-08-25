@@ -98,6 +98,8 @@ dependencies {
     androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(libs.androidx.test.uiautomator)
     androidTestImplementation(libs.hilt.android.testing)
+    // Deterministic instrumented-test fixtures, with no installable demo flavor.
+    androidTestImplementation(projects.core.dataFake)
     androidTestUtil(libs.androidx.test.orchestrator)
     kspAndroidTest(libs.hilt.compiler)
     debugImplementation(libs.androidx.ui.test.manifest)
