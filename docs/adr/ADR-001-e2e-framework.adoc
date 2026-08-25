@@ -13,6 +13,14 @@
 | Deciders    | Max Noé
 |===
 
+== NSID migration update
+
+NSID retired the installable `demo` flavor described below. Its deterministic
+fake repositories now belong only to JVM and instrumentation-test source
+sets; `local` is the credential-free development flavor and targets the
+Firebase Emulator Suite. The original decision record is retained as
+historical context.
+
 == Context
 
 The project requires an automated E2E test suite for the Itur Android client.

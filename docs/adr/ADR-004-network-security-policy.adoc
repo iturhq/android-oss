@@ -45,7 +45,7 @@ Add an explicit `network_security_config.xml`, referenced from
   override (standard Android resource-file override by source set, not a
   manifest merge) that keeps the same base policy but adds one
   `domain-config` cleartext exception scoped to exactly `10.0.2.2`.
-  `prod` and `demo` get zero exceptions.
+  `prod` gets zero exceptions.
 
 == Rationale
 
@@ -59,7 +59,7 @@ Add an explicit `network_security_config.xml`, referenced from
   `prod` builds -- the only ones real users install -- never see it, since
   Android resource merging selects the flavor-specific file over
   `src/main`'s for a `local` build and uses `src/main`'s unmodified for
-  `prod`/`demo`.
+  `prod`.
 . **No certificate pinning.** Considered and rejected here -- see
   Alternatives.
 
@@ -67,8 +67,8 @@ Add an explicit `network_security_config.xml`, referenced from
 
 * Positive: the certificate/trust policy is now a reviewable artifact,
   not tribal knowledge about what Android happens to default to.
-* Positive: no behavior change for `prod` or `demo` -- both already
-  disallowed cleartext implicitly; this makes that explicit.
+* Positive: no behavior change for `prod` -- it already disallowed cleartext
+  implicitly; this makes that explicit.
 * Neutral: `local` behavior is also unchanged -- the emulator connection
   already worked (Android's default cleartext policy for a fresh project
   created before stricter defaults existed, or simply never having been
@@ -128,5 +128,5 @@ a|
 
 | Verdict
 | Rejected. An explicit file costs little and directly enables scoping the
-  `local` exception to `prod`/`demo` never seeing it.
+  `local` exception to `prod` never seeing it.
 |===

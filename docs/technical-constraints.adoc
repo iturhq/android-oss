@@ -72,11 +72,11 @@ Tapping *Join an activity* again repeats the toast until the permission is grant
 
 | Firebase Firestore
 | Activity, location, and user data storage (real-time snapshot reads)
-| Use `demo` flavor with fake repositories OR Firebase Emulator Suite
+| Use test-scoped fake repositories OR Firebase Emulator Suite through the `local` flavor
 
 | Firebase Auth
 | Google Sign-In session management
-| Use `demo` flavor's `FakeUserRepository` OR Firebase Auth Emulator
+| Use test-scoped `FakeUserRepository` OR Firebase Auth Emulator through the `local` flavor
 
 | MapLibre / MapTiler
 | Map tile rendering (style: `streets`)
