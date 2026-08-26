@@ -114,7 +114,8 @@ class ServiceAwareControlsTest {
         }
 
         composeRule.onNodeWithTag("sign_in_fab").assertIsEnabled().performClick()
-        composeRule.onNodeWithTag("start_activity_fab").assertIsNotEnabled().performClick()
+        composeRule.onNodeWithTag("start_activity_fab").assertDoesNotExist()
+        composeRule.onNodeWithTag("join_activity_fab").assertIsEnabled()
 
         assertTrue(signedIn)
         assertFalse(started)

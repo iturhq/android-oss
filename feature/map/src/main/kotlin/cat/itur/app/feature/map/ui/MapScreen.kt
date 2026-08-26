@@ -32,7 +32,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 
 /** A composable with a map and controls driven by [MapViewModel]. */
 @Composable
-@Suppress("UNUSED_PARAMETER")
 fun MapScreen(
     modifier: Modifier = Modifier,
     viewModel: MapViewModel = hiltViewModel(),
@@ -52,6 +51,7 @@ fun MapScreen(
         modifier = modifier,
         viewModel = viewModel,
         locationPermissionCheck = locationPermissionCheck,
+        locationPermissionRequest = locationPermissionRequest,
         openGlEsSupportCheck = openGlEsSupportCheck,
         qrCustomization = qrCustomization.copy(
             scanSheet = qrScanSheet ?: qrCustomization.scanSheet,

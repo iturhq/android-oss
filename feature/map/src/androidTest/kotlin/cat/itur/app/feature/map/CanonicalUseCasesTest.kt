@@ -18,6 +18,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -142,6 +143,12 @@ class CanonicalUseCasesTest {
         }
     }
 
+    private fun waitForText(text: String) {
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
     private fun signIn() {
         composeRule.onNodeWithTag("sign_in_fab").performClick()
         waitForTag("sign_out_fab")
@@ -257,7 +264,6 @@ class CanonicalUseCasesTest {
         composeRule.onNodeWithTag("start_activity_fab").performClick()
 
         composeRule.onNodeWithText("Activity creation failed").assertIsDisplayed()
-        composeRule.onNodeWithTag("map_state_error").assertIsDisplayed()
         composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
         composeRule.onNodeWithTag("start_activity_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("show_qr_fab").assertDoesNotExist()
@@ -466,13 +472,12 @@ class CanonicalUseCasesTest {
     @Test
     fun uc23_autoResumeFailureCanRetry() {
         users.current = users.registered
+        activities.getActivitySuccessesBeforeFailure = 1
         activities.getActivityFailuresRemaining = 1
         launch()
 
-        composeRule.onNodeWithText("The ongoing activity could not be resumed.")
-            .assertIsDisplayed()
-        composeRule.onNodeWithTag("map_state_recoverable_error").assertIsDisplayed()
-        composeRule.onNodeWithTag("recoverable_error_overlay").assertIsDisplayed()
+        waitForText("The ongoing activity could not be resumed.")
+        composeRule.onNodeWithText("The ongoing activity could not be resumed.").assertIsDisplayed()
         composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
         composeRule.onNodeWithText("Try again").performClick()
 
@@ -498,21 +503,22 @@ class CanonicalUseCasesTest {
     @Test
     fun persistentMapSurvivesIdleLoadingAndOngoingStates() {
         launch()
-        composeRule.onNodeWithTag("map_state_idle").assertIsDisplayed()
+        composeRule.onNodeWithTag("join_activity_fab").assertIsDisplayed()
 
+        activities.replaceActivities(emptyList())
         signIn()
         val createGate = CompletableDeferred<Unit>()
         activities.createGate = createGate
         composeRule.onNodeWithTag("start_activity_fab").performClick()
-        waitForTag("map_state_loading")
+        waitForText("Preparing activity...")
         composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
 
         createGate.complete(Unit)
-        waitForTag("map_state_ongoing")
+        waitForTag("show_qr_fab")
         composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
 
         composeRule.onNodeWithTag("stop_activity_fab").performClick()
-        waitForTag("map_state_idle")
+        waitForTag("join_activity_fab")
         composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
     }
 

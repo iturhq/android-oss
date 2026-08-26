@@ -678,16 +678,21 @@ constructor(
             ) == PackageManager.PERMISSION_GRANTED &&
             !locationUpdatesActive
         ) {
-            Log.d("MapScreen", "Requesting location updates")
-            locationClient.requestUpdates(
-                locationUpdateConfig.updateIntervalMillis,
-                locationCallback,
-            )
-            locationUpdatesActive = true
-            Log.d("MapScreen", "Location updates requested successfully")
+            beginLocationUpdates()
         } else {
             Log.d("MapScreen", "No location permission...")
         }
+    }
+
+    private fun beginLocationUpdates() {
+        if (locationUpdatesActive) return
+        Log.d("MapScreen", "Requesting location updates")
+        locationClient.requestUpdates(
+            locationUpdateConfig.updateIntervalMillis,
+            locationCallback,
+        )
+        locationUpdatesActive = true
+        Log.d("MapScreen", "Location updates requested successfully")
     }
 
     /**
@@ -700,9 +705,9 @@ constructor(
     }
 
     /** Applies a runtime permission change without recreating the map or activity shell. */
-    fun onLocationPermissionChanged(granted: Boolean, context: Context) {
+    fun onLocationPermissionChanged(granted: Boolean) {
         if (granted && _ongoingActivityId.value != null) {
-            startLocationUpdates(context)
+            beginLocationUpdates()
         } else if (!granted) {
             stopLocationUpdates()
         }

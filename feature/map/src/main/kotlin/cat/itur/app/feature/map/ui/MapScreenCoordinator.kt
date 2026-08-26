@@ -14,6 +14,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -62,6 +63,7 @@ internal class MapInteractionState(
     var localMessage by mutableStateOf<String?>(null)
     var cameraPermissionGranted by mutableStateOf(false)
     var locationPermissionGranted by locationPermissionState
+    var locationPermissionRequests by mutableIntStateOf(0)
 }
 
 @Composable
@@ -69,6 +71,7 @@ internal fun MapScreenCoordinator(
     modifier: Modifier,
     viewModel: MapViewModel,
     locationPermissionCheck: (Context) -> Boolean,
+    locationPermissionRequest: (((Boolean) -> Unit) -> Unit)?,
     openGlEsSupportCheck: (Context) -> OpenGlEsSupport,
     qrCustomization: QrCustomization,
 ) {
@@ -78,7 +81,14 @@ internal fun MapScreenCoordinator(
     val snackbarHostState = remember { SnackbarHostState() }
     val helpAnchorRegistry = remember { HelpAnchorRegistry() }
 
-    MapScreenEffects(viewModel, environment, presentation, interaction, snackbarHostState)
+    MapScreenEffects(
+        viewModel,
+        environment,
+        presentation,
+        interaction,
+        snackbarHostState,
+        locationPermissionRequest,
+    )
     CompositionLocalProvider(LocalHelpAnchorRegistry provides helpAnchorRegistry) {
         MapTransientSurfaces(viewModel, environment, presentation, interaction, qrCustomization)
         MapScaffold(viewModel, environment, presentation, interaction, snackbarHostState)

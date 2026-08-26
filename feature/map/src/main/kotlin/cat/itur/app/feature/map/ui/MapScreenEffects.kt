@@ -30,12 +30,13 @@ internal fun MapScreenEffects(
     presentation: MapPresentation,
     interaction: MapInteractionState,
     snackbarHostState: SnackbarHostState,
+    locationPermissionRequest: (((Boolean) -> Unit) -> Unit)?,
 ) {
     BackendMonitoringEffect(viewModel)
     ParticipantLocationMonitoringEffect(viewModel)
     MessageEffects(presentation, interaction, snackbarHostState)
     LocationUpdatesEffect(viewModel, environment.context, interaction.locationPermissionGranted)
-    LocationPermissionEffect(environment, interaction)
+    LocationPermissionEffect(viewModel, environment, interaction, locationPermissionRequest)
     InitialCenteringEffect(presentation, interaction)
     NotificationPermissionEffect(environment.context, interaction.locationPermissionGranted)
     ActivityStateEffects(viewModel, environment.context, presentation)
@@ -142,17 +143,43 @@ private fun LocationUpdatesEffect(
 
 @Composable
 private fun LocationPermissionEffect(
+    viewModel: MapViewModel,
     environment: MapEnvironment,
     interaction: MapInteractionState,
+    locationPermissionRequest: (((Boolean) -> Unit) -> Unit)?,
 ) {
+    val onPermissionResult: (Boolean) -> Unit = { granted ->
+        interaction.locationPermissionGranted = granted
+        viewModel.onLocationPermissionChanged(granted)
+    }
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { interaction.locationPermissionGranted = it }
+        onResult = onPermissionResult,
+    )
+    LaunchedEffect(interaction.locationPermissionRequests) {
+        if (interaction.locationPermissionRequests > 0) {
+            if (ContextCompat.checkSelfPermission(
+                    environment.context,
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                ) == PackageManager.PERMISSION_GRANTED
+            ) {
+                onPermissionResult(true)
+            } else if (locationPermissionRequest != null) {
+                locationPermissionRequest(onPermissionResult)
+            } else {
+                launcher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            }
+        }
+    }
     LaunchedEffect(Unit) {
         if (environment.openGlEsSupport.isSupported && !interaction.locationPermissionGranted) {
             withFrameNanos { }
             withFrameNanos { }
-            launcher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            if (locationPermissionRequest != null) {
+                locationPermissionRequest(onPermissionResult)
+            } else {
+                launcher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            }
         }
     }
 }
