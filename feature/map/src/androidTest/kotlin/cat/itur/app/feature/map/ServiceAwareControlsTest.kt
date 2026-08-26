@@ -133,7 +133,7 @@ class ServiceAwareControlsTest {
                         onQrRequested = {},
                         onTrackUserRequested = { tracked = true },
                         onTrackGroupRequested = {},
-                        onAttentionRequest = {},
+                        onParticipantSignalRequested = {},
                         onHelpRequested = {},
                     ),
                     isOrganizer = false,

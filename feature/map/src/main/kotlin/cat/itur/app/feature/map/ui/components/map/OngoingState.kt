@@ -13,11 +13,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import cat.itur.app.core.model.ParticipantSignal
 import cat.itur.app.core.ui.IturIcons
 import cat.itur.app.feature.map.ui.components.help.helpAnchor
 
@@ -30,6 +32,7 @@ import cat.itur.app.feature.map.ui.components.help.helpAnchor
 internal fun OngoingState(
     actions: OngoingStateActions,
     isOrganizer: Boolean,
+    selfSignal: ParticipantSignal? = null,
     selfLocationAvailable: Boolean = true,
     modifier: Modifier = Modifier,
     activityActionsEnabled: Boolean = true,
@@ -65,7 +68,8 @@ internal fun OngoingState(
                     onStopRequested = actions.onStopRequested,
                     onQRRequested = actions.onQrRequested,
                     isOrganizer = isOrganizer,
-                    onAttentionRequest = actions.onAttentionRequest,
+                    onParticipantSignalRequested = actions.onParticipantSignalRequested,
+                    selfSignal = selfSignal,
                     activityActionsEnabled = activityActionsEnabled,
                 )
             }
@@ -76,10 +80,11 @@ internal fun OngoingState(
 @Composable
 private fun OngoingActivityFABs(
     onStopRequested: () -> Unit,
-    onAttentionRequest: () -> Unit,
+    onParticipantSignalRequested: (ParticipantSignal?) -> Unit,
     onQRRequested: () -> Unit,
     // Whether the user is the organiser.
     isOrganizer: Boolean,
+    selfSignal: ParticipantSignal?,
     activityActionsEnabled: Boolean,
 ) {
     // The QR button shows the QR sheet for scanning for organisers,
@@ -94,15 +99,11 @@ private fun OngoingActivityFABs(
             Icon(IturIcons.Join, contentDescription = "Show QR")
         }
     } else {
-        FloatingActionButton(
-            onClick = { if (activityActionsEnabled) onAttentionRequest() },
-            modifier = Modifier
-                .testTag("hail_organiser_fab")
-                .helpAnchor("hail_organiser_fab", "Ask the organiser for attention")
-                .serviceAvailability(activityActionsEnabled),
-        ) {
-            Icon(IturIcons.Warning, contentDescription = "Hail organiser")
-        }
+        ParticipantSafetyFABs(
+            signal = selfSignal,
+            enabled = activityActionsEnabled,
+            onSignalRequested = onParticipantSignalRequested,
+        )
     }
 
     FloatingActionButton(
@@ -122,6 +123,57 @@ private fun OngoingActivityFABs(
     }
 }
 
+@Composable
+private fun ParticipantSafetyFABs(
+    signal: ParticipantSignal?,
+    enabled: Boolean,
+    onSignalRequested: (ParticipantSignal?) -> Unit,
+) {
+    SafetySignalFAB(
+        tag = "safety_delayed_fab",
+        contentDescription = "I'm stopping; go ahead",
+        color = Color(0xFFFFC107),
+        enabled = enabled && signal == null,
+        onClick = { onSignalRequested(ParticipantSignal.DELAYED) },
+    )
+    SafetySignalFAB(
+        tag = "hail_organiser_fab",
+        contentDescription = "I need help; converge on me",
+        color = Color(0xFFD32F2F),
+        enabled = enabled && signal != ParticipantSignal.NEEDS_HELP,
+        onClick = { onSignalRequested(ParticipantSignal.NEEDS_HELP) },
+    )
+    if (signal != null) {
+        SafetySignalFAB(
+            tag = "safety_ok_fab",
+            contentDescription = "I'm okay",
+            color = Color(0xFF388E3C),
+            enabled = enabled,
+            onClick = { onSignalRequested(null) },
+        )
+    }
+}
+
+@Composable
+private fun SafetySignalFAB(
+    tag: String,
+    contentDescription: String,
+    color: Color,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    FloatingActionButton(
+        onClick = onClick,
+        modifier = Modifier
+            .testTag(tag)
+            .helpAnchor(tag, contentDescription)
+            .serviceAvailability(enabled),
+        containerColor = color,
+    ) {
+        Icon(IturIcons.Warning, contentDescription = contentDescription)
+    }
+}
+
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 private fun OrganizerOngoingStatePreview() {
@@ -131,7 +183,7 @@ private fun OrganizerOngoingStatePreview() {
             onQrRequested = {},
             onTrackUserRequested = {},
             onTrackGroupRequested = {},
-            onAttentionRequest = {},
+            onParticipantSignalRequested = {},
             onHelpRequested = {},
         ),
         isOrganizer = true,

@@ -5,11 +5,13 @@
 
 package cat.itur.app.feature.map.ui.components.map
 
+import cat.itur.app.core.model.ParticipantSignal
+
 internal data class OngoingStateActions(
     val onStopRequested: () -> Unit,
     val onQrRequested: () -> Unit,
     val onTrackUserRequested: () -> Unit,
     val onTrackGroupRequested: () -> Unit,
-    val onAttentionRequest: () -> Unit,
+    val onParticipantSignalRequested: (ParticipantSignal?) -> Unit,
     val onHelpRequested: () -> Unit,
 )

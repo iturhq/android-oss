@@ -15,6 +15,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -22,6 +23,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+
+internal val LocalBroadcastPollIntervalMillis = staticCompositionLocalOf { BROADCAST_POLL_INTERVAL_MS }
 
 @Composable
 internal fun MapScreenEffects(
@@ -38,7 +41,12 @@ internal fun MapScreenEffects(
     LocationPermissionEffect(viewModel, environment, interaction)
     InitialCenteringEffect(presentation, interaction)
     NotificationPermissionEffect(environment.context, interaction.locationPermissionGranted)
-    ActivityStateEffects(viewModel, environment.context, presentation)
+    ActivityStateEffects(
+        viewModel,
+        environment.context,
+        presentation,
+        LocalBroadcastPollIntervalMillis.current,
+    )
 }
 
 @Composable
@@ -221,6 +229,7 @@ private fun ActivityStateEffects(
     viewModel: MapViewModel,
     context: Context,
     presentation: MapPresentation,
+    broadcastPollIntervalMillis: Long,
 ) {
     LaunchedEffect(presentation.ongoingActivityId) {
         presentation.ongoingActivityId?.let {
@@ -233,7 +242,7 @@ private fun ActivityStateEffects(
         if (presentation.ongoingActivityId != null) {
             while (isActive) {
                 viewModel.pollBroadcastsOnce()
-                delay(BROADCAST_POLL_INTERVAL_MS)
+                delay(broadcastPollIntervalMillis)
             }
         }
     }

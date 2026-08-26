@@ -42,7 +42,7 @@ fun OngoingStatePreview() {
             onQrRequested = {},
             onTrackUserRequested = {},
             onTrackGroupRequested = {},
-            onAttentionRequest = {},
+            onParticipantSignalRequested = {},
             onHelpRequested = {},
         ),
         isOrganizer = true,

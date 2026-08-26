@@ -22,6 +22,7 @@ import cat.itur.app.core.data.repository.ActivityFilter
 import cat.itur.app.core.data.repository.ActivityRepository
 import cat.itur.app.core.data.repository.DataResult
 import cat.itur.app.core.data.repository.LocationRepository
+import cat.itur.app.core.data.repository.ParticipantSignalRepository
 import cat.itur.app.core.data.repository.SignInFailureReason
 import cat.itur.app.core.data.repository.SignInResult
 import cat.itur.app.core.data.repository.UserRepository
@@ -34,6 +35,7 @@ import cat.itur.app.core.model.Broadcast
 import cat.itur.app.core.model.IturActivity
 import cat.itur.app.core.model.IturActivityStatus
 import cat.itur.app.core.model.ParticipantLocation
+import cat.itur.app.core.model.ParticipantSignal
 import cat.itur.app.feature.map.config.LocationUpdateConfig
 import cat.itur.app.feature.map.config.MapStyleConfig
 import cat.itur.app.feature.map.health.BackendHealthRecoveryCoordinator
@@ -632,19 +634,53 @@ constructor(
     }
 
     /**
-     * A participant requests attention from the organiser.
+     * Changes the current participant's safety signal. Absence is the canonical okay state;
+     * the backend remains authoritative for membership and terminal-state checks.
      */
-    fun requestAttention() {
+    fun setParticipantSignal(signal: ParticipantSignal?) {
         val activityId = _ongoingActivityId.value ?: return
         val userId = currentUser.value?.id ?: return
+        if (_organizerId.value == userId) return
+        val previousState = _uiState.value
         viewModelScope.launch {
             try {
-                activityRepository.requestAttention(activityId, userId)
+                val signals = activityRepository as? ParticipantSignalRepository
+                    ?: error("Activity repository does not support safety signals")
+                val result = if (signal == null) {
+                    signals.clearParticipantSignal(activityId, userId)
+                } else {
+                    signals.setParticipantSignal(activityId, userId, signal)
+                }
+                requireSuccessfulBackendWrite(result)
+                val updated = (result as DataResult.Success).data
+                // A leave/end may win the race while the write is in flight. Do not restore a
+                // stale ongoing UI from its response.
+                if (_ongoingActivityId.value == activityId) updateOngoingActivity(updated)
             } catch (e: Exception) {
-                Log.e("MapViewModel", "Failed to request attention for activity $activityId", e)
+                Log.e("MapViewModel", "Failed to update safety signal for activity $activityId", e)
                 reportBackendFailure(e)
+                _uiState.value = MapUiState.RecoverableError(
+                    message = "Safety status could not be updated.",
+                    onRetry = {
+                        _uiState.value = previousState
+                        setParticipantSignal(signal)
+                    },
+                    onCancel = { _uiState.value = previousState },
+                )
             }
         }
+    }
+
+    /** Compatibility entry point for callers that only expose the historic hail action. */
+    fun requestAttention() = setParticipantSignal(ParticipantSignal.NEEDS_HELP)
+
+    private fun updateOngoingActivity(activity: IturActivity) {
+        val current = _uiState.value as? Ongoing ?: return
+        _organizerId.value = activity.organizerId
+        _uiState.value = current.copy(
+            activity = activity,
+            participantIds = activity.participantIds,
+        )
     }
 
     // The callback to use when the device's location is received.
