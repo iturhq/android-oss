@@ -139,12 +139,34 @@ private fun MapStateControls(
     interaction: MapInteractionState,
 ) {
     when {
-        presentation.currentUser == null -> IturProgressIndicator(label = "Preparing map...")
+        presentation.currentUser == null -> IturProgressIndicator(
+            label = "Preparing map...",
+            modifier = environment.modifier.testTag("map_state_loading"),
+        )
         presentation.uiState is MapUiState.Loading ->
-            IturProgressIndicator(label = "Preparing activity...")
+            IturProgressIndicator(
+                label = "Preparing activity...",
+                modifier = environment.modifier.testTag("map_state_loading"),
+            )
         presentation.uiState is MapUiState.Ongoing ->
-            OngoingControls(viewModel, presentation, interaction, environment)
-        else -> IdleControls(viewModel, presentation, interaction, environment)
+            OngoingControls(
+                viewModel,
+                presentation,
+                interaction,
+                environment,
+                "map_state_ongoing",
+            )
+        presentation.uiState is MapUiState.Error ->
+            IdleControls(viewModel, presentation, interaction, environment, "map_state_error")
+        presentation.uiState is MapUiState.RecoverableError ->
+            IdleControls(
+                viewModel,
+                presentation,
+                interaction,
+                environment,
+                "map_state_recoverable_error",
+            )
+        else -> IdleControls(viewModel, presentation, interaction, environment, "map_state_idle")
     }
 }
 
@@ -154,6 +176,7 @@ private fun IdleControls(
     presentation: MapPresentation,
     interaction: MapInteractionState,
     environment: MapEnvironment,
+    stateTag: String,
 ) {
     IdleState(
         onStartRequested = { viewModel.startActivity(environment.context) },
@@ -161,7 +184,7 @@ private fun IdleControls(
         onSignOutRequested = viewModel::signOut,
         onQRRequested = { interaction.showQrScanSheet = true },
         onHelpRequested = { interaction.showHelp = true },
-        modifier = environment.modifier,
+        modifier = environment.modifier.testTag(stateTag),
         isSignedIn = presentation.currentUser is User.RegisteredUser,
         authenticationActionsEnabled = presentation.authenticationActionsEnabled,
         activityActionsEnabled = presentation.activityActionsEnabled,
@@ -174,6 +197,7 @@ private fun OngoingControls(
     presentation: MapPresentation,
     interaction: MapInteractionState,
     environment: MapEnvironment,
+    stateTag: String,
 ) {
     val ongoingUiState = presentation.uiState as MapUiState.Ongoing
     OngoingState(
@@ -187,7 +211,7 @@ private fun OngoingControls(
         ),
         isOrganizer = ongoingUiState.organizer.id == presentation.currentUser?.id,
         selfLocationAvailable = interaction.locationPermissionGranted,
-        modifier = environment.modifier,
+        modifier = environment.modifier.testTag(stateTag),
         activityActionsEnabled = presentation.activityActionsEnabled,
     )
 }

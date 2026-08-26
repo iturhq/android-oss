@@ -474,7 +474,7 @@ class CanonicalUseCasesTest {
         users.current = users.registered
         activities.getActivitySuccessesBeforeFailure = 1
         activities.getActivityFailuresRemaining = 1
-        launch()
+        launch(initialTag = "map_state_recoverable_error")
 
         waitForText("The ongoing activity could not be resumed.")
         composeRule.onNodeWithText("The ongoing activity could not be resumed.").assertIsDisplayed()

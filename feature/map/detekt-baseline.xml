@@ -4,6 +4,7 @@
   <CurrentIssues>
     <ID>ComplexCondition:MapLibreView.kt$locationPermissionGranted &amp;&amp; styleLoaded &amp;&amp; map != null &amp;&amp; style != null</ID>
     <ID>CyclomaticComplexMethod:MapLibreView.kt$@Composable fun MapLibreView( styleUrl: String, isActivityOngoing: Boolean, locationPermissionGranted: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, onStyleLoadFailed: () -&gt; Unit = {}, onStyleLoadSucceeded: () -&gt; Unit = {}, )</ID>
+    <ID>LargeClass:MapViewModelTest.kt$MapViewModelTest</ID>
     <ID>LongMethod:MapLibreView.kt$@Composable fun MapLibreView( styleUrl: String, isActivityOngoing: Boolean, locationPermissionGranted: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, onStyleLoadFailed: () -&gt; Unit = {}, onStyleLoadSucceeded: () -&gt; Unit = {}, )</ID>
     <ID>LongParameterList:IdleState.kt$( onStartRequested: () -&gt; Unit, onSignInRequested: () -&gt; Unit, onSignOutRequested: () -&gt; Unit, onQRRequested: () -&gt; Unit, onHelpRequested: () -&gt; Unit, modifier: Modifier = Modifier, isSignedIn: Boolean, authenticationActionsEnabled: Boolean = true, activityActionsEnabled: Boolean = true, )</ID>
     <ID>LongParameterList:MapLibreView.kt$( styleUrl: String, isActivityOngoing: Boolean, locationPermissionGranted: Boolean, currentUserId: UserId?, organizerId: UserId?, participantLocations: List&lt;ParticipantLocation&gt;, modifier: Modifier = Modifier, onMapReady: (MapLibreMap) -&gt; Unit = {}, onStyleLoadFailed: () -&gt; Unit = {}, onStyleLoadSucceeded: () -&gt; Unit = {}, )</ID>
@@ -19,6 +20,15 @@
     <ID>MagicNumber:MapUtils.kt$15.0</ID>
     <ID>MagicNumber:NoMapView.kt$.3f</ID>
     <ID>MatchingDeclarationName:MapNavigation.kt$MapRoute</ID>
+    <ID>MaxLineLength:MapViewModelTest.kt$MapViewModelTest$abs(regeneratedLocation.latitude - otherParticipantLocation.latitude) &gt; LOCATION_UNCHANGED_THRESHOLD_DEGREES</ID>
+    <ID>MaxLineLength:MapViewModelTest.kt$MapViewModelTest$assertTrue(abs(survivingLocation.latitude - otherParticipantLocation.latitude) &lt; LOCATION_UNCHANGED_THRESHOLD_DEGREES)</ID>
+    <ID>MaxLineLength:MapViewModelTest.kt$MapViewModelTest$assertTrue(abs(survivingLocation.longitude - otherParticipantLocation.longitude) &lt; LOCATION_UNCHANGED_THRESHOLD_DEGREES)</ID>
+    <ID>MaxLineLength:MapViewModelTest.kt$MapViewModelTest$coEvery { activityRepo.createActivity(TestFixtures.ORGANIZER_ID) } returns DataResult.Error("quota exceeded")</ID>
+    <ID>MaxLineLength:MapViewModelTest.kt$MapViewModelTest$coEvery { activityRepo.getActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns DataResult.Error("backend error")</ID>
+    <ID>MaxLineLength:MapViewModelTest.kt$MapViewModelTest$coEvery { activityRepo.getActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns DataResult.NotFound(TestFixtures.ONGOING_ACTIVITY_ID.value)</ID>
+    <ID>MaxLineLength:MapViewModelTest.kt$MapViewModelTest$fun</ID>
+    <ID>MaxLineLength:MapViewModelTest.kt$MapViewModelTest$private fun activityRepo(vararg activities: IturActivity)</ID>
+    <ID>MaxLineLength:MapViewModelTest.kt$MapViewModelTest$private fun locationRepo(activityRepo: ActivityRepository)</ID>
     <ID>MaxLineLength:QRImageTest.kt$QRImageTest$fun</ID>
     <ID>ReturnCount:QRImage.kt$internal fun String.isValidQrUrl(): Boolean</ID>
     <ID>TooGenericExceptionCaught:BackendHealthRecoveryCoordinator.kt$BackendHealthRecoveryCoordinator$failure: Exception</ID>
@@ -31,5 +41,6 @@
     <ID>UnusedPrivateMember:IdleState.kt$@Preview(showBackground = true) @Composable private fun IdleMapPreview()</ID>
     <ID>UnusedPrivateMember:OngoingState.kt$@Preview(showBackground = true, showSystemUi = true) @Composable private fun OrganizerOngoingStatePreview()</ID>
     <ID>UnusedPrivateMember:QRImage.kt$@Preview @Composable private fun PreviewQRImage()</ID>
+    <ID>UseCheckOrError:MapViewModelTest.kt$FakeBackendHealthCheck$throw IllegalStateException("${service.id} unavailable")</ID>
   </CurrentIssues>
 </SmellBaseline>
