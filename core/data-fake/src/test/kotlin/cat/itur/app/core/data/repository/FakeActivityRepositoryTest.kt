@@ -148,6 +148,14 @@ class FakeActivityRepositoryTest {
         assertEquals(ORGANIZER_ID, result.data.organizerId)
     }
 
+    @Test
+    fun `WHEN creating an activity THEN its organizer is an initial participant`() = runBlocking {
+        val result = repository().createActivity(ORGANIZER_ID)
+        assertIs<DataResult.Success<IturActivity>>(result)
+        assertEquals(listOf(ORGANIZER_ID), result.data.participantIds)
+        assertEquals(IturActivityStatus.ONGOING, result.data.status)
+    }
+
     // --- addParticipant ---
 
     @Test

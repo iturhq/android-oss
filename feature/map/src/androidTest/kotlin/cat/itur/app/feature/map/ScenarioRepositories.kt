@@ -147,7 +147,8 @@ class ScenarioActivityRepository :
         val activity = IturActivity(
             id = IturActivityId("createdActivity00001"),
             organizerId = organizerId,
-            participantIds = emptyList(),
+            status = IturActivityStatus.ONGOING,
+            participantIds = listOf(organizerId),
         )
         activities.add(activity)
         return DataResult.Success(activity)

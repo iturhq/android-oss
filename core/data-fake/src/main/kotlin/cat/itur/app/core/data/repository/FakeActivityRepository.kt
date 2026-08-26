@@ -94,7 +94,8 @@ class FakeActivityRepository(
         val newActivity = IturActivity(
             organizerId = organizerId,
             id = IturActivityId(newId),
-            participantIds = emptyList(),
+            status = IturActivityStatus.ONGOING,
+            participantIds = listOf(organizerId),
         )
 
         activities.add(newActivity)

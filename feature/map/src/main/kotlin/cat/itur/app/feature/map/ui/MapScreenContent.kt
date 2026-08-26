@@ -225,6 +225,10 @@ private fun trackUser(presentation: MapPresentation, interaction: MapInteraction
 
 private fun trackGroup(presentation: MapPresentation, interaction: MapInteractionState) {
     Log.d("MapScreen", "Requested zoom on group")
+    if (presentation.participantLocations.isEmpty()) {
+        interaction.localMessage = "No group locations are available yet."
+        return
+    }
     interaction.mapLibreMap?.let {
         zoomOnGroup(
             map = it,

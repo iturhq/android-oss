@@ -618,6 +618,7 @@ class MapViewModelTest {
             locationRepo.updateForParticipant(organizerId, activityId, Location(latitude = 52.0, longitude = 1.0))
 
             vm.leaveActivity()
+            runCurrent()
 
             // With no stored location left, getForActivity regenerates a fresh position from
             // scratch (near the default fallback location), which lands far away from the

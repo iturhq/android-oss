@@ -234,6 +234,19 @@ class CanonicalUseCasesTest {
     }
 
     @Test
+    fun uc04_invalidSignInStaysAnonymousWithoutOfferingRetry() {
+        users.signInResult = SignInResult.Failure(SignInFailureReason.NOT_CONFIGURED)
+        launch()
+
+        composeRule.onNodeWithTag("sign_in_fab").performClick()
+
+        composeRule.onNodeWithText("Sign-in isn't configured for this app.").assertIsDisplayed()
+        composeRule.onNodeWithText("Try again").assertDoesNotExist()
+        composeRule.onNodeWithTag("start_activity_fab").assertDoesNotExist()
+        assertEquals(users.anonymous, users.current)
+    }
+
+    @Test
     fun uc05_signOutReturnsToAnonymousIdleState() {
         launch()
         signIn()
@@ -250,6 +263,10 @@ class CanonicalUseCasesTest {
         launch()
         startAsOrganizer()
 
+        assertTrue(
+            users.registered.id in activities.activity(IturActivityId("createdActivity00001"))
+                ?.participantIds.orEmpty(),
+        )
         composeRule.onNodeWithTag("recenter_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("zoom_group_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("stop_activity_fab").assertIsDisplayed()
@@ -523,6 +540,7 @@ class CanonicalUseCasesTest {
 
         composeRule.onNodeWithTag("zoom_group_fab").performClick()
 
+        composeRule.onNodeWithText("No group locations are available yet.").assertIsDisplayed()
         composeRule.onNodeWithTag("show_qr_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("stop_activity_fab").assertIsDisplayed()
     }
