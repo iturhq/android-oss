@@ -109,6 +109,9 @@ class FakeActivityRepository(
         val index = activities.indexOfFirst { it.id == activityId }
         if (index == -1) throw IllegalArgumentException("Activity not found")
         val activity = activities[index]
+        if (activity.status != IturActivityStatus.ONGOING) {
+            return DataResult.Error("Activity ${activityId.value} has ended")
+        }
         activities[index] = activity.copy(
             participantIds = activity.participantIds + userId,
         )

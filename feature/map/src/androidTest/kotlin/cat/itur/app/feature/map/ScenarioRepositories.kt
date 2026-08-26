@@ -180,6 +180,9 @@ class ScenarioActivityRepository :
         addFailure?.let { return DataResult.Error(it) }
         val index = activities.indexOfFirst { it.id == activityId }
         if (index < 0) return DataResult.NotFound(activityId.value)
+        if (activities[index].status != IturActivityStatus.ONGOING) {
+            return DataResult.Error("Activity ${activityId.value} has ended")
+        }
         activities[index] = activities[index].copy(
             participantIds = (activities[index].participantIds + userId).distinct(),
         )

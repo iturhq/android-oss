@@ -159,6 +159,19 @@ class FakeActivityRepositoryTest {
     }
 
     @Test
+    fun `GIVEN a terminal activity WHEN adding a participant THEN membership is not written`() = runBlocking {
+        val newUser = UserId("new-user")
+        val repository = repository(ACTIVITY.copy(status = IturActivityStatus.FINISHED))
+
+        val result = repository.addParticipant(ACTIVITY_ID, newUser)
+
+        val error = assertIs<DataResult.Error>(result)
+        assertEquals("Activity ${ACTIVITY_ID.value} has ended", error.message)
+        val stored = assertIs<DataResult.Success<IturActivity>>(repository.getActivity(ACTIVITY_ID)).data
+        assertTrue(newUser !in stored.participantIds)
+    }
+
+    @Test
     fun `GIVEN no matching activity WHEN adding a participant THEN throws IllegalArgumentException`() = runBlocking {
         try {
             repository().addParticipant(ACTIVITY_ID, PARTICIPANT_ID)

@@ -42,6 +42,7 @@ import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -301,6 +302,20 @@ class CanonicalUseCasesTest {
 
         composeRule.onNodeWithText("Activity ${missing.value} not found").assertIsDisplayed()
         composeRule.onNodeWithTag("hail_organiser_fab").assertDoesNotExist()
+    }
+
+    @Test
+    fun uc12_terminalActivityIsNotJoinedAndExplainsThatItEnded() {
+        val terminal = TestFixtures.ongoingActivity.copy(status = IturActivityStatus.FINISHED)
+        activities.replaceActivities(listOf(terminal))
+        launch(terminal.id.url)
+
+        composeRule.onNodeWithTag("join_activity_fab").performClick()
+        composeRule.onNodeWithText("Scan an activity QR to join").assertIsDisplayed()
+        emitScan()
+
+        composeRule.onNodeWithText("Activity ${terminal.id.value} has ended").assertIsDisplayed()
+        assertFalse(users.anonymous.id in activities.activity(terminal.id)?.participantIds.orEmpty())
     }
 
     @Test
