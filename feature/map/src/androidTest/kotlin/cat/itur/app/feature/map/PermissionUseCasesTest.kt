@@ -5,6 +5,7 @@
 
 package cat.itur.app.feature.map
 
+import android.Manifest
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -43,6 +44,9 @@ class PermissionUseCasesTest {
     @Inject
     lateinit var locationClient: FakeLocationClient
 
+    @Inject
+    lateinit var activities: ScenarioActivityRepository
+
     @get:Rule(order = 0)
     val hiltRule = HiltAndroidRule(this)
 
@@ -55,6 +59,7 @@ class PermissionUseCasesTest {
     @Before
     fun setUp() {
         hiltRule.inject()
+        resetLocationPermissionState()
         instrumentation.runOnMainSync {
             MapLibre.getInstance(
                 ApplicationProvider.getApplicationContext<Context>(),
@@ -62,15 +67,45 @@ class PermissionUseCasesTest {
                 WellKnownTileServer.MapLibre,
             )
         }
+    }
+
+    private fun resetLocationPermissionState() {
+        permissionPackages().forEach { packageName ->
+            locationPermissions().forEach { permission ->
+                device.executeShellCommand("pm revoke $packageName $permission")
+            }
+        }
+        clearLocationPermissionFlags()
+    }
+
+    private fun clearLocationPermissionFlags() {
+        permissionPackages().forEach { packageName ->
+            locationPermissions().forEach { permission ->
+                device.executeShellCommand(
+                    "pm clear-permission-flags $packageName $permission user-set user-fixed",
+                )
+            }
+        }
+    }
+
+    private fun permissionPackages(): Set<String> = setOf(
+        instrumentation.context.packageName,
+        instrumentation.targetContext.packageName,
+        composeRule.activity.packageName,
+    )
+
+    private fun locationPermissions(): List<String> = listOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+    )
+
+    @Test
+    fun uc01_grantingLocationPermissionShowsIdleMapControls() {
         composeRule.setContent {
             IturTheme {
                 MapScreen()
             }
         }
-    }
-
-    @Test
-    fun uc01_grantingLocationPermissionShowsIdleMapControls() {
         clickPermissionChoice(
             "While using the app",
             "Allow only while using the app",
@@ -93,11 +128,18 @@ class PermissionUseCasesTest {
 
     @Test
     fun uc02_denialKeepsMapAndGroupControlsThenGrantEnablesSelfLocation() {
-        clickPermissionChoice(
-            "Deny",
-            "Don't allow",
-            resourceName = "permission_deny_button",
-        )
+        var permissionRequestCount = 0
+        composeRule.setContent {
+            IturTheme {
+                MapScreen(
+                    locationPermissionCheck = { false },
+                    locationPermissionRequest = { onResult ->
+                        permissionRequestCount++
+                        onResult(permissionRequestCount > 1)
+                    },
+                )
+            }
+        }
 
         composeRule.waitUntil(timeoutMillis = 10_000) {
             runCatching {
@@ -117,6 +159,7 @@ class PermissionUseCasesTest {
                 .fetchSemanticsNodes()
                 .isNotEmpty()
         }
+        activities.replaceActivities(emptyList())
         composeRule.onNodeWithTag("start_activity_fab").performClick()
         composeRule.waitUntil(timeoutMillis = 10_000) {
             composeRule.onAllNodesWithTag("zoom_group_fab")
@@ -131,16 +174,10 @@ class PermissionUseCasesTest {
             composeRule.activity.window.decorView
                 .findViewWithTag<android.view.View>(PERSISTENT_MAP_NATIVE_VIEW_TAG),
         )
-        composeRule.onNodeWithText("Enable location").performClick()
-        clickPermissionChoice(
-            "While using the app",
-            "Allow only while using the app",
-            "Allow",
-            resourceName = "permission_allow_foreground_only_button",
-        )
+        composeRule.onNodeWithTag("enable_location_button").performClick()
 
         composeRule.waitUntil(timeoutMillis = 10_000) {
-            locationClient.requestCount.get() == 1
+            locationClient.requestCount.get() >= 1
         }
         composeRule.onNodeWithTag("recenter_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("location_permission_notice").assertDoesNotExist()

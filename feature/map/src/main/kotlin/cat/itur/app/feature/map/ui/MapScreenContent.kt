@@ -7,14 +7,24 @@ package cat.itur.app.feature.map.ui
 
 import android.util.Log
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import cat.itur.app.core.domain.model.User
 import cat.itur.app.core.ui.components.IturProgressIndicator
 import cat.itur.app.feature.map.ui.components.map.ErrorState
@@ -87,6 +97,38 @@ private fun MapReadyContent(
         )
     }
     MapStateControls(viewModel, environment, presentation, interaction)
+    if (!interaction.locationPermissionGranted) {
+        LocationPermissionNotice {
+            interaction.locationPermissionRequests++
+        }
+    }
+}
+
+@Composable
+private fun LocationPermissionNotice(onEnableLocation: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 72.dp, vertical = 16.dp)
+            .testTag("location_permission_notice"),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Location access is off; self-location sharing is disabled.",
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            TextButton(
+                onClick = onEnableLocation,
+                modifier = Modifier.testTag("enable_location_button"),
+            ) {
+                Text("Enable location")
+            }
+        }
+    }
 }
 
 @Composable
@@ -97,34 +139,12 @@ private fun MapStateControls(
     interaction: MapInteractionState,
 ) {
     when {
-        presentation.currentUser == null -> IturProgressIndicator(
-            label = "Preparing map...",
-            modifier = environment.modifier.testTag("map_state_loading"),
-        )
+        presentation.currentUser == null -> IturProgressIndicator(label = "Preparing map...")
         presentation.uiState is MapUiState.Loading ->
-            IturProgressIndicator(
-                label = "Preparing activity...",
-                modifier = environment.modifier.testTag("map_state_loading"),
-            )
+            IturProgressIndicator(label = "Preparing activity...")
         presentation.uiState is MapUiState.Ongoing ->
-            OngoingControls(
-                viewModel,
-                presentation,
-                interaction,
-                environment,
-                "map_state_ongoing",
-            )
-        presentation.uiState is MapUiState.Error ->
-            IdleControls(viewModel, presentation, interaction, environment, "map_state_error")
-        presentation.uiState is MapUiState.RecoverableError ->
-            IdleControls(
-                viewModel,
-                presentation,
-                interaction,
-                environment,
-                "map_state_recoverable_error",
-            )
-        else -> IdleControls(viewModel, presentation, interaction, environment, "map_state_idle")
+            OngoingControls(viewModel, presentation, interaction, environment)
+        else -> IdleControls(viewModel, presentation, interaction, environment)
     }
 }
 
@@ -134,7 +154,6 @@ private fun IdleControls(
     presentation: MapPresentation,
     interaction: MapInteractionState,
     environment: MapEnvironment,
-    stateTag: String,
 ) {
     IdleState(
         onStartRequested = { viewModel.startActivity(environment.context) },
@@ -142,7 +161,7 @@ private fun IdleControls(
         onSignOutRequested = viewModel::signOut,
         onQRRequested = { interaction.showQrScanSheet = true },
         onHelpRequested = { interaction.showHelp = true },
-        modifier = environment.modifier.testTag(stateTag),
+        modifier = environment.modifier,
         isSignedIn = presentation.currentUser is User.RegisteredUser,
         authenticationActionsEnabled = presentation.authenticationActionsEnabled,
         activityActionsEnabled = presentation.activityActionsEnabled,
@@ -155,7 +174,6 @@ private fun OngoingControls(
     presentation: MapPresentation,
     interaction: MapInteractionState,
     environment: MapEnvironment,
-    stateTag: String,
 ) {
     val ongoingUiState = presentation.uiState as MapUiState.Ongoing
     OngoingState(
@@ -168,7 +186,8 @@ private fun OngoingControls(
             onHelpRequested = { interaction.showHelp = true },
         ),
         isOrganizer = ongoingUiState.organizer.id == presentation.currentUser?.id,
-        modifier = environment.modifier.testTag(stateTag),
+        selfLocationAvailable = interaction.locationPermissionGranted,
+        modifier = environment.modifier,
         activityActionsEnabled = presentation.activityActionsEnabled,
     )
 }

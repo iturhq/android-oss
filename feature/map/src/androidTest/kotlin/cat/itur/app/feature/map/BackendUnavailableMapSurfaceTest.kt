@@ -9,6 +9,7 @@ import android.Manifest
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -61,7 +62,13 @@ class BackendUnavailableMapSurfaceTest {
     }
 
     @Test
-    fun backendUnavailableKeepsThePersistentMapMounted() {
+    fun backendUnavailableKeepsThePersistentMapAndSafeControls() {
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag("join_activity_fab")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
         composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+        composeRule.onNodeWithTag("join_activity_fab").assertIsDisplayed()
+        composeRule.onNodeWithTag("sign_in_fab").assertIsDisplayed()
     }
 }

@@ -88,6 +88,7 @@ class ScenarioActivityRepository :
     var addFailure: String? = null
     var removeFailure: Throwable? = null
     var updateFailure: Throwable? = null
+    var getActivitySuccessesBeforeFailure = 0
     var getActivityFailuresRemaining = 0
     val initialLookupComplete = AtomicBoolean()
     val addParticipantCount = AtomicInteger()
@@ -120,6 +121,11 @@ class ScenarioActivityRepository :
     )
 
     override suspend fun getActivity(activityId: IturActivityId): DataResult<IturActivity> {
+        if (getActivitySuccessesBeforeFailure > 0) {
+            getActivitySuccessesBeforeFailure--
+            return activity(activityId)?.let { DataResult.Success(it) }
+                ?: DataResult.NotFound(activityId.value)
+        }
         if (getActivityFailuresRemaining > 0) {
             getActivityFailuresRemaining--
             return DataResult.Error("temporary resume failure")
