@@ -6,9 +6,9 @@
 package cat.itur.app.observability
 
 /**
- * Boots crash reporting / performance monitoring for the current flavor. The `prod`/`local`
- * binding wires real Firebase Crashlytics and Performance Monitoring; `demo` binds a no-op so
- * the credential-free demo flavor never links or calls into Firebase observability code.
+ * Boots crash reporting / performance monitoring for the current flavor. `prod` binds Firebase
+ * Crashlytics and Performance Monitoring; `local` binds a no-op so the credential-free emulator
+ * build never links or calls into Firebase observability code.
  */
 interface ObservabilityInitializer {
     fun initialize()
