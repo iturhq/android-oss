@@ -30,13 +30,12 @@ internal fun MapScreenEffects(
     presentation: MapPresentation,
     interaction: MapInteractionState,
     snackbarHostState: SnackbarHostState,
-    locationPermissionRequest: (((Boolean) -> Unit) -> Unit)?,
 ) {
     BackendMonitoringEffect(viewModel)
     ParticipantLocationMonitoringEffect(viewModel)
     MessageEffects(presentation, interaction, snackbarHostState)
     LocationUpdatesEffect(viewModel, environment.context, interaction.locationPermissionGranted)
-    LocationPermissionEffect(viewModel, environment, interaction, locationPermissionRequest)
+    LocationPermissionEffect(viewModel, environment, interaction)
     InitialCenteringEffect(presentation, interaction)
     NotificationPermissionEffect(environment.context, interaction.locationPermissionGranted)
     ActivityStateEffects(viewModel, environment.context, presentation)
@@ -146,7 +145,6 @@ private fun LocationPermissionEffect(
     viewModel: MapViewModel,
     environment: MapEnvironment,
     interaction: MapInteractionState,
-    locationPermissionRequest: (((Boolean) -> Unit) -> Unit)?,
 ) {
     val onPermissionResult: (Boolean) -> Unit = { granted ->
         interaction.locationPermissionGranted = granted
@@ -164,8 +162,8 @@ private fun LocationPermissionEffect(
                 ) == PackageManager.PERMISSION_GRANTED
             ) {
                 onPermissionResult(true)
-            } else if (locationPermissionRequest != null) {
-                locationPermissionRequest(onPermissionResult)
+            } else if (environment.locationPermissionRequest != null) {
+                environment.locationPermissionRequest(onPermissionResult)
             } else {
                 launcher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
             }
@@ -175,8 +173,8 @@ private fun LocationPermissionEffect(
         if (environment.openGlEsSupport.isSupported && !interaction.locationPermissionGranted) {
             withFrameNanos { }
             withFrameNanos { }
-            if (locationPermissionRequest != null) {
-                locationPermissionRequest(onPermissionResult)
+            if (environment.locationPermissionRequest != null) {
+                environment.locationPermissionRequest(onPermissionResult)
             } else {
                 launcher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
             }
