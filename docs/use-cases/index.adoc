@@ -25,7 +25,7 @@ Each use case covers a single user scenario and specifies preconditions, steps, 
 
 == Executable coverage
 
-The demo-flavor instrumented suite implements these IDs through the real
+The test-scoped instrumented suite implements these IDs through the real
 `MapScreen`/`MapViewModel` Hilt graph. Compose Test drives application UI;
 UIAutomator is restricted to the Android-owned permission dialog in UC-01
 and UC-02. Scenario repositories replace network services deterministically,

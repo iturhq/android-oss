@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.nohex.itur.core.data.firebase"
+    namespace = "cat.itur.app.core.data.firebase"
     compileSdk = 36
 
     buildTypes {

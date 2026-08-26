@@ -42,7 +42,7 @@ jobs:
               {
                 "client_info": {
                   "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
-                  "android_client_info": { "package_name": "com.nohex.itur" }
+                "android_client_info": { "package_name": "cat.itur.app.oss" }
                 },
                 "oauth_client": [],
                 "api_key": [{ "current_key": "stub" }],
@@ -51,7 +51,7 @@ jobs:
               {
                 "client_info": {
                   "mobilesdk_app_id": "1:000000000000:android:0000000000000000000001",
-                  "android_client_info": { "package_name": "com.nohex.itur.debug" }
+                "android_client_info": { "package_name": "cat.itur.app.oss.debug" }
                 },
                 "oauth_client": [],
                 "api_key": [{ "current_key": "stub" }],
@@ -60,16 +60,7 @@ jobs:
               {
                 "client_info": {
                   "mobilesdk_app_id": "1:000000000000:android:0000000000000000000002",
-                  "android_client_info": { "package_name": "com.nohex.itur.local" }
-                },
-                "oauth_client": [],
-                "api_key": [{ "current_key": "stub" }],
-                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
-              },
-              {
-                "client_info": {
-                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000003",
-                  "android_client_info": { "package_name": "com.nohex.itur.local.debug" }
+                  "android_client_info": { "package_name": "cat.itur.app.oss.local.debug" }
                 },
                 "oauth_client": [],
                 "api_key": [{ "current_key": "stub" }],
@@ -87,7 +78,7 @@ jobs:
         run: ./gradlew detekt
 
       - name: Run unit tests with coverage
-        run: ./gradlew :core:auth:createLocalDebugUnitTestCoverageReport :core:data-fake:createDebugUnitTestCoverageReport :feature:map:createDemoDebugUnitTestCoverageReport :core:datastore:createDebugUnitTestCoverageReport
+        run: ./gradlew :app:testProdDebugUnitTest :core:auth:createLocalDebugUnitTestCoverageReport :core:data-fake:createDebugUnitTestCoverageReport :feature:map:createDebugUnitTestCoverageReport :core:datastore:createDebugUnitTestCoverageReport
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -96,15 +87,12 @@ jobs:
           files: |
             core/auth/build/reports/coverage/test/local/debug/report.xml
             core/data-fake/build/reports/coverage/test/debug/report.xml
-            feature/map/build/reports/coverage/test/demo/debug/report.xml
+            feature/map/build/reports/coverage/test/debug/report.xml
             core/datastore/build/reports/coverage/test/debug/report.xml
           fail_ci_if_error: true
 
-      - name: Assemble demo build
-        run: ./gradlew assembleDemoDebug
-
-      - name: Assemble local build
-        run: ./gradlew assembleLocalDebug
+      - name: Assemble supported application variants
+        run: ./gradlew :app:assembleProdRelease :app:assembleProdDebug :app:assembleLocalDebug
 
   map-screen-instrumented-tests:
     runs-on: ubuntu-latest
@@ -148,7 +136,7 @@ jobs:
             -noaudio -no-boot-anim -camera-back none
           script: >-
             bash -o pipefail -c
-            './gradlew :feature:map:connectedDemoDebugAndroidTest
+            './gradlew :feature:map:connectedDebugAndroidTest
             --console=plain --stacktrace 2>&1 | tee emulator-test.log'
 
       - name: Mark MapScreen emulator verification

@@ -16,7 +16,7 @@ Participants join a shared map session, see each other's real-time positions, an
 - **Start & manage activities**: organisers start activities, share a QR for others to join, broadcast an SOS, and end the session.
 - **Google Sign-In**: Firebase-backed authentication. Anyone with a Google account can sign in and become an organiser.
 - **Real-time positions**: participant and organiser locations synced through Firestore.
-- **Demo flavour**: fully functional offline build with fake repositories, used for testing; no Firebase account or API keys required.
+- **Local flavour**: development build that targets the Firebase Emulator Suite; it requires no production Firebase configuration.
 
 ## Tech stack
 
@@ -46,9 +46,10 @@ feature/
 
 ## Build flavours
 
-* `demo`: In-memory fake repositories, no credentials needed. Never links or calls Firebase Crashlytics/Performance Monitoring — see link:docs/adr/ADR-003-observability.adoc[ADR-003].
-* `local`: Connects to Firebase Emulator Suite running in [itur-dashboard](https://github.com/mnohe/itur-dashboard), requires `local.properties`. Reports crashes/performance to Firebase.
+* `local`: Connects to Firebase Emulator Suite running in [itur-dashboard](https://github.com/mnohe/itur-dashboard). It is credential-free and uses no-op observability.
 * `prod`: Live Firebase backend, requires `local.properties` and `google-services.json`. Reports crashes/performance to Firebase.
+
+Deterministic fake repositories are test infrastructure only; there is no installable demo flavour.
 
 ## Prerequisites
 
@@ -58,22 +59,22 @@ feature/
 
 ## Getting started
 
-### Demo build (no credentials required)
+### Local development build (no production Firebase configuration required)
 
 ```bash
-./gradlew assembleDemoDebug
+./gradlew assembleLocalDebug
 ```
 
 Install the resulting APK, or run directly on a device/emulator:
 
 ```bash
-./gradlew installDemoDebug
+./gradlew installLocalDebug
 ```
 
 ### Production build
 
 1. Copy `local.properties.example` to `local.properties` and fill in your MapLibre and Google OAuth credentials.
-2. Create a Firebase project, enable **Authentication** (Google provider) and **Firestore**, download `google-services.json`, and place it in `app/`.
+2. Create a Firebase project, enable **Authentication** (Google provider) and **Firestore**, download `google-services.json`, and place it in `app/src/prod/`.
 3. Build:
 
 ```bash

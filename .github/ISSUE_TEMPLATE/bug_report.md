@@ -24,7 +24,7 @@ labels: bug
 
 ## Environment
 
-- Build flavour: <!-- demo / prod -->
+- Build flavour: <!-- local / prod -->
 - Android version:
 - Device / emulator:
 - App version / commit:

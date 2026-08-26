@@ -15,13 +15,13 @@ plugins {
 }
 
 android {
-    namespace = "com.nohex.itur.feature.map"
+    namespace = "cat.itur.app.feature.map"
     compileSdk = 36
 
     defaultConfig {
         minSdk = 24
         multiDexEnabled = true
-        testInstrumentationRunner = "com.nohex.itur.feature.map.HiltTestRunner"
+        testInstrumentationRunner = "cat.itur.app.feature.map.HiltTestRunner"
         testInstrumentationRunnerArguments["clearPackageData"] = "true"
     }
 
@@ -38,18 +38,6 @@ android {
         }
     }
 
-    flavorDimensions += "environment"
-    productFlavors {
-        create("prod") {
-            dimension = "environment"
-        }
-        create("local") {
-            dimension = "environment"
-        }
-        create("demo") {
-            dimension = "environment"
-        }
-    }
 }
 
 dependencies {
@@ -100,8 +88,8 @@ dependencies {
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
-    // Fakes for the repository contracts, demo flavor only.
-    "testDemoImplementation"(projects.core.dataFake)
+    // Fakes for pure JVM tests.
+    testImplementation(projects.core.dataFake)
 
     // Android instrumented tests
     androidTestImplementation(libs.androidx.junit)
@@ -110,8 +98,9 @@ dependencies {
     androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(libs.androidx.test.uiautomator)
     androidTestImplementation(libs.hilt.android.testing)
+    // Deterministic instrumented-test fixtures, with no installable demo flavor.
+    androidTestImplementation(projects.core.dataFake)
     androidTestUtil(libs.androidx.test.orchestrator)
-    "androidTestDemoImplementation"(projects.core.dataFake)
     kspAndroidTest(libs.hilt.compiler)
     debugImplementation(libs.androidx.ui.test.manifest)
 }

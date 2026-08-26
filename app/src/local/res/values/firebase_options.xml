@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Itur © 2025 by Max Noé <code@itur.cat>
+  ~ SPDX-License-Identifier: GPL-3.0-or-later
+  -->
+<resources>
+    <string name="google_app_id" translatable="false">1:000000000000:android:osslocaldebug</string>
+    <string name="gcm_defaultSenderId" translatable="false">000000000000</string>
+    <string name="default_web_client_id" translatable="false">000000000000-local.apps.googleusercontent.com</string>
+    <string name="google_api_key" translatable="false">local-emulator-api-key</string>
+    <string name="google_storage_bucket" translatable="false">itur-local.appspot.com</string>
+    <string name="project_id" translatable="false">itur-local</string>
+</resources>

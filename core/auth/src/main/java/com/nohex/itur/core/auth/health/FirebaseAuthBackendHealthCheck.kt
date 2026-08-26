@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-package com.nohex.itur.core.auth.health
+package cat.itur.app.core.auth.health
 
+import cat.itur.app.core.data.health.BackendHealthCheck
+import cat.itur.app.core.data.health.BackendService
+import cat.itur.app.core.data.health.BackendServiceIds
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
-import com.nohex.itur.core.data.health.BackendHealthCheck
-import com.nohex.itur.core.data.health.BackendService
-import com.nohex.itur.core.data.health.BackendServiceIds
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 

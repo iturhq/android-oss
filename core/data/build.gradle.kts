@@ -10,7 +10,7 @@ plugins {
 }
 
 android {
-    namespace = "com.nohex.itur.core.data"
+    namespace = "cat.itur.app.core.data"
     compileSdk = 36
 
     buildTypes {
@@ -33,18 +33,15 @@ android {
         create("local") {
             dimension = "environment"
         }
-        create("demo") {
-            dimension = "environment"
-        }
     }
+
 }
 
 dependencies {
-    // The repository contracts this module's flavors bind to an implementation.
+    // Production and local use distinct Firebase endpoints (local targets emulators).
     implementation(projects.core.dataApi)
     "prodImplementation"(projects.core.dataFirebase)
     "localImplementation"(projects.core.dataFirebase)
-    "demoImplementation"(projects.core.dataFake)
 
     // Hilt
     implementation(libs.hilt.android)

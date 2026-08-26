@@ -17,7 +17,7 @@ The app follows MVVM{zwsp}footnote:[https://en.wikipedia.org/wiki/Model%E2%80%93
 | `MapViewModel` — Hilt-injected; exposes `StateFlow` / `LiveData` for reactive state
 
 | Model
-| Repository interfaces backed by Firebase Firestore (`prod`) or in-memory fakes (`demo`)
+| Repository interfaces backed by Firebase Firestore (`prod`/`local`); deterministic fakes are test-scoped infrastructure
 |===
 
 The `MapScreen` is a **state machine**: all UI changes are driven by `MapUiState`.
@@ -60,8 +60,7 @@ feature_map: "feature:map" {
 }
 core_data: "core:data" {
   ActivityRepository; UserRepository; LocationRepository
-  prod: { FirebaseActivityRepository; FirebaseLocationRepository; FirebaseUserRepository }
-  demo: { FakeActivityRepository; FakeLocationRepository; FakeUserRepository }
+  prod_local: { FirebaseActivityRepository; FirebaseLocationRepository; FirebaseUserRepository }
 }
 core_auth: "core:auth" {
   prod: { FirebaseAuthUserRepository }
@@ -87,12 +86,9 @@ feature_map.MapViewModel -> core_data.LocationRepository
 feature_map.MapViewModel -> core_location.LocationClient
 core_location.GmsLocationClient -> core_location.LocationClient: {style.stroke-dash: 4}
 
-core_data.prod.FirebaseActivityRepository -> core_data.ActivityRepository: {style.stroke-dash: 4}
-core_data.demo.FakeActivityRepository -> core_data.ActivityRepository: {style.stroke-dash: 4}
-core_auth.prod.FirebaseAuthUserRepository -> core_data.UserRepository: {style.stroke-dash: 4}
-core_data.demo.FakeUserRepository -> core_data.UserRepository: {style.stroke-dash: 4}
-core_data.prod.FirebaseLocationRepository -> core_data.LocationRepository: {style.stroke-dash: 4}
-core_data.demo.FakeLocationRepository -> core_data.LocationRepository: {style.stroke-dash: 4}
+core_data.prod_local.FirebaseActivityRepository -> core_data.ActivityRepository: {style.stroke-dash: 4}
+core_auth.prod_local.FirebaseAuthUserRepository -> core_data.UserRepository: {style.stroke-dash: 4}
+core_data.prod_local.FirebaseLocationRepository -> core_data.LocationRepository: {style.stroke-dash: 4}
 ....
 
 === Module responsibilities
@@ -114,7 +110,7 @@ core_data.demo.FakeLocationRepository -> core_data.LocationRepository: {style.st
 | Kotlin value-class IDs: `UserId`, `IturActivityId` (20-char alphanumeric); URL generation
 
 | `core:data`
-| Repository interfaces + `DataResult` sealed class; `prod` (Firebase) and `demo` (fake) source sets
+| Repository interfaces + `DataResult` sealed class; `prod` and `local` Firebase source sets (local targets the Emulator Suite)
 
 | `core:auth`
 | `UserRepository` implementation; `prod`: Firebase Auth + AndroidX Credentials (Google Sign-In)
@@ -170,8 +166,8 @@ fun NavGraphBuilder.mapScreen() {
 | `DataModule`
 | `core/data/src/prod/di/` — provides Firebase repository implementations
 
-| `FakeDataModule`
-| `core/data/src/demo/di/` — provides fake repository implementations
+| `TestDataModule`
+| `feature/map/src/androidTest/` — supplies deterministic fake repositories only to instrumentation tests
 
 | `FirebaseAuthModule`
 | `core/auth/src/prod/di/` — provides `FirebaseAuth`
@@ -183,7 +179,7 @@ fun NavGraphBuilder.mapScreen() {
 | `core/datastore/di/` — provides the proto `DataStore` singleton
 |===
 
-Flavor-based binding: the `demo` source set replaces all Firebase modules with `FakeDataModule`, enabling fully isolated in-process testing.
+Production and local builds bind Firebase implementations; deterministic fake bindings are test-scoped and never form an installable application flavor.
 
 
 === Firestore schema
@@ -218,8 +214,8 @@ erDiagram
 |===
 | Flavor | Backend
 
-| `demo`
-| In-memory fake repositories (no Firebase, no network).
+| `local`
+| Firebase Emulator Suite with an emulator-only configuration and no production observability.
 
 | `prod`
 | Firebase Firestore, Firebase Auth, Google Sign-In. Requires `local.properties` secrets.
