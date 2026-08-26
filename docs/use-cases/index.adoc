@@ -11,7 +11,7 @@ Each use case covers a single user scenario and specifies preconditions, steps, 
 // coverage-ledger: UC-AUTH-001 | E2E | CanonicalUseCasesTest.uc03_signInHappyPath
 // coverage-ledger: UC-ACTIVITY-001 | E2E | CanonicalUseCasesTest.uc06_startActivityHappyPath
 // coverage-ledger: UC-ACTIVITY-002 | E2E | CanonicalUseCasesTest.uc09_joinActivityFromValidQr
-// coverage-ledger: UC-ACTIVITY-003 | Unit | FirebaseLocationRepositoryTest.GIVEN no existing record WHEN updating a participant's location THEN a new document is added
+// coverage-ledger: UC-ACTIVITY-003 | E2E | CanonicalUseCasesTest.uc17_recenterAfterLocationFixKeepsOngoingState
 // coverage-ledger: UC-ACTIVITY-004 | E2E | CanonicalUseCasesTest.uc18_trackGroupWithKnownLocationsKeepsOngoingState
 // coverage-ledger: UC-ACTIVITY-005 | E2E | CanonicalUseCasesTest.uc19_participantHailsOrganizerExactlyOnce
 // coverage-ledger: UC-ACTIVITY-006 | E2E | CanonicalUseCasesTest.uc14_organizerStopsActivityForEveryone
@@ -51,7 +51,9 @@ and the hosted emulator runs the suite on every change.
 | UC-14 | `CanonicalUseCasesTest.uc14_organizerStopsActivityForEveryone`
 | UC-15 | `CanonicalUseCasesTest.uc15_participantExitsWithoutFinishingActivity`
 | UC-16 | `CanonicalUseCasesTest.uc16_leaveFailureIsVisibleAndDoesNotCrash`
-| UC-17 | `CanonicalUseCasesTest.uc17_recenterAfterLocationFixKeepsOngoingState`
+| UC-17 | `CanonicalUseCasesTest.uc17_recenterAfterLocationFixKeepsOngoingState`,
+`uc17_locationProviderFailureIsVisibleAndCanRetry`, and
+`uc17_locationWriteFailureShowsRecoverableDegradedState`
 | UC-18 | `CanonicalUseCasesTest.uc18_trackGroupWithKnownLocationsKeepsOngoingState`
 | UC-19 | `CanonicalUseCasesTest.uc19_participantHailsOrganizerExactlyOnce`
 | UC-20 | `CanonicalUseCasesTest.uc20_organizerActivityAutoResumesOnColdStart` and `uc20_participantActivityAutoResumesOnColdStart`

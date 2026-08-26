@@ -460,6 +460,7 @@ class CanonicalUseCasesTest {
         launch()
         startAsOrganizer()
         locationClient.emit(51.5, -0.1)
+        composeRule.waitUntil { locations.updateCount.get() == 1 }
 
         composeRule.onNodeWithTag("recenter_fab").performClick()
 
