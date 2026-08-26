@@ -306,7 +306,11 @@ class CanonicalUseCasesTest {
 
     @Test
     fun uc12_terminalActivityIsNotJoinedAndExplainsThatItEnded() {
-        val terminal = TestFixtures.ongoingActivity.copy(status = IturActivityStatus.FINISHED)
+        val terminal =
+            TestFixtures.ongoingActivity.copy(
+                status = IturActivityStatus.FINISHED,
+                participantIds = TestFixtures.ongoingActivity.participantIds - users.anonymous.id,
+            )
         activities.replaceActivities(listOf(terminal))
         launch(terminal.id.url)
 
