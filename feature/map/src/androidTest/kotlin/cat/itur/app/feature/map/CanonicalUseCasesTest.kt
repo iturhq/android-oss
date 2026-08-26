@@ -43,6 +43,7 @@ import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -221,6 +222,18 @@ class CanonicalUseCasesTest {
     }
 
     @Test
+    fun uc04_cancelledSignInStaysAnonymousAndIdle() {
+        users.signInResult = SignInResult.Cancelled
+        launch()
+
+        composeRule.onNodeWithTag("sign_in_fab").performClick()
+
+        composeRule.onNodeWithTag("sign_in_fab").assertIsDisplayed()
+        composeRule.onNodeWithTag("start_activity_fab").assertDoesNotExist()
+        assertEquals(users.anonymous, users.current)
+    }
+
+    @Test
     fun uc05_signOutReturnsToAnonymousIdleState() {
         launch()
         signIn()
@@ -350,6 +363,22 @@ class CanonicalUseCasesTest {
     }
 
     @Test
+    fun uc14_finishFailureKeepsTheActivityOngoingAndOffersRetry() {
+        launch()
+        startAsOrganizer()
+        val activityId = IturActivityId("createdActivity00001")
+        activities.updateFailure = IllegalStateException("test finish failure")
+
+        composeRule.onNodeWithTag("stop_activity_fab").performClick()
+
+        composeRule.onNodeWithText("Failed to leave activity $activityId").assertIsDisplayed()
+        composeRule.onNodeWithText("Try again").assertIsDisplayed()
+        assertEquals(IturActivityStatus.ONGOING, activities.activity(activityId)?.status)
+        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.onNodeWithTag("stop_activity_fab").assertIsDisplayed()
+    }
+
+    @Test
     fun uc15_participantExitsWithoutFinishingActivity() {
         launch(TestFixtures.ONGOING_ACTIVITY_ID.url)
         joinAsParticipant()
@@ -374,7 +403,39 @@ class CanonicalUseCasesTest {
         composeRule.onNodeWithText(
             "Failed to leave activity ${TestFixtures.ONGOING_ACTIVITY_ID}",
         ).assertIsDisplayed()
+        composeRule.onNodeWithText("Try again").assertIsDisplayed()
+        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.onNodeWithTag("hail_organiser_fab").assertIsDisplayed()
+        assertTrue(users.anonymous.id in activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)?.participantIds.orEmpty())
+    }
+
+    @Test
+    fun uc17_locationProviderFailureIsVisibleAndCanRetry() {
+        locationClient.requestFailure = IllegalStateException("provider unavailable")
+        launch()
+
+        composeRule.onNodeWithText("Location provider is unavailable.").assertIsDisplayed()
+        composeRule.onNodeWithText("Try again").assertIsDisplayed()
+        locationClient.requestFailure = null
+        composeRule.onNodeWithText("Try again").performClick()
+        composeRule.waitUntil { locationClient.hasActiveRequest }
         composeRule.onNodeWithTag("join_activity_fab").assertIsDisplayed()
+    }
+
+    @Test
+    fun uc17_locationWriteFailureShowsRecoverableDegradedState() {
+        launch()
+        startAsOrganizer()
+        locations.updateFailure = IllegalStateException("test location write failure")
+
+        locationClient.emit(51.5, -0.1)
+
+        composeRule.onNodeWithText("Location sharing is temporarily unavailable.")
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Try again").assertIsDisplayed()
+        assertEquals(1, locations.updateCount.get())
+        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.onNodeWithTag("stop_activity_fab").assertIsDisplayed()
     }
 
     @Test

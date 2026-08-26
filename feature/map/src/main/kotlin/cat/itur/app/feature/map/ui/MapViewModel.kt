@@ -447,6 +447,7 @@ constructor(
         viewModelScope.launch {
             // If there is an ongoing activity...
             _ongoingActivityId.value?.let { activityId ->
+                val previousState = _uiState.value
                 try {
                     currentUser.value?.let {
                         if (_organizerId.value == it.id) {
@@ -478,9 +479,12 @@ constructor(
                 } catch (e: Exception) {
                     val message = "Failed to leave activity $activityId"
                     Log.e("MapViewModel", message, e)
-                    if (!reportBackendFailure(e)) {
-                        _uiState.value = MapUiState.Error(message)
-                    }
+                    reportBackendFailure(e)
+                    _uiState.value = MapUiState.RecoverableError(
+                        message = message,
+                        onRetry = ::leaveActivity,
+                        onCancel = { _uiState.value = previousState },
+                    )
                 }
             }
         }
@@ -615,6 +619,7 @@ constructor(
         activityId: IturActivityId,
         location: Location,
     ) {
+        val previousState = _uiState.value
         try {
             locationsRepository.updateForParticipant(
                 userId,
@@ -629,6 +634,15 @@ constructor(
                 e,
             )
             reportBackendFailure(e)
+            _uiState.value = MapUiState.RecoverableError(
+                message = "Location sharing is temporarily unavailable.",
+                onRetry = {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        updateUserLocation(userId, activityId, location)
+                    }
+                },
+                onCancel = { _uiState.value = previousState },
+            )
         }
     }
 
@@ -687,12 +701,22 @@ constructor(
     private fun beginLocationUpdates() {
         if (locationUpdatesActive) return
         Log.d("MapScreen", "Requesting location updates")
-        locationClient.requestUpdates(
-            locationUpdateConfig.updateIntervalMillis,
-            locationCallback,
-        )
-        locationUpdatesActive = true
-        Log.d("MapScreen", "Location updates requested successfully")
+        val previousState = _uiState.value
+        try {
+            locationClient.requestUpdates(
+                locationUpdateConfig.updateIntervalMillis,
+                locationCallback,
+            )
+            locationUpdatesActive = true
+            Log.d("MapScreen", "Location updates requested successfully")
+        } catch (e: Exception) {
+            Log.e("MapScreen", "Location provider is unavailable", e)
+            _uiState.value = MapUiState.RecoverableError(
+                message = "Location provider is unavailable.",
+                onRetry = ::beginLocationUpdates,
+                onCancel = { _uiState.value = previousState },
+            )
+        }
     }
 
     /**

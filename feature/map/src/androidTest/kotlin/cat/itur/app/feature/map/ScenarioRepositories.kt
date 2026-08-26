@@ -249,6 +249,7 @@ class ScenarioLocationRepository(
     )
 
     var removeFailure: Throwable? = null
+    var updateFailure: Throwable? = null
     var recordedAt: Date? = Date()
     val updateCount = AtomicInteger()
     val removeCount = AtomicInteger()
@@ -276,6 +277,7 @@ class ScenarioLocationRepository(
         location: Location,
     ) {
         updateCount.incrementAndGet()
+        updateFailure?.let { throw it }
         locations.getOrPut(activityId) { mutableMapOf() }[userId] = location
     }
 
