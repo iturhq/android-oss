@@ -181,37 +181,23 @@ constructor(
         // membership to separate documents, leaving the legacy participantIds array frozen.
         // Resolve that exact activity first; the queries below remain as compatibility fallback
         // for pre-reservation installs and legacy activity records.
-        val reservedActivityId = when (val result = activityRepository.getActiveActivityId(user.id)) {
-            is DataResult.Success -> result.data
-            is DataResult.Error -> throw BackendInitializationException(result.message)
-            is DataResult.NotFound -> null
-        }
-        if (reservedActivityId != null) {
-            when (val result = activityRepository.getActivity(reservedActivityId)) {
-                is DataResult.Success -> if (result.data.status == IturActivityStatus.ONGOING) return result.data
-                is DataResult.Error -> throw BackendInitializationException(result.message)
-                is DataResult.NotFound -> Unit
-            }
-        }
+        val reserved = activityRepository.getActiveActivityId(user.id)
+            .dataOrNullOrThrow()
+            ?.let { activityRepository.getActivity(it).dataOrNullOrThrow() }
+            ?.takeIf { it.status == IturActivityStatus.ONGOING }
+        return reserved
+            ?: activityRepository.getActivities(ActivityFilter.OngoingByOrganizer(user.id))
+                .dataOrNullOrThrow()
+                ?.firstOrNull()
+            ?: activityRepository.getActivities(ActivityFilter.OngoingByParticipant(user.id))
+                .dataOrNullOrThrow()
+                ?.firstOrNull()
+    }
 
-        val organized = when (
-            val result = activityRepository.getActivities(
-                ActivityFilter.OngoingByOrganizer(user.id),
-            )
-        ) {
-            is DataResult.Success -> result.data.firstOrNull()
-            is DataResult.Error -> throw BackendInitializationException(result.message)
-            is DataResult.NotFound -> null
-        }
-        return organized ?: when (
-            val result = activityRepository.getActivities(
-                ActivityFilter.OngoingByParticipant(user.id),
-            )
-        ) {
-            is DataResult.Success -> result.data.firstOrNull()
-            is DataResult.Error -> throw BackendInitializationException(result.message)
-            is DataResult.NotFound -> null
-        }
+    private fun <T> DataResult<T>.dataOrNullOrThrow(): T? = when (this) {
+        is DataResult.Success -> data
+        is DataResult.Error -> throw BackendInitializationException(message)
+        is DataResult.NotFound -> null
     }
 
     /**
@@ -546,12 +532,11 @@ constructor(
         _ongoingActivityId.value = activity.id
         // Show the ongoing activity state.
         _participantLocations.value = locations
-        val organizer = try {
+        val organizer = runCatching {
             userRepository.getAll(listOf(activity.organizerId))
                 .firstOrNull() ?: AnonymousUser(activity.organizerId)
-        } catch (cancellation: CancellationException) {
-            throw cancellation
-        } catch (failure: Exception) {
+        }.getOrElse { failure ->
+            if (failure is CancellationException) throw failure
             // User profiles are not required to restore the activity. In particular, a
             // participant can read their activity without being allowed to read the organizer's
             // private profile; preserve the backend-derived ongoing state with an ID-only label.

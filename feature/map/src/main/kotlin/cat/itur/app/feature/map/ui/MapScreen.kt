@@ -25,6 +25,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -97,7 +98,10 @@ fun ModalAlert(text: String, onDismissRequest: () -> Unit) {
 fun RecoverableErrorDialog(message: String, onRetry: () -> Unit, onCancel: () -> Unit) {
     BasicAlertDialog(onDismissRequest = onCancel) {
         Surface(
-            modifier = Modifier.wrapContentWidth().wrapContentHeight(),
+            modifier = Modifier
+                .wrapContentWidth()
+                .wrapContentHeight()
+                .testTag("recoverable_error_overlay"),
             shape = MaterialTheme.shapes.large,
             tonalElevation = AlertDialogDefaults.TonalElevation,
         ) {
@@ -124,7 +128,10 @@ fun BackendUnavailableDialog(
 ) {
     BasicAlertDialog(onDismissRequest = {}) {
         Surface(
-            modifier = Modifier.wrapContentWidth().wrapContentHeight(),
+            modifier = Modifier
+                .wrapContentWidth()
+                .wrapContentHeight()
+                .testTag("backend_unavailable_overlay"),
             shape = MaterialTheme.shapes.large,
             tonalElevation = AlertDialogDefaults.TonalElevation,
         ) {
