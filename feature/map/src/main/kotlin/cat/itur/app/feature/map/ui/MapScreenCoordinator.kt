@@ -36,6 +36,7 @@ internal data class MapEnvironment(
     val isInspection: Boolean,
     val openGlEsSupport: OpenGlEsSupport,
     val modifier: Modifier,
+    val locationPermissionRequest: (((Boolean) -> Unit) -> Unit)?,
 )
 
 internal data class MapPresentation(
@@ -70,25 +71,24 @@ internal class MapInteractionState(
 internal fun MapScreenCoordinator(
     modifier: Modifier,
     viewModel: MapViewModel,
-    locationPermissionCheck: (Context) -> Boolean,
-    locationPermissionRequest: (((Boolean) -> Unit) -> Unit)?,
+    locationPermissionCustomization: LocationPermissionCustomization,
     openGlEsSupportCheck: (Context) -> OpenGlEsSupport,
     qrCustomization: QrCustomization,
 ) {
-    val environment = RememberMapEnvironment(openGlEsSupportCheck, modifier)
+    val environment = RememberMapEnvironment(
+        openGlEsSupportCheck,
+        modifier,
+        locationPermissionCustomization.request,
+    )
     val presentation = CollectMapPresentation(viewModel)
-    val interaction = RememberMapInteractionState(environment.context, locationPermissionCheck)
+    val interaction = RememberMapInteractionState(
+        environment.context,
+        locationPermissionCustomization.check,
+    )
     val snackbarHostState = remember { SnackbarHostState() }
     val helpAnchorRegistry = remember { HelpAnchorRegistry() }
 
-    MapScreenEffects(
-        viewModel,
-        environment,
-        presentation,
-        interaction,
-        snackbarHostState,
-        locationPermissionRequest,
-    )
+    MapScreenEffects(viewModel, environment, presentation, interaction, snackbarHostState)
     CompositionLocalProvider(LocalHelpAnchorRegistry provides helpAnchorRegistry) {
         MapTransientSurfaces(viewModel, environment, presentation, interaction, qrCustomization)
         MapScaffold(viewModel, environment, presentation, interaction, snackbarHostState)
@@ -99,6 +99,7 @@ internal fun MapScreenCoordinator(
 private fun RememberMapEnvironment(
     openGlEsSupportCheck: (Context) -> OpenGlEsSupport,
     modifier: Modifier,
+    locationPermissionRequest: (((Boolean) -> Unit) -> Unit)?,
 ): MapEnvironment {
     val context = LocalContext.current
     val openGlEsSupport = remember(context, openGlEsSupportCheck) {
@@ -109,6 +110,7 @@ private fun RememberMapEnvironment(
         isInspection = LocalInspectionMode.current,
         openGlEsSupport = openGlEsSupport,
         modifier = modifier,
+        locationPermissionRequest = locationPermissionRequest,
     )
 }
 
