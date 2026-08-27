@@ -16,7 +16,7 @@
 -keepclassmembers class * extends com.squareup.wire.Message {
     public static ** ADAPTER;
 }
--keep class com.nohex.itur.core.datastore.IturPreferences { *; }
+-keep class cat.itur.app.core.datastore.IturPreferences { *; }
 
 ##---- ZXing / zxing-android-embedded ----##
 # zxing-android-embedded does not ship complete consumer rules.
@@ -33,4 +33,4 @@
 # Keep the box representation of @JvmInline value classes.  These are used as
 # type arguments in generic collections and Firestore queries where R8 cannot
 # prove the box type is unreachable.
--keep @kotlin.jvm.JvmInline class com.nohex.itur.core.domain.id.** { *; }
+-keep @kotlin.jvm.JvmInline class cat.itur.app.core.domain.id.** { *; }

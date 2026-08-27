@@ -10,7 +10,7 @@ plugins {
 }
 
 android {
-    namespace = "com.nohex.itur.core.location"
+    namespace = "cat.itur.app.core.location"
     compileSdk = 36
 }
 

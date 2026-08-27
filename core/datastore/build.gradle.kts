@@ -10,7 +10,7 @@ plugins {
 }
 
 android {
-    namespace = "com.nohex.itur.core.datastore"
+    namespace = "cat.itur.app.core.datastore"
     compileSdk = 36
 
     defaultConfig {

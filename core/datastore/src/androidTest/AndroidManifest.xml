@@ -6,7 +6,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <service
-            android:name="com.nohex.itur.core.datastore.RemoteDataStoreService"
+            android:name="cat.itur.app.core.datastore.RemoteDataStoreService"
             android:exported="false"
             android:process=":settings_test" />
     </application>

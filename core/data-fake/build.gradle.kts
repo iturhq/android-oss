@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.nohex.itur.core.data.fake"
+    namespace = "cat.itur.app.core.data.fake"
     compileSdk = 36
 
     buildTypes {
