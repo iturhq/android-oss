@@ -4,8 +4,6 @@
  */
 // Read properties from `local.properties`.
 import com.google.gms.googleservices.GoogleServicesTask
-import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
-import com.google.firebase.perf.plugin.FirebasePerfExtension
 import java.util.Properties
 
 val localProperties = Properties().apply {
@@ -26,7 +24,7 @@ plugins {
     alias(libs.plugins.ksp)
     // Firebase
     alias(libs.plugins.gms)
-    // Observability (prod/local only; see ObservabilityModule)
+    // Observability is limited to production-backed variants.
     alias(libs.plugins.firebase.crashlytics)
     alias(libs.plugins.firebase.perf)
     // Generates the third-party license data OssLicensesMenuActivity displays (AOSS-386B).
@@ -34,17 +32,17 @@ plugins {
 }
 
 android {
-    namespace = "com.nohex.itur"
+    namespace = "cat.itur.app"
     compileSdk = 36
 
     buildFeatures.buildConfig = true
 
     defaultConfig {
-        applicationId = "com.nohex.itur"
+        applicationId = "cat.itur.app.oss"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "MAPLIBRE_API_KEY", "\"$apiKey\"")
@@ -88,22 +86,6 @@ android {
             dimension = "environment"
             applicationIdSuffix = ".local"
         }
-        create("demo") {
-            dimension = "environment"
-            // Force credential-free regardless of local.properties, matching this flavor's
-            // existing MAPTILER_API_KEY/no-Firebase-config posture (see AOSS-0238).
-            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"\"")
-            // The Performance plugin is project-wide, but its runtime library is deliberately
-            // absent from demo. Do not weave FirebasePerf calls into this flavor's bytecode.
-            configure<FirebasePerfExtension> {
-                setInstrumentationEnabled(false)
-            }
-            // No Crashlytics runtime or Firebase app exists in demo, so there is no mapping
-            // destination. Prod/local keep their default upload behavior.
-            configure<CrashlyticsExtension> {
-                mappingFileUploadEnabled = false
-            }
-        }
     }
 }
 
@@ -137,15 +119,10 @@ dependencies {
     // Third-party license attribution screen (AOSS-386B).
     implementation(libs.play.services.oss.licenses)
 
-    // Observability: crash reporting + performance monitoring, prod/local only.
-    // The demo flavor stays credential-free and never links these (see
-    // ObservabilityModule and AOSS-96EE's task write-up).
+    // Observability is linked only by the production-backed variants.
     "prodImplementation"(platform(libs.firebase.bom))
     "prodImplementation"(libs.firebase.crashlytics.ktx)
     "prodImplementation"(libs.firebase.perf.ktx)
-    "localImplementation"(platform(libs.firebase.bom))
-    "localImplementation"(libs.firebase.crashlytics.ktx)
-    "localImplementation"(libs.firebase.perf.ktx)
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlin.test.junit)
@@ -159,10 +136,14 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
 }
 
-// The demo flavor deliberately has no Firebase application or google-services.json. Disable only
-// its generated-resource tasks; prod/local retain the plugin's fail-closed credential check.
-tasks.withType<GoogleServicesTask>().configureEach {
-    if (name.startsWith("processDemo")) {
-        enabled = false
+androidComponents {
+    beforeVariants(selector().withBuildType("release").withFlavor("environment" to "local")) { variantBuilder ->
+        variantBuilder.enable = false
     }
+}
+
+// Local builds supply emulator-only options from src/local/res and must never
+// consume a production google-services.json.
+tasks.withType<GoogleServicesTask>().configureEach {
+    if (name.startsWith("processLocal")) enabled = false
 }
