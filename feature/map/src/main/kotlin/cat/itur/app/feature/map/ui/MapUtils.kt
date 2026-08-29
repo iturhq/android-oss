@@ -12,8 +12,104 @@ import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.ln
+import kotlin.math.sin
 
 private const val PADDING: Int = 100
+internal const val MIN_SELF_FRAMING_DISTANCE_METERS = 50.0
+internal const val MAX_SELF_FRAMING_DISTANCE_METERS = 300.0
+private const val SPEED_TO_FRAMING_DISTANCE = 25.0
+private const val RECENT_LOCATION_WINDOW_MILLIS = 10_000L
+private const val MAX_RECENT_LOCATIONS = 3
+private const val DEFAULT_VIEWPORT_HEIGHT_PIXELS = 1_000
+private const val DIRECTION_OF_TRAVEL_POINTER_FRACTION = 0.8
+private const val EARTH_METERS_PER_PIXEL_AT_ZOOM_ZERO = 156543.03392
+private const val MAX_MAP_ZOOM = 22.0
+private const val EARTH_RADIUS_METERS = 6_371_000.0
+
+internal data class RecentLocation(
+    val latitude: Double,
+    val longitude: Double,
+    val timeMillis: Long,
+    val speedMetersPerSecond: Float?,
+    val bearingDegrees: Float?,
+)
+
+internal data class MapPoint(val latitude: Double, val longitude: Double)
+
+/**
+ * Adds a fresh location sample while keeping the most recent three reports within the last ten
+ * seconds. The bounded history makes speed framing responsive without reacting to one noisy fix.
+ */
+internal fun appendRecentLocation(
+    history: List<RecentLocation>,
+    location: Location,
+): List<RecentLocation> = appendRecentLocation(history, location.asRecentLocation())
+
+internal fun appendRecentLocation(
+    history: List<RecentLocation>,
+    sample: RecentLocation,
+): List<RecentLocation> {
+    if (history.lastOrNull() == sample) return history
+    val newestTime = sample.timeMillis
+    return (history + sample)
+        .filter {
+            newestTime <= 0L ||
+                it.timeMillis <= 0L ||
+                newestTime - it.timeMillis <= RECENT_LOCATION_WINDOW_MILLIS
+        }
+        .takeLast(MAX_RECENT_LOCATIONS)
+}
+
+/** Maps recent motion to the required 50–300 metre user framing band. */
+internal fun selfFramingDistanceMeters(recentLocations: List<RecentLocation>): Double {
+    val speed = recentAverageSpeedMetersPerSecond(recentLocations)
+    return (MIN_SELF_FRAMING_DISTANCE_METERS + speed * SPEED_TO_FRAMING_DISTANCE)
+        .coerceIn(MIN_SELF_FRAMING_DISTANCE_METERS, MAX_SELF_FRAMING_DISTANCE_METERS)
+}
+
+/**
+ * Converts a distance from the pointer to the useful map edge into a MapLibre zoom level.
+ * North-up uses the distance on both sides of the centred pointer; direction-of-travel reserves
+ * the upper 80% of the viewport for the route ahead of its lower pointer anchor.
+ */
+internal fun selfFramingZoom(
+    latitude: Double,
+    viewportHeightPixels: Int,
+    framingDistanceMeters: Double,
+    isDirectionOfTravel: Boolean,
+): Double {
+    val verticalSpanMeters = if (isDirectionOfTravel) {
+        framingDistanceMeters / DIRECTION_OF_TRAVEL_POINTER_FRACTION
+    } else {
+        framingDistanceMeters * 2
+    }
+    val viewportHeight = viewportHeightPixels.takeIf { it > 0 } ?: DEFAULT_VIEWPORT_HEIGHT_PIXELS
+    val scale = EARTH_METERS_PER_PIXEL_AT_ZOOM_ZERO * cos(latitude * PI / 180.0) * viewportHeight
+    return (ln(scale / verticalSpanMeters) / ln(2.0)).coerceIn(0.0, MAX_MAP_ZOOM)
+}
+
+/**
+ * Moves the camera centre ahead of the GPS point in direction-of-travel mode, leaving the desired
+ * [framingDistanceMeters] visible before the pointer. North-up keeps the pointer centred.
+ */
+internal fun selfFramingTarget(
+    location: RecentLocation,
+    recentLocations: List<RecentLocation>,
+    framingDistanceMeters: Double,
+    isDirectionOfTravel: Boolean,
+): MapPoint {
+    if (!isDirectionOfTravel) return MapPoint(location.latitude, location.longitude)
+    val bearing = locationBearing(location, recentLocations) ?: return MapPoint(
+        location.latitude,
+        location.longitude,
+    )
+    val verticalSpan = framingDistanceMeters / DIRECTION_OF_TRAVEL_POINTER_FRACTION
+    val centreOffset = (framingDistanceMeters - verticalSpan / 2.0).coerceAtLeast(0.0)
+    return destination(location.latitude, location.longitude, bearing, centreOffset)
+}
 
 /**
  * Applies the startup camera move once both prerequisites exist and returns the new one-shot
@@ -37,10 +133,22 @@ internal fun centerOnInitialLocationIfReady(
 internal fun zoomOnUser(
     map: MapLibreMap,
     location: Location,
+    recentLocations: List<RecentLocation> = listOf(location.asRecentLocation()),
+    viewportHeightPixels: Int = DEFAULT_VIEWPORT_HEIGHT_PIXELS,
+    isDirectionOfTravel: Boolean = false,
 ) {
     Log.d("ZoomOnUser", "Zooming on user")
-    val latLng = LatLng(location.latitude, location.longitude)
-    map.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 15.0))
+    val currentLocation = location.asRecentLocation()
+    val locations = recentLocations.ifEmpty { listOf(currentLocation) }
+    val framingDistance = selfFramingDistanceMeters(locations)
+    val target = selfFramingTarget(currentLocation, locations, framingDistance, isDirectionOfTravel)
+    val zoom = selfFramingZoom(
+        latitude = location.latitude,
+        viewportHeightPixels = viewportHeightPixels,
+        framingDistanceMeters = framingDistance,
+        isDirectionOfTravel = isDirectionOfTravel,
+    )
+    map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(target.latitude, target.longitude), zoom))
     Log.d("ZoomOnUser", "Map should be showing the user")
 }
 
@@ -77,4 +185,74 @@ internal fun zoomOnGroup(
             Log.e("MapScreen", "Zoom on group failed", e)
         }
     }
+}
+
+private fun recentAverageSpeedMetersPerSecond(locations: List<RecentLocation>): Double {
+    val recent = locations.takeLast(MAX_RECENT_LOCATIONS)
+    if (recent.size >= 2) {
+        val first = recent.first()
+        val last = recent.last()
+        val durationMillis = last.timeMillis - first.timeMillis
+        if (durationMillis > 0L) {
+            val distance = recent.zipWithNext().sumOf { (from, to) -> distanceBetween(from, to) }
+            return distance / (durationMillis / 1_000.0)
+        }
+    }
+    val reportedSpeeds = recent.mapNotNull(RecentLocation::speedMetersPerSecond)
+    return reportedSpeeds.average().takeUnless(Double::isNaN) ?: 0.0
+}
+
+private fun Location.asRecentLocation(): RecentLocation = RecentLocation(
+    latitude = latitude,
+    longitude = longitude,
+    timeMillis = time,
+    speedMetersPerSecond = speed.takeIf { hasSpeed() },
+    bearingDegrees = bearing.takeIf { hasBearing() },
+)
+
+private fun locationBearing(location: RecentLocation, recentLocations: List<RecentLocation>): Double? = when {
+    location.bearingDegrees != null -> location.bearingDegrees.toDouble()
+    recentLocations.size >= 2 -> bearingBetween(recentLocations[recentLocations.lastIndex - 1], location)
+    else -> null
+}
+
+private fun distanceBetween(from: RecentLocation, to: RecentLocation): Double {
+    val latitudeDelta = (to.latitude - from.latitude) * PI / 180.0
+    val longitudeDelta = (to.longitude - from.longitude) * PI / 180.0
+    val fromLatitude = from.latitude * PI / 180.0
+    val toLatitude = to.latitude * PI / 180.0
+    val a = sin(latitudeDelta / 2.0) * sin(latitudeDelta / 2.0) +
+        cos(fromLatitude) * cos(toLatitude) * sin(longitudeDelta / 2.0) * sin(longitudeDelta / 2.0)
+    return EARTH_RADIUS_METERS * 2.0 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1.0 - a))
+}
+
+private fun bearingBetween(from: RecentLocation, to: RecentLocation): Double {
+    val longitudeDelta = (to.longitude - from.longitude) * PI / 180.0
+    val fromLatitude = from.latitude * PI / 180.0
+    val toLatitude = to.latitude * PI / 180.0
+    return kotlin.math.atan2(
+        sin(longitudeDelta) * cos(toLatitude),
+        cos(fromLatitude) * sin(toLatitude) - sin(fromLatitude) * cos(toLatitude) * cos(longitudeDelta),
+    ) * 180.0 / PI
+}
+
+private fun destination(
+    latitude: Double,
+    longitude: Double,
+    bearingDegrees: Double,
+    distanceMeters: Double,
+): MapPoint {
+    val angularDistance = distanceMeters / EARTH_RADIUS_METERS
+    val bearing = bearingDegrees * PI / 180.0
+    val startLatitude = latitude * PI / 180.0
+    val startLongitude = longitude * PI / 180.0
+    val targetLatitude = kotlin.math.asin(
+        sin(startLatitude) * cos(angularDistance) +
+            cos(startLatitude) * sin(angularDistance) * cos(bearing),
+    )
+    val targetLongitude = startLongitude + kotlin.math.atan2(
+        sin(bearing) * sin(angularDistance) * cos(startLatitude),
+        cos(angularDistance) - sin(startLatitude) * sin(targetLatitude),
+    )
+    return MapPoint(targetLatitude * 180.0 / PI, targetLongitude * 180.0 / PI)
 }

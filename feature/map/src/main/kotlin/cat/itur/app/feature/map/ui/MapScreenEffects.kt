@@ -39,6 +39,7 @@ internal fun MapScreenEffects(
     MessageEffects(presentation, interaction, snackbarHostState)
     LocationUpdatesEffect(viewModel, environment.context, interaction.locationPermissionGranted)
     LocationPermissionEffect(viewModel, environment, interaction)
+    RecentLocationHistoryEffect(presentation, interaction)
     InitialCenteringEffect(presentation, interaction)
     NotificationPermissionEffect(environment.context, interaction.locationPermissionGranted)
     ActivityStateEffects(
@@ -48,6 +49,16 @@ internal fun MapScreenEffects(
         interaction,
         LocalBroadcastPollIntervalMillis.current,
     )
+}
+
+@Composable
+private fun RecentLocationHistoryEffect(
+    presentation: MapPresentation,
+    interaction: MapInteractionState,
+) {
+    LaunchedEffect(presentation.lastLocation) {
+        presentation.lastLocation?.let(interaction::recordLocation)
+    }
 }
 
 @Composable
@@ -200,11 +211,23 @@ private fun InitialCenteringEffect(
         interaction.mapLibreMap,
         presentation.lastLocation,
         interaction.centeredOnInitialLocation,
+        interaction.hasManualZoomOverride,
     ) {
         interaction.centeredOnInitialLocation = centerOnInitialLocationIfReady(
             map = interaction.mapLibreMap,
             location = presentation.lastLocation,
             alreadyCentered = interaction.centeredOnInitialLocation,
+            center = { map, location ->
+                if (!interaction.hasManualZoomOverride) {
+                    zoomOnUser(
+                        map = map,
+                        location = location,
+                        recentLocations = interaction.recentLocations,
+                        viewportHeightPixels = interaction.mapViewportHeightPixels,
+                        isDirectionOfTravel = interaction.isDirectionOfTravel,
+                    )
+                }
+            },
         )
     }
 }

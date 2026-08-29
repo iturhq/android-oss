@@ -94,6 +94,8 @@ private fun MapReadyContent(
                 .fillMaxSize()
                 .testTag("persistent_map_surface"),
             onMapReady = { interaction.mapLibreMap = it },
+            onViewportHeightChanged = { interaction.mapViewportHeightPixels = it },
+            onManualZoomChanged = { interaction.hasManualZoomOverride = true },
             onStyleLoadFailed = viewModel::reportMapStyleLoadFailed,
             onStyleLoadSucceeded = viewModel::reportMapStyleLoadSucceeded,
         )
@@ -213,6 +215,8 @@ private fun OngoingControls(
             onTrackGroupRequested = { trackGroup(presentation, interaction) },
             onOrientationToggleRequested = {
                 interaction.isDirectionOfTravel = !interaction.isDirectionOfTravel
+                interaction.hasManualZoomOverride = false
+                trackUser(presentation, interaction)
             },
             onParticipantSignalRequested = viewModel::setParticipantSignal,
             onHelpRequested = { interaction.showHelp = true },
@@ -230,8 +234,17 @@ private fun OngoingControls(
 
 private fun trackUser(presentation: MapPresentation, interaction: MapInteractionState) {
     Log.d("MapScreen", "Requested zoom on user")
+    interaction.hasManualZoomOverride = false
     interaction.mapLibreMap?.let { map ->
-        presentation.lastLocation?.let { zoomOnUser(map = map, location = it) }
+        presentation.lastLocation?.let {
+            zoomOnUser(
+                map = map,
+                location = it,
+                recentLocations = interaction.recentLocations,
+                viewportHeightPixels = interaction.mapViewportHeightPixels,
+                isDirectionOfTravel = interaction.isDirectionOfTravel,
+            )
+        }
     }
 }
 

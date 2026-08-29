@@ -41,6 +41,7 @@ import org.maplibre.android.location.engine.LocationEngineRequest
 import org.maplibre.android.location.engine.LocationEngineRequest.PRIORITY_HIGH_ACCURACY
 import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapLibreMap.OnScaleListener
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
@@ -97,6 +98,8 @@ fun MapLibreView(
     isDirectionOfTravel: Boolean = false,
     modifier: Modifier = Modifier,
     onMapReady: (MapLibreMap) -> Unit = {},
+    onViewportHeightChanged: (Int) -> Unit = {},
+    onManualZoomChanged: () -> Unit = {},
     onStyleLoadFailed: () -> Unit = {},
     onStyleLoadSucceeded: () -> Unit = {},
 ) {
@@ -151,6 +154,21 @@ fun MapLibreView(
             mapView.removeOnDidFinishRenderingMapListener(renderingListener)
             mapView.removeOnShaderCompileFailedListener(shaderFailureListener)
         }
+    }
+
+    DisposableEffect(mapLibreMap, onManualZoomChanged) {
+        val map = mapLibreMap ?: return@DisposableEffect onDispose {}
+        val scaleListener = object : OnScaleListener {
+            override fun onScaleBegin(detector: org.maplibre.android.gestures.StandardScaleGestureDetector) = Unit
+
+            override fun onScale(detector: org.maplibre.android.gestures.StandardScaleGestureDetector) = Unit
+
+            override fun onScaleEnd(detector: org.maplibre.android.gestures.StandardScaleGestureDetector) {
+                onManualZoomChanged()
+            }
+        }
+        map.addOnScaleListener(scaleListener)
+        onDispose { map.removeOnScaleListener(scaleListener) }
     }
 
     // Forward lifecycle events to the map
@@ -350,7 +368,10 @@ fun MapLibreView(
 
     AndroidView(
         modifier = modifier
-            .onSizeChanged { mapViewportHeight = it.height }
+            .onSizeChanged {
+                mapViewportHeight = it.height
+                onViewportHeightChanged(it.height)
+            }
             .semantics {
                 contentDescription = accessibilityDescription
             },

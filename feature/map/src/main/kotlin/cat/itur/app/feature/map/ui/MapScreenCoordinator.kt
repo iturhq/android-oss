@@ -57,6 +57,9 @@ internal class MapInteractionState(
     centeredOnInitialLocationState: MutableState<Boolean>,
 ) {
     var mapLibreMap by mutableStateOf<MapLibreMap?>(null)
+    var mapViewportHeightPixels by mutableIntStateOf(0)
+    var recentLocations by mutableStateOf(emptyList<RecentLocation>())
+    var hasManualZoomOverride by mutableStateOf(false)
     var centeredOnInitialLocation by centeredOnInitialLocationState
     var isDirectionOfTravel by mutableStateOf(false)
     var showQrDisplaySheet by mutableStateOf(false)
@@ -66,6 +69,10 @@ internal class MapInteractionState(
     var cameraPermissionGranted by mutableStateOf(false)
     var locationPermissionGranted by locationPermissionState
     var locationPermissionRequests by mutableIntStateOf(0)
+
+    fun recordLocation(location: Location) {
+        recentLocations = appendRecentLocation(recentLocations, location)
+    }
 }
 
 @Composable
