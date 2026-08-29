@@ -41,6 +41,7 @@ internal fun MapScreenEffects(
     LocationPermissionEffect(viewModel, environment, interaction)
     RecentLocationHistoryEffect(presentation, interaction)
     InitialCenteringEffect(presentation, interaction)
+    ContinuousCameraTrackingEffect(presentation, interaction)
     NotificationPermissionEffect(environment.context, interaction.locationPermissionGranted)
     ActivityStateEffects(
         viewModel,
@@ -233,6 +234,41 @@ private fun InitialCenteringEffect(
 }
 
 @Composable
+private fun ContinuousCameraTrackingEffect(
+    presentation: MapPresentation,
+    interaction: MapInteractionState,
+) {
+    LaunchedEffect(
+        interaction.cameraTrackingMode,
+        interaction.mapLibreMap,
+        presentation.lastLocation,
+        presentation.participantLocations,
+        interaction.recentLocations,
+        interaction.mapViewportHeightPixels,
+        interaction.isDirectionOfTravel,
+    ) {
+        val map = interaction.mapLibreMap ?: return@LaunchedEffect
+        when (interaction.cameraTrackingMode) {
+            CameraTrackingMode.NONE -> Unit
+            CameraTrackingMode.USER -> presentation.lastLocation?.let { location ->
+                zoomOnUser(
+                    map = map,
+                    location = location,
+                    recentLocations = interaction.recentLocations,
+                    viewportHeightPixels = interaction.mapViewportHeightPixels,
+                    isDirectionOfTravel = interaction.isDirectionOfTravel,
+                )
+            }
+            CameraTrackingMode.GROUP -> zoomOnGroup(
+                map = map,
+                participantLocations = presentation.participantLocations,
+                currentLocation = presentation.lastLocation,
+            )
+        }
+    }
+}
+
+@Composable
 private fun NotificationPermissionEffect(context: Context, locationPermissionGranted: Boolean) {
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -261,6 +297,7 @@ private fun ActivityStateEffects(
             viewModel.triggerOngoingState(it, context)
         } ?: run {
             interaction.isDirectionOfTravel = false
+            interaction.stopCameraTracking()
             if (presentation.uiState !is MapUiState.Idle) viewModel.triggerIdleState()
         }
     }

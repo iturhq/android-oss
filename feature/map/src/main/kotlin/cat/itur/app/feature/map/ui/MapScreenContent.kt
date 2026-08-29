@@ -95,7 +95,7 @@ private fun MapReadyContent(
                 .testTag("persistent_map_surface"),
             onMapReady = { interaction.mapLibreMap = it },
             onViewportHeightChanged = { interaction.mapViewportHeightPixels = it },
-            onManualZoomChanged = { interaction.hasManualZoomOverride = true },
+            onManualZoomChanged = interaction::stopCameraTrackingForManualZoom,
             onStyleLoadFailed = viewModel::reportMapStyleLoadFailed,
             onStyleLoadSucceeded = viewModel::reportMapStyleLoadSucceeded,
         )
@@ -208,15 +208,16 @@ private fun OngoingControls(
         actions = OngoingStateActions(
             onStopRequested = {
                 interaction.isDirectionOfTravel = false
+                interaction.stopCameraTracking()
                 viewModel.leaveActivity()
             },
             onQrRequested = { interaction.showQrDisplaySheet = true },
-            onTrackUserRequested = { trackUser(presentation, interaction) },
-            onTrackGroupRequested = { trackGroup(presentation, interaction) },
+            onTrackUserRequested = { toggleUserTracking(interaction) },
+            onTrackGroupRequested = { toggleGroupTracking(presentation, interaction) },
             onOrientationToggleRequested = {
                 interaction.isDirectionOfTravel = !interaction.isDirectionOfTravel
                 interaction.hasManualZoomOverride = false
-                trackUser(presentation, interaction)
+                centerOnUser(presentation, interaction)
             },
             onParticipantSignalRequested = viewModel::setParticipantSignal,
             onHelpRequested = { interaction.showHelp = true },
@@ -227,19 +228,24 @@ private fun OngoingControls(
             selfLocationAvailable = interaction.locationPermissionGranted,
             activityActionsEnabled = presentation.activityActionsEnabled,
             isDirectionOfTravel = interaction.isDirectionOfTravel,
+            isUserTracking = interaction.cameraTrackingMode == CameraTrackingMode.USER,
+            isGroupTracking = interaction.cameraTrackingMode == CameraTrackingMode.GROUP,
         ),
         modifier = environment.modifier.testTag(stateTag),
     )
 }
 
-private fun trackUser(presentation: MapPresentation, interaction: MapInteractionState) {
-    Log.d("MapScreen", "Requested zoom on user")
-    interaction.hasManualZoomOverride = false
+private fun toggleUserTracking(interaction: MapInteractionState) {
+    Log.d("MapScreen", "Toggled continuous user tracking")
+    interaction.toggleCameraTracking(CameraTrackingMode.USER)
+}
+
+private fun centerOnUser(presentation: MapPresentation, interaction: MapInteractionState) {
     interaction.mapLibreMap?.let { map ->
-        presentation.lastLocation?.let {
+        presentation.lastLocation?.let { location ->
             zoomOnUser(
                 map = map,
-                location = it,
+                location = location,
                 recentLocations = interaction.recentLocations,
                 viewportHeightPixels = interaction.mapViewportHeightPixels,
                 isDirectionOfTravel = interaction.isDirectionOfTravel,
@@ -248,17 +254,15 @@ private fun trackUser(presentation: MapPresentation, interaction: MapInteraction
     }
 }
 
-private fun trackGroup(presentation: MapPresentation, interaction: MapInteractionState) {
-    Log.d("MapScreen", "Requested zoom on group")
+private fun toggleGroupTracking(presentation: MapPresentation, interaction: MapInteractionState) {
+    Log.d("MapScreen", "Toggled continuous group tracking")
+    if (interaction.cameraTrackingMode == CameraTrackingMode.GROUP) {
+        interaction.toggleCameraTracking(CameraTrackingMode.GROUP)
+        return
+    }
     if (presentation.participantLocations.isEmpty()) {
         interaction.localMessage = "No group locations are available yet."
         return
     }
-    interaction.mapLibreMap?.let {
-        zoomOnGroup(
-            map = it,
-            participantLocations = presentation.participantLocations,
-            currentLocation = presentation.lastLocation,
-        )
-    }
+    interaction.toggleCameraTracking(CameraTrackingMode.GROUP)
 }

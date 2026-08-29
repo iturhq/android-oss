@@ -60,6 +60,7 @@ internal class MapInteractionState(
     var mapViewportHeightPixels by mutableIntStateOf(0)
     var recentLocations by mutableStateOf(emptyList<RecentLocation>())
     var hasManualZoomOverride by mutableStateOf(false)
+    var cameraTrackingMode by mutableStateOf(CameraTrackingMode.NONE)
     var centeredOnInitialLocation by centeredOnInitialLocationState
     var isDirectionOfTravel by mutableStateOf(false)
     var showQrDisplaySheet by mutableStateOf(false)
@@ -72,6 +73,20 @@ internal class MapInteractionState(
 
     fun recordLocation(location: Location) {
         recentLocations = appendRecentLocation(recentLocations, location)
+    }
+
+    fun toggleCameraTracking(requested: CameraTrackingMode) {
+        cameraTrackingMode = cameraTrackingMode.toggle(requested)
+        if (cameraTrackingMode != CameraTrackingMode.NONE) hasManualZoomOverride = false
+    }
+
+    fun stopCameraTrackingForManualZoom() {
+        hasManualZoomOverride = true
+        cameraTrackingMode = cameraTrackingMode.stopForManualZoom()
+    }
+
+    fun stopCameraTracking() {
+        cameraTrackingMode = CameraTrackingMode.NONE
     }
 }
 

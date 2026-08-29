@@ -12,11 +12,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cat.itur.app.core.model.ParticipantSignal
@@ -29,6 +32,8 @@ internal data class OngoingState(
     val selfLocationAvailable: Boolean = true,
     val activityActionsEnabled: Boolean = true,
     val isDirectionOfTravel: Boolean = false,
+    val isUserTracking: Boolean = false,
+    val isGroupTracking: Boolean = false,
 )
 
 private object SafetySignalColors {
@@ -55,13 +60,25 @@ internal fun OngoingState(
                 onTrackUserRequested = actions.onTrackUserRequested,
                 onOrientationToggleRequested = actions.onOrientationToggleRequested,
                 isDirectionOfTravel = presentation.isDirectionOfTravel,
+                isUserTracking = presentation.isUserTracking,
                 selfLocationAvailable = presentation.selfLocationAvailable,
             ) {
                 FloatingActionButton(
                     onClick = actions.onTrackGroupRequested,
                     modifier = Modifier
                         .testTag("zoom_group_fab")
+                        .semantics { selected = presentation.isGroupTracking }
                         .helpAnchor("zoom_group_fab", "Zoom out to fit every participant on the map"),
+                    containerColor = if (presentation.isGroupTracking) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    },
+                    contentColor = if (presentation.isGroupTracking) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    },
                 ) {
                     Icon(IturIcons.ZoomAll, contentDescription = "Track group")
                 }

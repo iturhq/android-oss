@@ -11,11 +11,14 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import cat.itur.app.core.ui.IturIcons
 import cat.itur.app.feature.map.ui.components.help.helpAnchor
@@ -83,6 +86,7 @@ internal fun TrackingFABs(
     onTrackUserRequested: () -> Unit,
     onOrientationToggleRequested: () -> Unit,
     isDirectionOfTravel: Boolean,
+    isUserTracking: Boolean,
     selfLocationAvailable: Boolean,
     content: @Composable () -> Unit,
 ) {
@@ -115,7 +119,18 @@ internal fun TrackingFABs(
                 onClick = onTrackUserRequested,
                 modifier = Modifier
                     .testTag("recenter_fab")
+                    .semantics { selected = isUserTracking }
                     .helpAnchor("recenter_fab", "Recenter the map on your own location"),
+                containerColor = if (isUserTracking) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.secondaryContainer
+                },
+                contentColor = if (isUserTracking) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                },
             ) {
                 Icon(IturIcons.ZoomSelf, contentDescription = "Recenter")
             }
