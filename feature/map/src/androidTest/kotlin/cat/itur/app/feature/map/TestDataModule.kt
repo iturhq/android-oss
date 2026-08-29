@@ -17,7 +17,7 @@ import dagger.multibindings.IntoSet
 import javax.inject.Singleton
 
 /**
- * Supplies the scenario repositories needed by [MapScreenTest] without pulling the application-level
+ * Supplies the demo repositories needed by [MapScreenTest] without pulling the application-level
  * `core:data` wiring (and its Firebase implementation dependencies) into the test APK.
  */
 @Module

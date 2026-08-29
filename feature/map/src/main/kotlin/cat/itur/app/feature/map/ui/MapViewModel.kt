@@ -174,6 +174,7 @@ constructor(
         }
     }
 
+    @Suppress("CyclomaticComplexMethod", "ReturnCount", "ThrowsCount")
     private suspend fun findOngoingActivity(): IturActivity? {
         val user = _currentUser.value ?: return null
 
@@ -181,23 +182,37 @@ constructor(
         // membership to separate documents, leaving the legacy participantIds array frozen.
         // Resolve that exact activity first; the queries below remain as compatibility fallback
         // for pre-reservation installs and legacy activity records.
-        val reserved = activityRepository.getActiveActivityId(user.id)
-            .dataOrNullOrThrow()
-            ?.let { activityRepository.getActivity(it).dataOrNullOrThrow() }
-            ?.takeIf { it.status == IturActivityStatus.ONGOING }
-        return reserved
-            ?: activityRepository.getActivities(ActivityFilter.OngoingByOrganizer(user.id))
-                .dataOrNullOrThrow()
-                ?.firstOrNull()
-            ?: activityRepository.getActivities(ActivityFilter.OngoingByParticipant(user.id))
-                .dataOrNullOrThrow()
-                ?.firstOrNull()
-    }
+        val reservedActivityId = when (val result = activityRepository.getActiveActivityId(user.id)) {
+            is DataResult.Success -> result.data
+            is DataResult.Error -> throw BackendInitializationException(result.message)
+            is DataResult.NotFound -> null
+        }
+        if (reservedActivityId != null) {
+            when (val result = activityRepository.getActivity(reservedActivityId)) {
+                is DataResult.Success -> if (result.data.status == IturActivityStatus.ONGOING) return result.data
+                is DataResult.Error -> throw BackendInitializationException(result.message)
+                is DataResult.NotFound -> Unit
+            }
+        }
 
-    private fun <T> DataResult<T>.dataOrNullOrThrow(): T? = when (this) {
-        is DataResult.Success -> data
-        is DataResult.Error -> throw BackendInitializationException(message)
-        is DataResult.NotFound -> null
+        val organized = when (
+            val result = activityRepository.getActivities(
+                ActivityFilter.OngoingByOrganizer(user.id),
+            )
+        ) {
+            is DataResult.Success -> result.data.firstOrNull()
+            is DataResult.Error -> throw BackendInitializationException(result.message)
+            is DataResult.NotFound -> null
+        }
+        return organized ?: when (
+            val result = activityRepository.getActivities(
+                ActivityFilter.OngoingByParticipant(user.id),
+            )
+        ) {
+            is DataResult.Success -> result.data.firstOrNull()
+            is DataResult.Error -> throw BackendInitializationException(result.message)
+            is DataResult.NotFound -> null
+        }
     }
 
     /**
@@ -520,6 +535,7 @@ constructor(
         }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun triggerOngoingState(activity: IturActivity, context: Context) {
         val locations = locationsRepository.getForActivity(activity.id)
         // Keep a record of activity's organiser ID.
@@ -528,11 +544,12 @@ constructor(
         _ongoingActivityId.value = activity.id
         // Show the ongoing activity state.
         _participantLocations.value = locations
-        val organizer = runCatching {
+        val organizer = try {
             userRepository.getAll(listOf(activity.organizerId))
                 .firstOrNull() ?: AnonymousUser(activity.organizerId)
-        }.getOrElse { failure ->
-            if (failure is CancellationException) throw failure
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
             // User profiles are not required to restore the activity. In particular, a
             // participant can read their activity without being allowed to read the organizer's
             // private profile; preserve the backend-derived ongoing state with an ID-only label.
