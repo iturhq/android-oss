@@ -45,8 +45,7 @@ fun OngoingStatePreview() {
             onParticipantSignalRequested = {},
             onHelpRequested = {},
         ),
-        isOrganizer = true,
-        selfLocationAvailable = true,
+        presentation = OngoingState(isOrganizer = true),
     )
 }
 

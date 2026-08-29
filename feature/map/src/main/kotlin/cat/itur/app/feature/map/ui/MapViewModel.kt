@@ -639,8 +639,8 @@ constructor(
      */
     fun setParticipantSignal(signal: ParticipantSignal?) {
         val activityId = _ongoingActivityId.value ?: return
-        val userId = currentUser.value?.id ?: return
-        if (_organizerId.value == userId) return
+        val userId = currentUser.value?.id
+        if (userId == null || _organizerId.value == userId) return
         val previousState = _uiState.value
         viewModelScope.launch {
             try {

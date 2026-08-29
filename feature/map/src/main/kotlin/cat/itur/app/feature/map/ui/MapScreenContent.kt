@@ -209,11 +209,13 @@ private fun OngoingControls(
             onParticipantSignalRequested = viewModel::setParticipantSignal,
             onHelpRequested = { interaction.showHelp = true },
         ),
-        isOrganizer = ongoingUiState.organizer.id == presentation.currentUser?.id,
-        selfSignal = presentation.currentUser?.id?.let(ongoingUiState.activity.participantSignals::get),
-        selfLocationAvailable = interaction.locationPermissionGranted,
+        presentation = OngoingState(
+            isOrganizer = ongoingUiState.organizer.id == presentation.currentUser?.id,
+            selfSignal = presentation.currentUser?.id?.let(ongoingUiState.activity.participantSignals::get),
+            selfLocationAvailable = interaction.locationPermissionGranted,
+            activityActionsEnabled = presentation.activityActionsEnabled,
+        ),
         modifier = environment.modifier.testTag(stateTag),
-        activityActionsEnabled = presentation.activityActionsEnabled,
     )
 }
 

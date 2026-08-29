@@ -23,6 +23,19 @@ import cat.itur.app.core.model.ParticipantSignal
 import cat.itur.app.core.ui.IturIcons
 import cat.itur.app.feature.map.ui.components.help.helpAnchor
 
+internal data class OngoingState(
+    val isOrganizer: Boolean,
+    val selfSignal: ParticipantSignal? = null,
+    val selfLocationAvailable: Boolean = true,
+    val activityActionsEnabled: Boolean = true,
+)
+
+private object SafetySignalColors {
+    const val DELAYED = 0xFFFFC107
+    const val NEEDS_HELP = 0xFFD32F2F
+    const val OK = 0xFF388E3C
+}
+
 /**
  * A composable for ongoing activities.
  *
@@ -31,18 +44,15 @@ import cat.itur.app.feature.map.ui.components.help.helpAnchor
 @Composable
 internal fun OngoingState(
     actions: OngoingStateActions,
-    isOrganizer: Boolean,
-    selfSignal: ParticipantSignal? = null,
-    selfLocationAvailable: Boolean = true,
+    presentation: OngoingState,
     modifier: Modifier = Modifier,
-    activityActionsEnabled: Boolean = true,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         FabSideColumn(horizontalAlignment = Alignment.Start, modifier = Modifier.padding(16.dp)) {
             HelpFABs(onHelpRequested = actions.onHelpRequested)
             TrackingFABs(
                 onTrackUserRequested = actions.onTrackUserRequested,
-                selfLocationAvailable = selfLocationAvailable,
+                selfLocationAvailable = presentation.selfLocationAvailable,
             ) {
                 FloatingActionButton(
                     onClick = actions.onTrackGroupRequested,
@@ -65,12 +75,8 @@ internal fun OngoingState(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 OngoingActivityFABs(
-                    onStopRequested = actions.onStopRequested,
-                    onQRRequested = actions.onQrRequested,
-                    isOrganizer = isOrganizer,
-                    onParticipantSignalRequested = actions.onParticipantSignalRequested,
-                    selfSignal = selfSignal,
-                    activityActionsEnabled = activityActionsEnabled,
+                    actions = actions,
+                    presentation = presentation,
                 )
             }
         }
@@ -79,19 +85,14 @@ internal fun OngoingState(
 
 @Composable
 private fun OngoingActivityFABs(
-    onStopRequested: () -> Unit,
-    onParticipantSignalRequested: (ParticipantSignal?) -> Unit,
-    onQRRequested: () -> Unit,
-    // Whether the user is the organiser.
-    isOrganizer: Boolean,
-    selfSignal: ParticipantSignal?,
-    activityActionsEnabled: Boolean,
+    actions: OngoingStateActions,
+    presentation: OngoingState,
 ) {
     // The QR button shows the QR sheet for scanning for organisers,
     // or the QR scanner for potential participants.
-    if (isOrganizer) {
+    if (presentation.isOrganizer) {
         FloatingActionButton(
-            onClick = onQRRequested,
+            onClick = actions.onQrRequested,
             modifier = Modifier
                 .testTag("show_qr_fab")
                 .helpAnchor("show_qr_fab", "Show the QR code for others to join this activity"),
@@ -100,25 +101,27 @@ private fun OngoingActivityFABs(
         }
     } else {
         ParticipantSafetyFABs(
-            signal = selfSignal,
-            enabled = activityActionsEnabled,
-            onSignalRequested = onParticipantSignalRequested,
+            signal = presentation.selfSignal,
+            enabled = presentation.activityActionsEnabled,
+            onSignalRequested = actions.onParticipantSignalRequested,
         )
     }
 
     FloatingActionButton(
-        onClick = { if (activityActionsEnabled) onStopRequested() },
+        onClick = {
+            if (presentation.activityActionsEnabled) actions.onStopRequested()
+        },
         modifier = Modifier
             .testTag("stop_activity_fab")
             .helpAnchor(
                 "stop_activity_fab",
-                if (isOrganizer) "Stop the activity for everyone" else "Leave the activity",
+                if (presentation.isOrganizer) "Stop the activity for everyone" else "Leave the activity",
             )
-            .serviceAvailability(activityActionsEnabled),
+            .serviceAvailability(presentation.activityActionsEnabled),
     ) {
         Icon(
             IturIcons.Stop,
-            contentDescription = if (isOrganizer) "Stop activity" else "Exit activity",
+            contentDescription = if (presentation.isOrganizer) "Stop activity" else "Exit activity",
         )
     }
 }
@@ -132,14 +135,14 @@ private fun ParticipantSafetyFABs(
     SafetySignalFAB(
         tag = "safety_delayed_fab",
         contentDescription = "I'm stopping; go ahead",
-        color = Color(0xFFFFC107),
+        color = Color(SafetySignalColors.DELAYED),
         enabled = enabled && signal == null,
         onClick = { onSignalRequested(ParticipantSignal.DELAYED) },
     )
     SafetySignalFAB(
         tag = "hail_organiser_fab",
         contentDescription = "I need help; converge on me",
-        color = Color(0xFFD32F2F),
+        color = Color(SafetySignalColors.NEEDS_HELP),
         enabled = enabled && signal != ParticipantSignal.NEEDS_HELP,
         onClick = { onSignalRequested(ParticipantSignal.NEEDS_HELP) },
     )
@@ -147,7 +150,7 @@ private fun ParticipantSafetyFABs(
         SafetySignalFAB(
             tag = "safety_ok_fab",
             contentDescription = "I'm okay",
-            color = Color(0xFF388E3C),
+            color = Color(SafetySignalColors.OK),
             enabled = enabled,
             onClick = { onSignalRequested(null) },
         )
@@ -186,7 +189,6 @@ private fun OrganizerOngoingStatePreview() {
             onParticipantSignalRequested = {},
             onHelpRequested = {},
         ),
-        isOrganizer = true,
-        selfLocationAvailable = true,
+        presentation = OngoingState(isOrganizer = true),
     )
 }

@@ -136,8 +136,10 @@ class ServiceAwareControlsTest {
                         onParticipantSignalRequested = {},
                         onHelpRequested = {},
                     ),
-                    isOrganizer = false,
-                    activityActionsEnabled = false,
+                    presentation = OngoingState(
+                        isOrganizer = false,
+                        activityActionsEnabled = false,
+                    ),
                 )
             }
         }
