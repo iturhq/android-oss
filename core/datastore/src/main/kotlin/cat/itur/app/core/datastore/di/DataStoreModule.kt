@@ -13,6 +13,7 @@ import cat.itur.app.core.datastore.AndroidKeystoreEmailCipher
 import cat.itur.app.core.datastore.EmailCipher
 import cat.itur.app.core.datastore.IturPreferences
 import cat.itur.app.core.datastore.IturSettingsSerializer
+import cat.itur.app.core.datastore.UserEmailEncryptionMigration
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -32,8 +33,10 @@ object DataStoreModule {
     internal fun providesUserSettingsDataStore(
         @ApplicationContext context: Context,
         iturSettingsSerializer: IturSettingsSerializer,
+        emailCipher: AndroidKeystoreEmailCipher,
     ): DataStore<IturPreferences> = MultiProcessDataStoreFactory.create(
         serializer = iturSettingsSerializer,
+        migrations = listOf(UserEmailEncryptionMigration(emailCipher)),
         scope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
     ) {
         context.dataStoreFile("user_settings.pb")
@@ -41,5 +44,9 @@ object DataStoreModule {
 
     @Provides
     @Singleton
-    internal fun providesEmailCipher(): EmailCipher = AndroidKeystoreEmailCipher()
+    internal fun providesAndroidKeystoreEmailCipher(): AndroidKeystoreEmailCipher = AndroidKeystoreEmailCipher()
+
+    @Provides
+    @Singleton
+    internal fun providesEmailCipher(emailCipher: AndroidKeystoreEmailCipher): EmailCipher = emailCipher
 }
