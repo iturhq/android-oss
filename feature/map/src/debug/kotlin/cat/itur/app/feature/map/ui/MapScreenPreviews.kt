@@ -42,6 +42,7 @@ fun OngoingStatePreview() {
             onQrRequested = {},
             onTrackUserRequested = {},
             onTrackGroupRequested = {},
+            onOrientationToggleRequested = {},
             onParticipantSignalRequested = {},
             onHelpRequested = {},
         ),

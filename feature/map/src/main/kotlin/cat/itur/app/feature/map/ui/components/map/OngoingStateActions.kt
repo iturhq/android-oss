@@ -12,6 +12,7 @@ internal data class OngoingStateActions(
     val onQrRequested: () -> Unit,
     val onTrackUserRequested: () -> Unit,
     val onTrackGroupRequested: () -> Unit,
+    val onOrientationToggleRequested: () -> Unit,
     val onParticipantSignalRequested: (ParticipantSignal?) -> Unit,
     val onHelpRequested: () -> Unit,
 )

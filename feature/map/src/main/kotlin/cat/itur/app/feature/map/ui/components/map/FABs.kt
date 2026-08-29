@@ -81,12 +81,33 @@ internal fun UserFABs(
 @Composable
 internal fun TrackingFABs(
     onTrackUserRequested: () -> Unit,
+    onOrientationToggleRequested: () -> Unit,
+    isDirectionOfTravel: Boolean,
     selfLocationAvailable: Boolean,
     content: @Composable () -> Unit,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        FloatingActionButton(
+            onClick = onOrientationToggleRequested,
+            modifier = Modifier
+                .testTag("map_orientation_fab")
+                .helpAnchor(
+                    "map_orientation_fab",
+                    "Switch between north-up and direction-of-travel map views",
+                ),
+        ) {
+            Icon(
+                IturIcons.Orientation,
+                contentDescription = if (isDirectionOfTravel) {
+                    "Switch to north-up view"
+                } else {
+                    "Switch to direction-of-travel view"
+                },
+            )
+        }
+
         content()
 
         if (selfLocationAvailable) {

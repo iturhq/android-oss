@@ -88,6 +88,8 @@ private fun MapReadyContent(
             organizerId = presentation.organizerId,
             currentUserId = presentation.currentUser?.id,
             participantLocations = presentation.participantLocations,
+            isDirectionOfTravel = presentation.ongoingActivityId != null &&
+                interaction.isDirectionOfTravel,
             modifier = environment.modifier
                 .fillMaxSize()
                 .testTag("persistent_map_surface"),
@@ -202,10 +204,16 @@ private fun OngoingControls(
     val ongoingUiState = presentation.uiState as MapUiState.Ongoing
     OngoingState(
         actions = OngoingStateActions(
-            onStopRequested = viewModel::leaveActivity,
+            onStopRequested = {
+                interaction.isDirectionOfTravel = false
+                viewModel.leaveActivity()
+            },
             onQrRequested = { interaction.showQrDisplaySheet = true },
             onTrackUserRequested = { trackUser(presentation, interaction) },
             onTrackGroupRequested = { trackGroup(presentation, interaction) },
+            onOrientationToggleRequested = {
+                interaction.isDirectionOfTravel = !interaction.isDirectionOfTravel
+            },
             onParticipantSignalRequested = viewModel::setParticipantSignal,
             onHelpRequested = { interaction.showHelp = true },
         ),
@@ -214,6 +222,7 @@ private fun OngoingControls(
             selfSignal = presentation.currentUser?.id?.let(ongoingUiState.activity.participantSignals::get),
             selfLocationAvailable = interaction.locationPermissionGranted,
             activityActionsEnabled = presentation.activityActionsEnabled,
+            isDirectionOfTravel = interaction.isDirectionOfTravel,
         ),
         modifier = environment.modifier.testTag(stateTag),
     )

@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -64,6 +65,8 @@ private const val CURRENT_MARKER_OPACITY = 1f
 private const val AGING_MARKER_OPACITY = 0.6f
 private const val STALE_MARKER_OPACITY = 0.3f
 private const val UNKNOWN_AGE_MARKER_OPACITY = 0.45f
+private const val DIRECTION_OF_TRAVEL_POINTER_FRACTION = 0.8
+private const val IMMEDIATE_CAMERA_TRANSITION_DURATION_MS = 0L
 const val PERSISTENT_MAP_NATIVE_VIEW_TAG = "itur-persistent-map-native-view"
 
 internal data class LocationRecencyThresholds(
@@ -91,6 +94,7 @@ fun MapLibreView(
     currentUserId: UserId?,
     organizerId: UserId?,
     participantLocations: List<ParticipantLocation>,
+    isDirectionOfTravel: Boolean = false,
     modifier: Modifier = Modifier,
     onMapReady: (MapLibreMap) -> Unit = {},
     onStyleLoadFailed: () -> Unit = {},
@@ -117,6 +121,7 @@ fun MapLibreView(
     var mapLibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
     var styleLoaded by remember { mutableStateOf(false) }
     var locationComponent by remember { mutableStateOf<LocationComponent?>(null) }
+    var mapViewportHeight by remember { mutableStateOf(0) }
     val accessibilityDescription = participantLocations
         .filter { it.userId != currentUserId }
         .joinToString(", ", prefix = "Participant locations. ") {
@@ -174,7 +179,14 @@ fun MapLibreView(
     }
 
     @SuppressLint("MissingPermission")
-    LaunchedEffect(isActivityOngoing, locationPermissionGranted, styleLoaded, mapLibreMap) {
+    LaunchedEffect(
+        isActivityOngoing,
+        isDirectionOfTravel,
+        locationPermissionGranted,
+        styleLoaded,
+        mapLibreMap,
+        mapViewportHeight,
+    ) {
         val map = mapLibreMap
         val style = map?.style
         if (locationPermissionGranted && styleLoaded && map != null && style != null) {
@@ -182,6 +194,30 @@ fun MapLibreView(
                 locationComponent = it
             }
             component.isLocationComponentEnabled = isActivityOngoing
+            component.setCameraMode(
+                if (isActivityOngoing && isDirectionOfTravel) {
+                    CameraMode.TRACKING_GPS
+                } else {
+                    CameraMode.TRACKING_GPS_NORTH
+                },
+                IMMEDIATE_CAMERA_TRANSITION_DURATION_MS,
+                null,
+                null,
+                null,
+                null,
+            )
+            component.paddingWhileTracking(
+                doubleArrayOf(
+                    0.0,
+                    if (isActivityOngoing && isDirectionOfTravel) {
+                        mapViewportHeight * (2 * DIRECTION_OF_TRAVEL_POINTER_FRACTION - 1)
+                    } else {
+                        0.0
+                    },
+                    0.0,
+                    0.0,
+                ),
+            )
         } else {
             locationComponent?.isLocationComponentEnabled = false
         }
@@ -313,9 +349,11 @@ fun MapLibreView(
     }
 
     AndroidView(
-        modifier = modifier.semantics {
-            contentDescription = accessibilityDescription
-        },
+        modifier = modifier
+            .onSizeChanged { mapViewportHeight = it.height }
+            .semantics {
+                contentDescription = accessibilityDescription
+            },
         factory = { mapView },
     )
 }
@@ -390,7 +428,7 @@ private fun createLocationComponent(
 
     return map.locationComponent.apply {
         activateLocationComponent(locationComponentActivationOptions)
-        cameraMode = CameraMode.TRACKING
+        cameraMode = CameraMode.TRACKING_GPS_NORTH
         // Enable only for ongoing activities.
         isLocationComponentEnabled = false
     }

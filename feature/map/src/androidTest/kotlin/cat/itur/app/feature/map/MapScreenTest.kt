@@ -9,6 +9,7 @@ import android.Manifest
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -86,6 +87,7 @@ class MapScreenTest {
         composeRule.onNodeWithTag("join_activity_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("sign_in_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("start_activity_fab").assertDoesNotExist()
+        composeRule.onNodeWithTag("map_orientation_fab").assertDoesNotExist()
     }
 
     @Test
@@ -121,6 +123,7 @@ class MapScreenTest {
 
         composeRule.onNodeWithTag("recenter_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("zoom_group_fab").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_orientation_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("help_fab").assertIsDisplayed()
         // The activity's creator is its organiser, so they see "show QR", not "hail organiser".
         composeRule.onNodeWithTag("show_qr_fab").assertIsDisplayed()
@@ -136,6 +139,8 @@ class MapScreenTest {
 
         composeRule.onNodeWithTag("help_overlay").assertIsDisplayed()
         composeRule.onNodeWithText("Show the QR code for others to join this activity")
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Switch between north-up and direction-of-travel map views")
             .assertIsDisplayed()
         // The organiser doesn't see "hail organiser", so the overlay must not describe it either
         // -- it only annotates buttons actually visible in the current state.
@@ -161,7 +166,20 @@ class MapScreenTest {
         composeRule.onNodeWithTag("stop_activity_fab").performClick()
 
         composeRule.onNodeWithTag("join_activity_fab").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_orientation_fab").assertDoesNotExist()
         composeRule.onNodeWithText("You are no longer participating in an activity")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun orientationToggleSwitchesItsAccessibleModeLabel() {
+        startAsOrganizer()
+
+        composeRule.onNodeWithTag("map_orientation_fab").performClick()
+        composeRule.onNodeWithContentDescription("Switch to north-up view").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("map_orientation_fab").performClick()
+        composeRule.onNodeWithContentDescription("Switch to direction-of-travel view")
             .assertIsDisplayed()
     }
 }

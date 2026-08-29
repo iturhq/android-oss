@@ -58,6 +58,7 @@ internal class MapInteractionState(
 ) {
     var mapLibreMap by mutableStateOf<MapLibreMap?>(null)
     var centeredOnInitialLocation by centeredOnInitialLocationState
+    var isDirectionOfTravel by mutableStateOf(false)
     var showQrDisplaySheet by mutableStateOf(false)
     var showQrScanSheet by mutableStateOf(false)
     var showHelp by mutableStateOf(false)

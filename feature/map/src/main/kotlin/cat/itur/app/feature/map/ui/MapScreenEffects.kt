@@ -45,6 +45,7 @@ internal fun MapScreenEffects(
         viewModel,
         environment.context,
         presentation,
+        interaction,
         LocalBroadcastPollIntervalMillis.current,
     )
 }
@@ -229,12 +230,14 @@ private fun ActivityStateEffects(
     viewModel: MapViewModel,
     context: Context,
     presentation: MapPresentation,
+    interaction: MapInteractionState,
     broadcastPollIntervalMillis: Long,
 ) {
     LaunchedEffect(presentation.ongoingActivityId) {
         presentation.ongoingActivityId?.let {
             viewModel.triggerOngoingState(it, context)
         } ?: run {
+            interaction.isDirectionOfTravel = false
             if (presentation.uiState !is MapUiState.Idle) viewModel.triggerIdleState()
         }
     }

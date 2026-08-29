@@ -28,6 +28,7 @@ internal data class OngoingState(
     val selfSignal: ParticipantSignal? = null,
     val selfLocationAvailable: Boolean = true,
     val activityActionsEnabled: Boolean = true,
+    val isDirectionOfTravel: Boolean = false,
 )
 
 private object SafetySignalColors {
@@ -52,6 +53,8 @@ internal fun OngoingState(
             HelpFABs(onHelpRequested = actions.onHelpRequested)
             TrackingFABs(
                 onTrackUserRequested = actions.onTrackUserRequested,
+                onOrientationToggleRequested = actions.onOrientationToggleRequested,
+                isDirectionOfTravel = presentation.isDirectionOfTravel,
                 selfLocationAvailable = presentation.selfLocationAvailable,
             ) {
                 FloatingActionButton(
@@ -186,6 +189,7 @@ private fun OrganizerOngoingStatePreview() {
             onQrRequested = {},
             onTrackUserRequested = {},
             onTrackGroupRequested = {},
+            onOrientationToggleRequested = {},
             onParticipantSignalRequested = {},
             onHelpRequested = {},
         ),
