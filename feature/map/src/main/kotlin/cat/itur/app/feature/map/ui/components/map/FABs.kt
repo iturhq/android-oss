@@ -85,9 +85,7 @@ internal fun UserFABs(
 internal fun TrackingFABs(
     onTrackUserRequested: () -> Unit,
     onOrientationToggleRequested: () -> Unit,
-    isDirectionOfTravel: Boolean,
-    isUserTracking: Boolean,
-    selfLocationAvailable: Boolean,
+    state: TrackingFabState,
     content: @Composable () -> Unit,
 ) {
     Column(
@@ -104,7 +102,7 @@ internal fun TrackingFABs(
         ) {
             Icon(
                 IturIcons.Orientation,
-                contentDescription = if (isDirectionOfTravel) {
+                contentDescription = if (state.isDirectionOfTravel) {
                     "Switch to north-up view"
                 } else {
                     "Switch to direction-of-travel view"
@@ -114,19 +112,19 @@ internal fun TrackingFABs(
 
         content()
 
-        if (selfLocationAvailable) {
+        if (state.selfLocationAvailable) {
             FloatingActionButton(
                 onClick = onTrackUserRequested,
                 modifier = Modifier
                     .testTag("recenter_fab")
-                    .semantics { selected = isUserTracking }
+                    .semantics { selected = state.isUserTracking }
                     .helpAnchor("recenter_fab", "Recenter the map on your own location"),
-                containerColor = if (isUserTracking) {
+                containerColor = if (state.isUserTracking) {
                     MaterialTheme.colorScheme.primaryContainer
                 } else {
                     MaterialTheme.colorScheme.secondaryContainer
                 },
-                contentColor = if (isUserTracking) {
+                contentColor = if (state.isUserTracking) {
                     MaterialTheme.colorScheme.onPrimaryContainer
                 } else {
                     MaterialTheme.colorScheme.onSecondaryContainer
@@ -137,6 +135,12 @@ internal fun TrackingFABs(
         }
     }
 }
+
+internal data class TrackingFabState(
+    val isDirectionOfTravel: Boolean,
+    val isUserTracking: Boolean,
+    val selfLocationAvailable: Boolean,
+)
 
 @Composable
 internal fun HelpFABs(onHelpRequested: () -> Unit) {

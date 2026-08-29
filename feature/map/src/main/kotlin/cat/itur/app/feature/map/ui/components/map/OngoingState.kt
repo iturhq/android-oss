@@ -59,9 +59,11 @@ internal fun OngoingState(
             TrackingFABs(
                 onTrackUserRequested = actions.onTrackUserRequested,
                 onOrientationToggleRequested = actions.onOrientationToggleRequested,
-                isDirectionOfTravel = presentation.isDirectionOfTravel,
-                isUserTracking = presentation.isUserTracking,
-                selfLocationAvailable = presentation.selfLocationAvailable,
+                state = TrackingFabState(
+                    isDirectionOfTravel = presentation.isDirectionOfTravel,
+                    isUserTracking = presentation.isUserTracking,
+                    selfLocationAvailable = presentation.selfLocationAvailable,
+                ),
             ) {
                 FloatingActionButton(
                     onClick = actions.onTrackGroupRequested,

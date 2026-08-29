@@ -30,6 +30,8 @@ import cat.itur.app.core.ui.components.IturProgressIndicator
 import cat.itur.app.feature.map.ui.components.map.ErrorState
 import cat.itur.app.feature.map.ui.components.map.IdleState
 import cat.itur.app.feature.map.ui.components.map.MapLibreView
+import cat.itur.app.feature.map.ui.components.map.MapLibreViewCallbacks
+import cat.itur.app.feature.map.ui.components.map.MapLibreViewInput
 import cat.itur.app.feature.map.ui.components.map.NoMapView
 import cat.itur.app.feature.map.ui.components.map.OngoingState
 import cat.itur.app.feature.map.ui.components.map.OngoingStateActions
@@ -82,22 +84,26 @@ private fun MapReadyContent(
         NoMapView(modifier = environment.modifier.testTag("persistent_map_surface"))
     } else {
         MapLibreView(
-            styleUrl = viewModel.mapStyleConfig.styleUrl,
-            isActivityOngoing = presentation.ongoingActivityId != null,
-            locationPermissionGranted = interaction.locationPermissionGranted,
-            organizerId = presentation.organizerId,
-            currentUserId = presentation.currentUser?.id,
-            participantLocations = presentation.participantLocations,
-            isDirectionOfTravel = presentation.ongoingActivityId != null &&
-                interaction.isDirectionOfTravel,
+            input = MapLibreViewInput(
+                styleUrl = viewModel.mapStyleConfig.styleUrl,
+                isActivityOngoing = presentation.ongoingActivityId != null,
+                locationPermissionGranted = interaction.locationPermissionGranted,
+                organizerId = presentation.organizerId,
+                currentUserId = presentation.currentUser?.id,
+                participantLocations = presentation.participantLocations,
+                isDirectionOfTravel = presentation.ongoingActivityId != null &&
+                    interaction.isDirectionOfTravel,
+            ),
             modifier = environment.modifier
                 .fillMaxSize()
                 .testTag("persistent_map_surface"),
-            onMapReady = { interaction.mapLibreMap = it },
-            onViewportHeightChanged = { interaction.mapViewportHeightPixels = it },
-            onManualZoomChanged = interaction::stopCameraTrackingForManualZoom,
-            onStyleLoadFailed = viewModel::reportMapStyleLoadFailed,
-            onStyleLoadSucceeded = viewModel::reportMapStyleLoadSucceeded,
+            callbacks = MapLibreViewCallbacks(
+                onMapReady = { interaction.mapLibreMap = it },
+                onViewportHeightChanged = { interaction.mapViewportHeightPixels = it },
+                onManualZoomChanged = interaction::stopCameraTrackingForManualZoom,
+                onStyleLoadFailed = viewModel::reportMapStyleLoadFailed,
+                onStyleLoadSucceeded = viewModel::reportMapStyleLoadSucceeded,
+            ),
         )
     }
     MapStateControls(viewModel, environment, presentation, interaction)
