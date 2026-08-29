@@ -38,6 +38,9 @@ class BackendUnavailableMapSurfaceTest {
     )
 
     @get:Rule(order = 2)
+    val notificationPermissionRule = NotificationPermissionRule()
+
+    @get:Rule(order = 3)
     val composeRule = createAndroidComposeRule<HiltTestActivity>()
 
     @Inject

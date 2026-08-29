@@ -34,12 +34,12 @@ import cat.itur.app.core.data.repository.SignInFailureReason
 import cat.itur.app.core.data.repository.SignInResult
 import cat.itur.app.core.domain.id.IturActivityId
 import cat.itur.app.core.domain.id.url
+import cat.itur.app.core.model.Broadcast
 import cat.itur.app.core.model.IturActivityStatus
 import cat.itur.app.core.model.ParticipantSignal
-import cat.itur.app.core.model.Broadcast
 import cat.itur.app.core.ui.theme.IturTheme
-import cat.itur.app.feature.map.ui.MapScreen
 import cat.itur.app.feature.map.ui.LocalBroadcastPollIntervalMillis
+import cat.itur.app.feature.map.ui.MapScreen
 import cat.itur.app.feature.map.ui.components.map.LocalLocationRecencyThresholds
 import cat.itur.app.feature.map.ui.components.map.LocationRecencyThresholds
 import dagger.hilt.android.testing.HiltAndroidRule
@@ -76,6 +76,9 @@ class CanonicalUseCasesTest {
     )
 
     @get:Rule(order = 2)
+    val notificationPermissionRule = NotificationPermissionRule()
+
+    @get:Rule(order = 3)
     val composeRule = createAndroidComposeRule<HiltTestActivity>()
 
     @Inject

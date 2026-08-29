@@ -47,9 +47,8 @@ class MapScreenTest {
     val hiltRule = HiltAndroidRule(this)
 
     // Grant upfront so the system permission dialogs MapScreen requests on launch don't cover
-    // the UI and block Compose test interactions. POST_NOTIFICATIONS is deliberately not
-    // requested here: it doesn't exist as a runtime permission before API 33, and MapScreen
-    // only asks for it on Build.VERSION.SDK_INT >= TIRAMISU in the first place.
+    // the UI and block Compose test interactions. POST_NOTIFICATIONS is handled separately by a
+    // version-aware rule because the API 29 CI AVD does not know that permission.
     @get:Rule(order = 1)
     val permissionRule: GrantPermissionRule = GrantPermissionRule.grant(
         Manifest.permission.ACCESS_FINE_LOCATION,
@@ -58,6 +57,9 @@ class MapScreenTest {
     )
 
     @get:Rule(order = 2)
+    val notificationPermissionRule = NotificationPermissionRule()
+
+    @get:Rule(order = 3)
     val composeRule = createAndroidComposeRule<HiltTestActivity>()
 
     @Before
