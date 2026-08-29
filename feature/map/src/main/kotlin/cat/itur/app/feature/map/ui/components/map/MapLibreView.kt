@@ -66,7 +66,7 @@ private const val CURRENT_MARKER_OPACITY = 1f
 private const val AGING_MARKER_OPACITY = 0.6f
 private const val STALE_MARKER_OPACITY = 0.3f
 private const val UNKNOWN_AGE_MARKER_OPACITY = 0.45f
-private const val DIRECTION_OF_TRAVEL_POINTER_FRACTION = 0.8
+internal const val DIRECTION_OF_TRAVEL_POINTER_FRACTION = 0.8
 private const val IMMEDIATE_CAMERA_TRANSITION_DURATION_MS = 0L
 const val PERSISTENT_MAP_NATIVE_VIEW_TAG = "itur-persistent-map-native-view"
 

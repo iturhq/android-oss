@@ -8,6 +8,7 @@ package cat.itur.app.feature.map.ui
 import android.location.Location
 import android.util.Log
 import cat.itur.app.core.model.ParticipantLocation
+import cat.itur.app.feature.map.ui.components.map.DIRECTION_OF_TRAVEL_POINTER_FRACTION
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
@@ -24,7 +25,6 @@ private const val SPEED_TO_FRAMING_DISTANCE = 25.0
 private const val RECENT_LOCATION_WINDOW_MILLIS = 10_000L
 private const val MAX_RECENT_LOCATIONS = 3
 private const val DEFAULT_VIEWPORT_HEIGHT_PIXELS = 1_000
-private const val DIRECTION_OF_TRAVEL_POINTER_FRACTION = 0.8
 private const val EARTH_METERS_PER_PIXEL_AT_ZOOM_ZERO = 156543.03392
 private const val MAX_MAP_ZOOM = 22.0
 private const val EARTH_RADIUS_METERS = 6_371_000.0
