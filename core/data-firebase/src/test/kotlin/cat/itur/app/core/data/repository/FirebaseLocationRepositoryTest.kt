@@ -27,11 +27,23 @@ import java.util.Date
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private val ACTIVITY_ID = IturActivityId("TestActivity00000001")
 private val USER_ID = UserId("user1")
-private val NEW_LOCATION = Location(latitude = 51.5, longitude = -0.1)
+private val NEW_LOCATION = Location(
+    latitude = 51.5,
+    longitude = -0.1,
+    providerTimestampMillis = 1_725_000_123_456L,
+    altitudeMeters = 22.5,
+    speedMetersPerSecond = 3.5f,
+    bearingDegrees = 145f,
+    horizontalAccuracyMeters = 4f,
+    verticalAccuracyMeters = 5f,
+    speedAccuracyMetersPerSecond = 0.5f,
+    bearingAccuracyDegrees = 6f,
+)
 
 /**
  * `removeForActivity`, `removeForParticipant`, and `updateForParticipant` deliberately have no
@@ -58,6 +70,15 @@ class FirebaseLocationRepositoryTest {
             userId = USER_ID.value,
             location = GeoPoint(51.4, -0.2),
             updatedOn = com.google.firebase.Timestamp(Date(1_234_567L)),
+            version = 2,
+            providerTimestampMillis = NEW_LOCATION.providerTimestampMillis,
+            altitudeMeters = NEW_LOCATION.altitudeMeters,
+            speedMetersPerSecond = NEW_LOCATION.speedMetersPerSecond,
+            bearingDegrees = NEW_LOCATION.bearingDegrees,
+            horizontalAccuracyMeters = NEW_LOCATION.horizontalAccuracyMeters,
+            verticalAccuracyMeters = NEW_LOCATION.verticalAccuracyMeters,
+            speedAccuracyMetersPerSecond = NEW_LOCATION.speedAccuracyMetersPerSecond,
+            bearingAccuracyDegrees = NEW_LOCATION.bearingAccuracyDegrees,
         )
         val querySnapshot = mockk<QuerySnapshot> { every { toObjects(ParticipantLocationDTO::class.java) } returns listOf(dto) }
         every { query.get() } returns successfulTask(querySnapshot)
@@ -73,6 +94,17 @@ class FirebaseLocationRepositoryTest {
         assertEquals(51.4, result[0].location.latitude)
         assertEquals(-0.2, result[0].location.longitude)
         assertEquals(Date(1_234_567L), result[0].recordedAt)
+        assertEquals(NEW_LOCATION.providerTimestampMillis, result[0].location.providerTimestampMillis)
+        assertEquals(NEW_LOCATION.altitudeMeters, result[0].location.altitudeMeters)
+        assertEquals(NEW_LOCATION.speedMetersPerSecond, result[0].location.speedMetersPerSecond)
+        assertEquals(NEW_LOCATION.bearingDegrees, result[0].location.bearingDegrees)
+        assertEquals(NEW_LOCATION.horizontalAccuracyMeters, result[0].location.horizontalAccuracyMeters)
+        assertEquals(NEW_LOCATION.verticalAccuracyMeters, result[0].location.verticalAccuracyMeters)
+        assertEquals(
+            NEW_LOCATION.speedAccuracyMetersPerSecond,
+            result[0].location.speedAccuracyMetersPerSecond,
+        )
+        assertEquals(NEW_LOCATION.bearingAccuracyDegrees, result[0].location.bearingAccuracyDegrees)
     }
 
     @Test
@@ -91,6 +123,14 @@ class FirebaseLocationRepositoryTest {
         val result = repository.getForActivity(ACTIVITY_ID)
 
         assertEquals("<Not available>", result[0].userName)
+        assertNull(result[0].location.providerTimestampMillis)
+        assertNull(result[0].location.altitudeMeters)
+        assertNull(result[0].location.speedMetersPerSecond)
+        assertNull(result[0].location.bearingDegrees)
+        assertNull(result[0].location.horizontalAccuracyMeters)
+        assertNull(result[0].location.verticalAccuracyMeters)
+        assertNull(result[0].location.speedAccuracyMetersPerSecond)
+        assertNull(result[0].location.bearingAccuracyDegrees)
     }
 
     @Test
@@ -237,6 +277,18 @@ class FirebaseLocationRepositoryTest {
         assertEquals(USER_ID.value, newRecord.captured.userId)
         assertEquals(NEW_LOCATION.latitude, newRecord.captured.location.latitude)
         assertEquals(NEW_LOCATION.longitude, newRecord.captured.location.longitude)
+        assertEquals(2, newRecord.captured.version)
+        assertEquals(NEW_LOCATION.providerTimestampMillis, newRecord.captured.providerTimestampMillis)
+        assertEquals(NEW_LOCATION.altitudeMeters, newRecord.captured.altitudeMeters)
+        assertEquals(NEW_LOCATION.speedMetersPerSecond, newRecord.captured.speedMetersPerSecond)
+        assertEquals(NEW_LOCATION.bearingDegrees, newRecord.captured.bearingDegrees)
+        assertEquals(NEW_LOCATION.horizontalAccuracyMeters, newRecord.captured.horizontalAccuracyMeters)
+        assertEquals(NEW_LOCATION.verticalAccuracyMeters, newRecord.captured.verticalAccuracyMeters)
+        assertEquals(
+            NEW_LOCATION.speedAccuracyMetersPerSecond,
+            newRecord.captured.speedAccuracyMetersPerSecond,
+        )
+        assertEquals(NEW_LOCATION.bearingAccuracyDegrees, newRecord.captured.bearingAccuracyDegrees)
     }
 
     @Test
@@ -259,10 +311,37 @@ class FirebaseLocationRepositoryTest {
 
         repository.updateForParticipant(USER_ID, ACTIVITY_ID, NEW_LOCATION)
 
-        assertEquals(setOf("location", "updatedOn"), updates.captured.keys)
+        assertEquals(
+            setOf(
+                "location",
+                "updatedOn",
+                "version",
+                "providerTimestampMillis",
+                "altitudeMeters",
+                "speedMetersPerSecond",
+                "bearingDegrees",
+                "horizontalAccuracyMeters",
+                "verticalAccuracyMeters",
+                "speedAccuracyMetersPerSecond",
+                "bearingAccuracyDegrees",
+            ),
+            updates.captured.keys,
+        )
         val updatedGeoPoint = updates.captured["location"] as GeoPoint
         assertEquals(NEW_LOCATION.latitude, updatedGeoPoint.latitude)
         assertEquals(NEW_LOCATION.longitude, updatedGeoPoint.longitude)
+        assertEquals(2, updates.captured["version"])
+        assertEquals(NEW_LOCATION.providerTimestampMillis, updates.captured["providerTimestampMillis"])
+        assertEquals(NEW_LOCATION.altitudeMeters, updates.captured["altitudeMeters"])
+        assertEquals(NEW_LOCATION.speedMetersPerSecond, updates.captured["speedMetersPerSecond"])
+        assertEquals(NEW_LOCATION.bearingDegrees, updates.captured["bearingDegrees"])
+        assertEquals(NEW_LOCATION.horizontalAccuracyMeters, updates.captured["horizontalAccuracyMeters"])
+        assertEquals(NEW_LOCATION.verticalAccuracyMeters, updates.captured["verticalAccuracyMeters"])
+        assertEquals(
+            NEW_LOCATION.speedAccuracyMetersPerSecond,
+            updates.captured["speedAccuracyMetersPerSecond"],
+        )
+        assertEquals(NEW_LOCATION.bearingAccuracyDegrees, updates.captured["bearingAccuracyDegrees"])
         verify(exactly = 0) { locationsCollection.add(any<ParticipantLocationDTO>()) }
     }
 

@@ -69,7 +69,18 @@ class FakeLocationRepositoryTest {
 
     @Test
     fun `GIVEN a stored location WHEN getting locations THEN the result is close to the stored position`() = runBlocking {
-        val stored = Location(latitude = 51.4793, longitude = 0.0001)
+        val stored = Location(
+            latitude = 51.4793,
+            longitude = 0.0001,
+            providerTimestampMillis = 1_725_000_123_456L,
+            altitudeMeters = 12.3,
+            speedMetersPerSecond = 4.5f,
+            bearingDegrees = 67.8f,
+            horizontalAccuracyMeters = 3.2f,
+            verticalAccuracyMeters = 4.3f,
+            speedAccuracyMetersPerSecond = 0.4f,
+            bearingAccuracyDegrees = 2.1f,
+        )
         val repo = locationRepo(activityRepo(ACTIVITY))
         repo.updateForParticipant(ORGANIZER_ID, ACTIVITY_ID, stored)
 
@@ -79,6 +90,14 @@ class FakeLocationRepositoryTest {
 
         assertTrue(abs(returned.latitude - stored.latitude) <= MAX_JITTER_DEGREES)
         assertTrue(abs(returned.longitude - stored.longitude) <= MAX_JITTER_DEGREES)
+        assertEquals(stored.providerTimestampMillis, returned.providerTimestampMillis)
+        assertEquals(stored.altitudeMeters, returned.altitudeMeters)
+        assertEquals(stored.speedMetersPerSecond, returned.speedMetersPerSecond)
+        assertEquals(stored.bearingDegrees, returned.bearingDegrees)
+        assertEquals(stored.horizontalAccuracyMeters, returned.horizontalAccuracyMeters)
+        assertEquals(stored.verticalAccuracyMeters, returned.verticalAccuracyMeters)
+        assertEquals(stored.speedAccuracyMetersPerSecond, returned.speedAccuracyMetersPerSecond)
+        assertEquals(stored.bearingAccuracyDegrees, returned.bearingAccuracyDegrees)
     }
 
     // --- removeForActivity ---

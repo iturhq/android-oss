@@ -65,6 +65,14 @@ constructor(
                 location = Location(
                     latitude = it.location.latitude,
                     longitude = it.location.longitude,
+                    providerTimestampMillis = it.providerTimestampMillis,
+                    altitudeMeters = it.altitudeMeters,
+                    speedMetersPerSecond = it.speedMetersPerSecond,
+                    bearingDegrees = it.bearingDegrees,
+                    horizontalAccuracyMeters = it.horizontalAccuracyMeters,
+                    verticalAccuracyMeters = it.verticalAccuracyMeters,
+                    speedAccuracyMetersPerSecond = it.speedAccuracyMetersPerSecond,
+                    bearingAccuracyDegrees = it.bearingAccuracyDegrees,
                 ),
                 recordedAt = it.updatedOn.toDate(),
             )
@@ -129,6 +137,15 @@ constructor(
                 userId = userId.value,
                 location = firebaseLocation,
                 updatedOn = Timestamp.now(),
+                version = LOCATION_RECORD_VERSION,
+                providerTimestampMillis = location.providerTimestampMillis,
+                altitudeMeters = location.altitudeMeters,
+                speedMetersPerSecond = location.speedMetersPerSecond,
+                bearingDegrees = location.bearingDegrees,
+                horizontalAccuracyMeters = location.horizontalAccuracyMeters,
+                verticalAccuracyMeters = location.verticalAccuracyMeters,
+                speedAccuracyMetersPerSecond = location.speedAccuracyMetersPerSecond,
+                bearingAccuracyDegrees = location.bearingAccuracyDegrees,
             )
             val newReference = backendHealthReporter.get().observeFirestoreMutation {
                 locationsCollection.add(newRecord).await()
@@ -146,6 +163,15 @@ constructor(
                     mapOf(
                         "location" to firebaseLocation,
                         "updatedOn" to Timestamp.now(),
+                        "version" to LOCATION_RECORD_VERSION,
+                        "providerTimestampMillis" to location.providerTimestampMillis,
+                        "altitudeMeters" to location.altitudeMeters,
+                        "speedMetersPerSecond" to location.speedMetersPerSecond,
+                        "bearingDegrees" to location.bearingDegrees,
+                        "horizontalAccuracyMeters" to location.horizontalAccuracyMeters,
+                        "verticalAccuracyMeters" to location.verticalAccuracyMeters,
+                        "speedAccuracyMetersPerSecond" to location.speedAccuracyMetersPerSecond,
+                        "bearingAccuracyDegrees" to location.bearingAccuracyDegrees,
                     ),
                 ).await()
             }
@@ -163,4 +189,15 @@ data class ParticipantLocationDTO(
     var userId: String = "",
     var location: GeoPoint = GeoPoint(0.0, 0.0),
     var updatedOn: Timestamp = Timestamp.now(),
+    var version: Int = 1,
+    var providerTimestampMillis: Long? = null,
+    var altitudeMeters: Double? = null,
+    var speedMetersPerSecond: Float? = null,
+    var bearingDegrees: Float? = null,
+    var horizontalAccuracyMeters: Float? = null,
+    var verticalAccuracyMeters: Float? = null,
+    var speedAccuracyMetersPerSecond: Float? = null,
+    var bearingAccuracyDegrees: Float? = null,
 )
+
+private const val LOCATION_RECORD_VERSION = 2

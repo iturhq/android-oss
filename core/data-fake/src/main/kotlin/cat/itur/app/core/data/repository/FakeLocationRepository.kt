@@ -86,7 +86,7 @@ class FakeLocationRepository constructor(
     private fun jitterLocation(origin: Location, maxOffset: Double): Location {
         val latOffset = Random.nextDouble(-maxOffset, maxOffset) / METERS_PER_DEGREE
         val lonOffset = Random.nextDouble(-maxOffset, maxOffset) / METERS_PER_DEGREE
-        return Location(
+        return origin.copy(
             latitude = origin.latitude + latOffset,
             longitude = origin.longitude + lonOffset,
         )

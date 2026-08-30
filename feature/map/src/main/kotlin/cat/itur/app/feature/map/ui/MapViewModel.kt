@@ -54,8 +54,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.util.Date
 import javax.inject.Inject
-import cat.itur.app.core.model.Location as IturLocation
-
 @HiltViewModel
 class MapViewModel @Inject
 constructor(
@@ -611,7 +609,7 @@ constructor(
             locationsRepository.updateForParticipant(
                 userId,
                 activityId,
-                IturLocation(latitude = location.latitude, longitude = location.longitude),
+                location.toIturLocation(),
             )
             refreshParticipantLocations()
         } catch (e: Exception) {

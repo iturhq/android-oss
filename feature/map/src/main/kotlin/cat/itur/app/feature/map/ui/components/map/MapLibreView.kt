@@ -31,7 +31,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import cat.itur.app.core.domain.id.UserId
 import cat.itur.app.core.model.ParticipantLocation
-import cat.itur.app.feature.map.R
+import cat.itur.app.core.model.ParticipantSignal
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import org.maplibre.android.location.LocationComponent
@@ -48,18 +48,17 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.PropertyFactory.iconImage
 import org.maplibre.android.style.layers.PropertyFactory.iconOpacity
+import org.maplibre.android.style.layers.PropertyFactory.iconRotate
+import org.maplibre.android.style.layers.PropertyFactory.iconRotationAlignment
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
-import org.maplibre.geojson.Point
 
 private const val ORGANIZER_LAYER = "organizer-layer"
 private const val ORGANIZER_SOURCE = "organizer-source"
 private const val PARTICIPANT_LAYER = "participants-layer"
 private const val PARTICIPANT_SOURCE = "participants-source"
-private const val MARKER_OTHER = "marker-other"
-private const val MARKER_ORGANIZER = "marker-organizer"
 private const val RECENCY_REFRESH_INTERVAL_MILLIS = 1_000L
 private const val MILLIS_PER_SECOND = 1_000L
 private const val CURRENT_MARKER_OPACITY = 1f
@@ -91,6 +90,7 @@ data class MapLibreViewInput(
     val currentUserId: UserId?,
     val organizerId: UserId?,
     val participantLocations: List<ParticipantLocation>,
+    val participantSignals: Map<UserId, ParticipantSignal> = emptyMap(),
     val isDirectionOfTravel: Boolean = false,
 )
 
@@ -342,8 +342,16 @@ private object MapStyleInitializer {
     }
 
     private fun addMapMarkers(style: Style, context: Context) {
-        vectorToBitmap(context, R.drawable.ic_location_other)?.let { style.addImage(MARKER_OTHER, it) }
-        vectorToBitmap(context, R.drawable.ic_location_organiser)?.let { style.addImage(MARKER_ORGANIZER, it) }
+        PointerRole.entries.forEach { role ->
+            listOf(null, ParticipantSignal.DELAYED, ParticipantSignal.NEEDS_HELP).forEach { signal ->
+                listOf(true, false).forEach { directional ->
+                    val pointer = pointerPresentation(role, signal, directional)
+                    vectorToBitmap(context, pointer.drawable)?.let {
+                        style.addImage(pointer.imageName, it)
+                    }
+                }
+            }
+        }
     }
 
     private fun addMapMarkerLayers(style: Style) {
@@ -352,6 +360,8 @@ private object MapStyleInitializer {
             SymbolLayer(ORGANIZER_LAYER, ORGANIZER_SOURCE).withProperties(
                 iconImage(Expression.get("marker")),
                 iconOpacity(Expression.get("opacity")),
+                iconRotate(Expression.get("bearing")),
+                iconRotationAlignment("map"),
             ),
         )
         style.addSource(GeoJsonSource(PARTICIPANT_SOURCE, FeatureCollection.fromFeatures(emptyList<Feature>())))
@@ -359,6 +369,8 @@ private object MapStyleInitializer {
             SymbolLayer(PARTICIPANT_LAYER, PARTICIPANT_SOURCE).withProperties(
                 iconImage(Expression.get("marker")),
                 iconOpacity(Expression.get("opacity")),
+                iconRotate(Expression.get("bearing")),
+                iconRotationAlignment("map"),
             ),
         )
     }
@@ -381,6 +393,7 @@ private object MapMarkers {
     ) {
         LaunchedEffect(
             input.participantLocations,
+            input.participantSignals,
             state.styleLoaded,
             state.map,
             state.nowMillis,
@@ -401,16 +414,13 @@ private object MapMarkers {
         input.participantLocations.firstOrNull { it.userId == input.organizerId }?.let { organizerLocation ->
             source.setGeoJson(
                 FeatureCollection.fromFeature(
-                    Feature.fromGeometry(
-                        Point.fromLngLat(organizerLocation.location.longitude, organizerLocation.location.latitude),
-                    ).apply {
-                        addStringProperty("id", organizerLocation.userId.value)
-                        addStringProperty("marker", MARKER_ORGANIZER)
-                        addNumberProperty(
-                            "opacity",
-                            organizerLocation.markerOpacity(state.nowMillis, state.recencyThresholds),
-                        )
-                    },
+                    remotePointerFeature(
+                        participantLocation = organizerLocation,
+                        role = PointerRole.ORGANIZER,
+                        signal = input.participantSignals[organizerLocation.userId],
+                        opacity = organizerLocation.markerOpacity(state.nowMillis, state.recencyThresholds),
+                        nowMillis = state.nowMillis,
+                    ),
                 ),
             )
         }
@@ -425,17 +435,13 @@ private object MapMarkers {
                     input.participantLocations
                         .filter { it.userId != input.organizerId && it.userId != input.currentUserId }
                         .map { location ->
-                            Feature.fromGeometry(
-                                Point.fromLngLat(location.location.longitude, location.location.latitude),
-                            ).apply {
-                                addStringProperty("label", location.userName)
-                                addStringProperty("id", location.userId.value)
-                                addStringProperty("marker", MARKER_OTHER)
-                                addNumberProperty(
-                                    "opacity",
-                                    location.markerOpacity(state.nowMillis, state.recencyThresholds),
-                                )
-                            }
+                            remotePointerFeature(
+                                participantLocation = location,
+                                role = PointerRole.OTHER,
+                                signal = input.participantSignals[location.userId],
+                                opacity = location.markerOpacity(state.nowMillis, state.recencyThresholds),
+                                nowMillis = state.nowMillis,
+                            )
                         },
                 ),
             )

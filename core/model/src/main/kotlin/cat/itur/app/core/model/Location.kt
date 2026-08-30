@@ -11,4 +11,13 @@ package cat.itur.app.core.model
 data class Location(
     val latitude: Double,
     val longitude: Double,
+    /** Epoch time supplied by the location provider, in milliseconds. */
+    val providerTimestampMillis: Long? = null,
+    val altitudeMeters: Double? = null,
+    val speedMetersPerSecond: Float? = null,
+    val bearingDegrees: Float? = null,
+    val horizontalAccuracyMeters: Float? = null,
+    val verticalAccuracyMeters: Float? = null,
+    val speedAccuracyMetersPerSecond: Float? = null,
+    val bearingAccuracyDegrees: Float? = null,
 )
