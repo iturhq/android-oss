@@ -26,29 +26,41 @@ internal fun pointerPresentation(
         ParticipantSignal.NEEDS_HELP -> "needs-help"
         null -> "okay"
     }
-    val drawable = when (Triple(role, signal, directional)) {
-        Triple(PointerRole.ORGANIZER, ParticipantSignal.DELAYED, true) ->
-            R.drawable.ic_location_organiser_delayed
-        Triple(PointerRole.ORGANIZER, ParticipantSignal.NEEDS_HELP, true) ->
-            R.drawable.ic_location_organiser_needs_help
-        Triple(PointerRole.ORGANIZER, null, true) -> R.drawable.ic_location_organiser
-        Triple(PointerRole.OTHER, ParticipantSignal.DELAYED, true) ->
-            R.drawable.ic_location_other_delayed
-        Triple(PointerRole.OTHER, ParticipantSignal.NEEDS_HELP, true) ->
-            R.drawable.ic_location_other_needs_help
-        Triple(PointerRole.OTHER, null, true) -> R.drawable.ic_location_other
-        Triple(PointerRole.ORGANIZER, ParticipantSignal.DELAYED, false) ->
-            R.drawable.ic_location_organiser_neutral_delayed
-        Triple(PointerRole.ORGANIZER, ParticipantSignal.NEEDS_HELP, false) ->
-            R.drawable.ic_location_organiser_neutral_needs_help
-        Triple(PointerRole.ORGANIZER, null, false) -> R.drawable.ic_location_organiser_neutral
-        Triple(PointerRole.OTHER, ParticipantSignal.DELAYED, false) ->
-            R.drawable.ic_location_other_neutral_delayed
-        Triple(PointerRole.OTHER, ParticipantSignal.NEEDS_HELP, false) ->
-            R.drawable.ic_location_other_neutral_needs_help
-        Triple(PointerRole.OTHER, null, false) -> R.drawable.ic_location_other_neutral
-        else -> error("Unsupported pointer role and signal")
+    val drawable = if (directional) {
+        directionalPointerDrawable(role, signal)
+    } else {
+        neutralPointerDrawable(role, signal)
     }
     val direction = if (directional) "directional" else "neutral"
     return PointerPresentation(drawable, "marker-${role.name.lowercase()}-$status-$direction")
+}
+
+@DrawableRes
+private fun directionalPointerDrawable(role: PointerRole, signal: ParticipantSignal?): Int = when (role to signal) {
+    PointerRole.ORGANIZER to ParticipantSignal.DELAYED ->
+        R.drawable.ic_location_organiser_delayed
+    PointerRole.ORGANIZER to ParticipantSignal.NEEDS_HELP ->
+        R.drawable.ic_location_organiser_needs_help
+    PointerRole.ORGANIZER to null -> R.drawable.ic_location_organiser
+    PointerRole.OTHER to ParticipantSignal.DELAYED ->
+        R.drawable.ic_location_other_delayed
+    PointerRole.OTHER to ParticipantSignal.NEEDS_HELP ->
+        R.drawable.ic_location_other_needs_help
+    PointerRole.OTHER to null -> R.drawable.ic_location_other
+    else -> error("Unsupported pointer role and signal")
+}
+
+@DrawableRes
+private fun neutralPointerDrawable(role: PointerRole, signal: ParticipantSignal?): Int = when (role to signal) {
+    PointerRole.ORGANIZER to ParticipantSignal.DELAYED ->
+        R.drawable.ic_location_organiser_neutral_delayed
+    PointerRole.ORGANIZER to ParticipantSignal.NEEDS_HELP ->
+        R.drawable.ic_location_organiser_neutral_needs_help
+    PointerRole.ORGANIZER to null -> R.drawable.ic_location_organiser_neutral
+    PointerRole.OTHER to ParticipantSignal.DELAYED ->
+        R.drawable.ic_location_other_neutral_delayed
+    PointerRole.OTHER to ParticipantSignal.NEEDS_HELP ->
+        R.drawable.ic_location_other_neutral_needs_help
+    PointerRole.OTHER to null -> R.drawable.ic_location_other_neutral
+    else -> error("Unsupported pointer role and signal")
 }

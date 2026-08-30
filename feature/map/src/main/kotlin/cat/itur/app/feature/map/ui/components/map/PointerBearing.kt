@@ -13,23 +13,28 @@ import org.maplibre.geojson.Point
 
 internal const val MAX_POINTER_BEARING_AGE_MILLIS = 30_000L
 internal const val MAX_POINTER_BEARING_ACCURACY_DEGREES = 45f
+private const val MIN_POINTER_BEARING_DEGREES = 0f
+private const val FULL_TURN_DEGREES = 360f
 
 internal fun pointerBearingRotation(
     location: Location,
     nowMillis: Long = System.currentTimeMillis(),
-): Float? {
-    val bearing = location.bearingDegrees ?: return null
-    if (!bearing.isFinite() || bearing !in 0f..360f) return null
-    val timestamp = location.providerTimestampMillis ?: return null
-    val age = nowMillis - timestamp
-    if (age !in 0..MAX_POINTER_BEARING_AGE_MILLIS) return null
-    val accuracy = location.bearingAccuracyDegrees
-    if (accuracy != null &&
-        (!accuracy.isFinite() || accuracy < 0f || accuracy > MAX_POINTER_BEARING_ACCURACY_DEGREES)
-    ) {
-        return null
-    }
-    return bearing % 360f
+): Float? = location.bearingDegrees
+    ?.takeIf { it.isFinite() && it in MIN_POINTER_BEARING_DEGREES..FULL_TURN_DEGREES }
+    ?.takeIf { location.hasFreshBearing(nowMillis) }
+    ?.takeIf { location.bearingAccuracyDegrees.isReliableBearingAccuracy() }
+    ?.rem(FULL_TURN_DEGREES)
+
+private fun Location.hasFreshBearing(nowMillis: Long): Boolean {
+    val timestamp = providerTimestampMillis ?: return false
+    return nowMillis - timestamp in 0..MAX_POINTER_BEARING_AGE_MILLIS
+}
+
+private fun Float?.isReliableBearingAccuracy(): Boolean = this == null || isFiniteAndWithinBearingAccuracyRange()
+
+private fun Float.isFiniteAndWithinBearingAccuracyRange(): Boolean {
+    val validRange = MIN_POINTER_BEARING_DEGREES..MAX_POINTER_BEARING_ACCURACY_DEGREES
+    return isFinite() && this in validRange
 }
 
 internal fun remotePointerFeature(

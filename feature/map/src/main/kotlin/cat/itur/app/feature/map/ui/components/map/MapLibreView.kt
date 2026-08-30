@@ -346,12 +346,18 @@ private object MapStyleInitializer {
             listOf(null, ParticipantSignal.DELAYED, ParticipantSignal.NEEDS_HELP).forEach { signal ->
                 listOf(true, false).forEach { directional ->
                     val pointer = pointerPresentation(role, signal, directional)
-                    vectorToBitmap(context, pointer.drawable)?.let {
-                        style.addImage(pointer.imageName, it)
-                    }
+                    addMapMarker(style, context, pointer)
                 }
             }
         }
+    }
+
+    private fun addMapMarker(
+        style: Style,
+        context: Context,
+        pointer: PointerPresentation,
+    ) {
+        vectorToBitmap(context, pointer.drawable)?.let { style.addImage(pointer.imageName, it) }
     }
 
     private fun addMapMarkerLayers(style: Style) {
