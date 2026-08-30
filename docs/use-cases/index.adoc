@@ -8,6 +8,15 @@
 All E2E use cases are listed below.
 Each use case covers a single user scenario and specifies preconditions, steps, expected results, and the UI identifiers required for test implementation.
 
+// coverage-ledger: UC-AUTH-001 | E2E | CanonicalUseCasesTest.uc03_signInHappyPath
+// coverage-ledger: UC-ACTIVITY-001 | E2E | CanonicalUseCasesTest.uc06_startActivityHappyPath
+// coverage-ledger: UC-ACTIVITY-002 | E2E | CanonicalUseCasesTest.uc09_joinActivityFromValidQr
+// coverage-ledger: UC-ACTIVITY-003 | E2E | CanonicalUseCasesTest.uc17_recenterAfterLocationFixKeepsOngoingState
+// coverage-ledger: UC-ACTIVITY-004 | E2E | CanonicalUseCasesTest.uc18_trackGroupWithKnownLocationsKeepsOngoingState
+// coverage-ledger: UC-ACTIVITY-005 | E2E | CanonicalUseCasesTest.uc19_participantCanEscalateAndClearSafetySignal
+// coverage-ledger: UC-ACTIVITY-006 | E2E | CanonicalUseCasesTest.uc14_organizerStopsActivityForEveryone
+// coverage-ledger: UC-ACTIVITY-007 | E2E | CanonicalUseCasesTest.broadcastAppearsInAppDuringAnOngoingActivity
+
 == Conventions
 
 * *Test account:* any registered Google account.
@@ -16,7 +25,7 @@ Each use case covers a single user scenario and specifies preconditions, steps, 
 
 == Executable coverage
 
-The demo-flavor instrumented suite implements these IDs through the real
+The test-scoped instrumented suite implements these IDs through the real
 `MapScreen`/`MapViewModel` Hilt graph. Compose Test drives application UI;
 UIAutomator is restricted to the Android-owned permission dialog in UC-01
 and UC-02. Scenario repositories replace network services deterministically,
@@ -42,9 +51,13 @@ and the hosted emulator runs the suite on every change.
 | UC-14 | `CanonicalUseCasesTest.uc14_organizerStopsActivityForEveryone`
 | UC-15 | `CanonicalUseCasesTest.uc15_participantExitsWithoutFinishingActivity`
 | UC-16 | `CanonicalUseCasesTest.uc16_leaveFailureIsVisibleAndDoesNotCrash`
-| UC-17 | `CanonicalUseCasesTest.uc17_recenterAfterLocationFixKeepsOngoingState`
+| UC-17 | `CanonicalUseCasesTest.uc17_recenterAfterLocationFixKeepsOngoingState`,
+`uc17_locationProviderFailureIsVisibleAndCanRetry`, and
+`uc17_locationWriteFailureShowsRecoverableDegradedState`
 | UC-18 | `CanonicalUseCasesTest.uc18_trackGroupWithKnownLocationsKeepsOngoingState`
-| UC-19 | `CanonicalUseCasesTest.uc19_participantHailsOrganizerExactlyOnce`
+| UC-19 | `CanonicalUseCasesTest.uc19_participantCanEscalateAndClearSafetySignal`,
+`uc19_safetyWriteFailurePreservesConfirmedStateAndCanRetry`, and
+`uc19_terminalActivityRejectsAStaleSafetyAction`
 | UC-20 | `CanonicalUseCasesTest.uc20_organizerActivityAutoResumesOnColdStart` and `uc20_participantActivityAutoResumesOnColdStart`
 | UC-21 | `CanonicalUseCasesTest.uc21_zeroParticipantActivityCanTrackGroup`
 | UC-22 | `CanonicalUseCasesTest.uc22_pendingHailsDoNotExposeParticipantActionToOrganizer`
@@ -54,8 +67,10 @@ and the hosted emulator runs the suite on every change.
 
 UC-07 is reconciled with the current accepted UX: anonymous users see
 *Sign in*, while *Start an activity* is offered only after sign-in. UC-19
-tests the canonical one-shot, idempotent attention request from
-`UC-ACTIVITY-005`; cancellation is not part of that contract. UC-22's
+tests the participant safety-state progression (delayed, needs help, and
+okay) through the authoritative activity boundary. The broadcast journeys
+exercise in-app delivery, silent read recovery, and cancellation after leave
+for `UC-ACTIVITY-007`. UC-22's
 organiser acknowledgement controls remain deliberately deferred: the
 canonical system use case says organiser-facing UI is future work, so the
 Android boundary scenario verifies that pending backend state is preserved

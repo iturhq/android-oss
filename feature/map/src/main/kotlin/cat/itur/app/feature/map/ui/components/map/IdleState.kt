@@ -20,7 +20,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
@@ -28,7 +27,6 @@ import androidx.compose.ui.unit.dp
 import cat.itur.app.core.ui.IturIcons
 import cat.itur.app.core.ui.R
 import cat.itur.app.core.ui.theme.IturTheme
-import cat.itur.app.feature.map.R as MapR
 import cat.itur.app.feature.map.ui.components.help.helpAnchor
 
 /**
@@ -54,7 +52,7 @@ fun IdleState(
         Icon(
             painter = painterResource(R.drawable.core_ui_itur_overlay),
             tint = Color.Transparent,
-            contentDescription = stringResource(MapR.string.feature_map_itur_logo),
+            contentDescription = "Itur logo",
             modifier = Modifier
                 .size(64.dp)
                 .padding(8.dp),
@@ -113,12 +111,9 @@ private fun ActivityFABs(
         onClick = onQRRequested,
         modifier = Modifier
             .testTag("join_activity_fab")
-            .helpAnchor(
-                "join_activity_fab",
-                stringResource(MapR.string.feature_map_help_join_activity),
-            ),
+            .helpAnchor("join_activity_fab", "Join an activity by scanning its QR code"),
     ) {
-        Icon(IturIcons.Join, contentDescription = stringResource(MapR.string.feature_map_join_activity))
+        Icon(IturIcons.Join, contentDescription = "Join activity")
     }
 
     // Only signed-in users can start activities.
@@ -127,16 +122,10 @@ private fun ActivityFABs(
             onClick = { if (activityActionsEnabled) onStartRequested() },
             modifier = Modifier
                 .testTag("start_activity_fab")
-                .helpAnchor(
-                    "start_activity_fab",
-                    stringResource(MapR.string.feature_map_help_start_activity),
-                )
+                .helpAnchor("start_activity_fab", "Start a new activity")
                 .serviceAvailability(activityActionsEnabled),
         ) {
-            Icon(
-                IturIcons.Add,
-                contentDescription = stringResource(MapR.string.feature_map_start_activity),
-            )
+            Icon(IturIcons.Add, contentDescription = "Start activity")
         }
     }
 }

@@ -14,11 +14,10 @@ import cat.itur.app.feature.map.R
 @Composable
 internal fun localizedMapMessage(message: String): String {
     val dynamicMessage = dynamicMapMessage(message)
-    if (dynamicMessage != null) {
-        return stringResource(dynamicMessage.resource, dynamicMessage.argument)
+    return when {
+        dynamicMessage != null -> stringResource(dynamicMessage.resource, dynamicMessage.argument)
+        else -> staticMapMessageResources[message]?.let { stringResource(it) } ?: message
     }
-    val resource = staticMapMessageResources[message] ?: return message
-    return stringResource(resource)
 }
 
 private fun dynamicMapMessage(message: String): DynamicMapMessage? = dynamicMapMessagePatterns

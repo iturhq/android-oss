@@ -24,14 +24,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import cat.itur.app.core.domain.model.User
 import cat.itur.app.core.ui.components.IturProgressIndicator
-import cat.itur.app.feature.map.R
 import cat.itur.app.feature.map.ui.components.map.ErrorState
 import cat.itur.app.feature.map.ui.components.map.IdleState
 import cat.itur.app.feature.map.ui.components.map.MapLibreView
+import cat.itur.app.feature.map.ui.components.map.MapLibreViewCallbacks
+import cat.itur.app.feature.map.ui.components.map.MapLibreViewInput
 import cat.itur.app.feature.map.ui.components.map.NoMapView
 import cat.itur.app.feature.map.ui.components.map.OngoingState
 import cat.itur.app.feature.map.ui.components.map.OngoingStateActions
@@ -64,11 +64,9 @@ private fun MapContent(
 ) {
     when {
         !environment.openGlEsSupport.isSupported && !environment.isInspection -> ErrorState(
-            guidance = stringResource(R.string.feature_map_graphics_guidance),
-            message = stringResource(
-                R.string.feature_map_graphics_message,
-                environment.openGlEsSupport.reportedVersion,
-            ),
+            guidance = "This device does not provide the graphics support required by the map.",
+            message = "OpenGL ES 3.0 or newer is required; this device reports " +
+                "${environment.openGlEsSupport.reportedVersion}.",
             modifier = environment.modifier,
         )
         else -> MapReadyContent(viewModel, environment, presentation, interaction)
@@ -86,18 +84,26 @@ private fun MapReadyContent(
         NoMapView(modifier = environment.modifier.testTag("persistent_map_surface"))
     } else {
         MapLibreView(
-            styleUrl = viewModel.mapStyleConfig.styleUrl,
-            isActivityOngoing = presentation.ongoingActivityId != null,
-            locationPermissionGranted = interaction.locationPermissionGranted,
-            organizerId = presentation.organizerId,
-            currentUserId = presentation.currentUser?.id,
-            participantLocations = presentation.participantLocations,
+            input = MapLibreViewInput(
+                styleUrl = viewModel.mapStyleConfig.styleUrl,
+                isActivityOngoing = presentation.ongoingActivityId != null,
+                locationPermissionGranted = interaction.locationPermissionGranted,
+                organizerId = presentation.organizerId,
+                currentUserId = presentation.currentUser?.id,
+                participantLocations = presentation.participantLocations,
+                isDirectionOfTravel = presentation.ongoingActivityId != null &&
+                    interaction.isDirectionOfTravel,
+            ),
             modifier = environment.modifier
                 .fillMaxSize()
                 .testTag("persistent_map_surface"),
-            onMapReady = { interaction.mapLibreMap = it },
-            onStyleLoadFailed = viewModel::reportMapStyleLoadFailed,
-            onStyleLoadSucceeded = viewModel::reportMapStyleLoadSucceeded,
+            callbacks = MapLibreViewCallbacks(
+                onMapReady = { interaction.mapLibreMap = it },
+                onViewportHeightChanged = { interaction.mapViewportHeightPixels = it },
+                onManualZoomChanged = interaction::stopCameraTrackingForManualZoom,
+                onStyleLoadFailed = viewModel::reportMapStyleLoadFailed,
+                onStyleLoadSucceeded = viewModel::reportMapStyleLoadSucceeded,
+            ),
         )
     }
     MapStateControls(viewModel, environment, presentation, interaction)
@@ -121,7 +127,7 @@ private fun LocationPermissionNotice(onEnableLocation: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                stringResource(R.string.feature_map_location_disabled),
+                "Location access is off; self-location sharing is disabled.",
                 modifier = Modifier.weight(1f),
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -129,7 +135,7 @@ private fun LocationPermissionNotice(onEnableLocation: () -> Unit) {
                 onClick = onEnableLocation,
                 modifier = Modifier.testTag("enable_location_button"),
             ) {
-                Text(stringResource(R.string.feature_map_enable_location))
+                Text("Enable location")
             }
         }
     }
@@ -143,13 +149,34 @@ private fun MapStateControls(
     interaction: MapInteractionState,
 ) {
     when {
-        presentation.currentUser == null ->
-            IturProgressIndicator(label = stringResource(R.string.feature_map_preparing_map))
+        presentation.currentUser == null -> IturProgressIndicator(
+            label = "Preparing map...",
+            modifier = environment.modifier.testTag("map_state_loading"),
+        )
         presentation.uiState is MapUiState.Loading ->
-            IturProgressIndicator(label = stringResource(R.string.feature_map_preparing_activity))
+            IturProgressIndicator(
+                label = "Preparing activity...",
+                modifier = environment.modifier.testTag("map_state_loading"),
+            )
         presentation.uiState is MapUiState.Ongoing ->
-            OngoingControls(viewModel, presentation, interaction, environment)
-        else -> IdleControls(viewModel, presentation, interaction, environment)
+            OngoingControls(
+                viewModel,
+                presentation,
+                interaction,
+                environment,
+                "map_state_ongoing",
+            )
+        presentation.uiState is MapUiState.Error ->
+            IdleControls(viewModel, presentation, interaction, environment, "map_state_error")
+        presentation.uiState is MapUiState.RecoverableError ->
+            IdleControls(
+                viewModel,
+                presentation,
+                interaction,
+                environment,
+                "map_state_recoverable_error",
+            )
+        else -> IdleControls(viewModel, presentation, interaction, environment, "map_state_idle")
     }
 }
 
@@ -159,6 +186,7 @@ private fun IdleControls(
     presentation: MapPresentation,
     interaction: MapInteractionState,
     environment: MapEnvironment,
+    stateTag: String,
 ) {
     IdleState(
         onStartRequested = { viewModel.startActivity(environment.context) },
@@ -166,7 +194,7 @@ private fun IdleControls(
         onSignOutRequested = viewModel::signOut,
         onQRRequested = { interaction.showQrScanSheet = true },
         onHelpRequested = { interaction.showHelp = true },
-        modifier = environment.modifier,
+        modifier = environment.modifier.testTag(stateTag),
         isSignedIn = presentation.currentUser is User.RegisteredUser,
         authenticationActionsEnabled = presentation.authenticationActionsEnabled,
         activityActionsEnabled = presentation.activityActionsEnabled,
@@ -179,38 +207,68 @@ private fun OngoingControls(
     presentation: MapPresentation,
     interaction: MapInteractionState,
     environment: MapEnvironment,
+    stateTag: String,
 ) {
     val ongoingUiState = presentation.uiState as MapUiState.Ongoing
     OngoingState(
         actions = OngoingStateActions(
-            onStopRequested = viewModel::leaveActivity,
+            onStopRequested = {
+                interaction.isDirectionOfTravel = false
+                interaction.stopCameraTracking()
+                viewModel.leaveActivity()
+            },
             onQrRequested = { interaction.showQrDisplaySheet = true },
-            onTrackUserRequested = { trackUser(presentation, interaction) },
-            onTrackGroupRequested = { trackGroup(presentation, interaction) },
-            onAttentionRequest = viewModel::requestAttention,
+            onTrackUserRequested = { toggleUserTracking(interaction) },
+            onTrackGroupRequested = { toggleGroupTracking(presentation, interaction) },
+            onOrientationToggleRequested = {
+                interaction.isDirectionOfTravel = !interaction.isDirectionOfTravel
+                interaction.hasManualZoomOverride = false
+                centerOnUser(presentation, interaction)
+            },
+            onParticipantSignalRequested = viewModel::setParticipantSignal,
             onHelpRequested = { interaction.showHelp = true },
         ),
-        isOrganizer = ongoingUiState.organizer.id == presentation.currentUser?.id,
-        selfLocationAvailable = interaction.locationPermissionGranted,
-        modifier = environment.modifier,
-        activityActionsEnabled = presentation.activityActionsEnabled,
+        presentation = OngoingState(
+            isOrganizer = ongoingUiState.organizer.id == presentation.currentUser?.id,
+            selfSignal = presentation.currentUser?.id?.let(ongoingUiState.activity.participantSignals::get),
+            selfLocationAvailable = interaction.locationPermissionGranted,
+            activityActionsEnabled = presentation.activityActionsEnabled,
+            isDirectionOfTravel = interaction.isDirectionOfTravel,
+            isUserTracking = interaction.cameraTrackingMode == CameraTrackingMode.USER,
+            isGroupTracking = interaction.cameraTrackingMode == CameraTrackingMode.GROUP,
+        ),
+        modifier = environment.modifier.testTag(stateTag),
     )
 }
 
-private fun trackUser(presentation: MapPresentation, interaction: MapInteractionState) {
-    Log.d("MapScreen", "Requested zoom on user")
+private fun toggleUserTracking(interaction: MapInteractionState) {
+    Log.d("MapScreen", "Toggled continuous user tracking")
+    interaction.toggleCameraTracking(CameraTrackingMode.USER)
+}
+
+private fun centerOnUser(presentation: MapPresentation, interaction: MapInteractionState) {
     interaction.mapLibreMap?.let { map ->
-        presentation.lastLocation?.let { zoomOnUser(map = map, location = it) }
+        presentation.lastLocation?.let { location ->
+            zoomOnUser(
+                map = map,
+                location = location,
+                recentLocations = interaction.recentLocations,
+                viewportHeightPixels = interaction.mapViewportHeightPixels,
+                isDirectionOfTravel = interaction.isDirectionOfTravel,
+            )
+        }
     }
 }
 
-private fun trackGroup(presentation: MapPresentation, interaction: MapInteractionState) {
-    Log.d("MapScreen", "Requested zoom on group")
-    interaction.mapLibreMap?.let {
-        zoomOnGroup(
-            map = it,
-            participantLocations = presentation.participantLocations,
-            currentLocation = presentation.lastLocation,
-        )
+private fun toggleGroupTracking(presentation: MapPresentation, interaction: MapInteractionState) {
+    Log.d("MapScreen", "Toggled continuous group tracking")
+    if (interaction.cameraTrackingMode == CameraTrackingMode.GROUP) {
+        interaction.toggleCameraTracking(CameraTrackingMode.GROUP)
+        return
     }
+    if (presentation.participantLocations.isEmpty()) {
+        interaction.localMessage = "No group locations are available yet."
+        return
+    }
+    interaction.toggleCameraTracking(CameraTrackingMode.GROUP)
 }

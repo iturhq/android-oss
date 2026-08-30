@@ -7,6 +7,7 @@ package cat.itur.app.feature.map
 
 import android.Manifest
 import android.content.Context
+import android.os.SystemClock
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
@@ -15,6 +16,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -32,9 +34,11 @@ import cat.itur.app.core.data.repository.SignInFailureReason
 import cat.itur.app.core.data.repository.SignInResult
 import cat.itur.app.core.domain.id.IturActivityId
 import cat.itur.app.core.domain.id.url
+import cat.itur.app.core.model.Broadcast
 import cat.itur.app.core.model.IturActivityStatus
 import cat.itur.app.core.model.ParticipantSignal
 import cat.itur.app.core.ui.theme.IturTheme
+import cat.itur.app.feature.map.ui.LocalBroadcastPollIntervalMillis
 import cat.itur.app.feature.map.ui.MapScreen
 import cat.itur.app.feature.map.ui.components.map.LocalLocationRecencyThresholds
 import cat.itur.app.feature.map.ui.components.map.LocationRecencyThresholds
@@ -42,6 +46,8 @@ import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -70,6 +76,9 @@ class CanonicalUseCasesTest {
     )
 
     @get:Rule(order = 2)
+    val notificationPermissionRule = NotificationPermissionRule()
+
+    @get:Rule(order = 3)
     val composeRule = createAndroidComposeRule<HiltTestActivity>()
 
     @Inject
@@ -100,11 +109,15 @@ class CanonicalUseCasesTest {
         scanCode: String? = null,
         initialTag: String = "join_activity_fab",
         recencyThresholds: LocationRecencyThresholds = LocationRecencyThresholds(),
+        broadcastPollIntervalMillis: Long = 15_000L,
         readyTag: String? = null,
     ) {
         injectedScanCode = scanCode
         composeRule.setContent {
-            CompositionLocalProvider(LocalLocationRecencyThresholds provides recencyThresholds) {
+            CompositionLocalProvider(
+                LocalLocationRecencyThresholds provides recencyThresholds,
+                LocalBroadcastPollIntervalMillis provides broadcastPollIntervalMillis,
+            ) {
                 IturTheme {
                     MapScreen(
                         locationPermissionCheck = { true },
@@ -220,6 +233,31 @@ class CanonicalUseCasesTest {
     }
 
     @Test
+    fun uc04_cancelledSignInStaysAnonymousAndIdle() {
+        users.signInResult = SignInResult.Cancelled
+        launch()
+
+        composeRule.onNodeWithTag("sign_in_fab").performClick()
+
+        composeRule.onNodeWithTag("sign_in_fab").assertIsDisplayed()
+        composeRule.onNodeWithTag("start_activity_fab").assertDoesNotExist()
+        assertEquals(users.anonymous, users.current)
+    }
+
+    @Test
+    fun uc04_invalidSignInStaysAnonymousWithoutOfferingRetry() {
+        users.signInResult = SignInResult.Failure(SignInFailureReason.NOT_CONFIGURED)
+        launch()
+
+        composeRule.onNodeWithTag("sign_in_fab").performClick()
+
+        composeRule.onNodeWithText("Sign-in isn't configured for this app.").assertIsDisplayed()
+        composeRule.onNodeWithText("Try again").assertDoesNotExist()
+        composeRule.onNodeWithTag("start_activity_fab").assertDoesNotExist()
+        assertEquals(users.anonymous, users.current)
+    }
+
+    @Test
     fun uc05_signOutReturnsToAnonymousIdleState() {
         launch()
         signIn()
@@ -236,6 +274,10 @@ class CanonicalUseCasesTest {
         launch()
         startAsOrganizer()
 
+        assertTrue(
+            users.registered.id in activities.activity(IturActivityId("createdActivity00001"))
+                ?.participantIds.orEmpty(),
+        )
         composeRule.onNodeWithTag("recenter_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("zoom_group_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("stop_activity_fab").assertIsDisplayed()
@@ -304,6 +346,24 @@ class CanonicalUseCasesTest {
     }
 
     @Test
+    fun uc12_terminalActivityIsNotJoinedAndExplainsThatItEnded() {
+        val terminal =
+            TestFixtures.ongoingActivity.copy(
+                status = IturActivityStatus.FINISHED,
+                participantIds = TestFixtures.ongoingActivity.participantIds - users.anonymous.id,
+            )
+        activities.replaceActivities(listOf(terminal))
+        launch(terminal.id.url)
+
+        composeRule.onNodeWithTag("join_activity_fab").performClick()
+        composeRule.onNodeWithText("Scan an activity QR to join").assertIsDisplayed()
+        emitScan()
+
+        composeRule.onNodeWithText("Activity ${terminal.id.value} has ended").assertIsDisplayed()
+        assertFalse(users.anonymous.id in activities.activity(terminal.id)?.participantIds.orEmpty())
+    }
+
+    @Test
     fun uc13_organizerDisplaysGeneratedQr() {
         launch()
         startAsOrganizer()
@@ -331,6 +391,22 @@ class CanonicalUseCasesTest {
     }
 
     @Test
+    fun uc14_finishFailureKeepsTheActivityOngoingAndOffersRetry() {
+        launch()
+        startAsOrganizer()
+        val activityId = IturActivityId("createdActivity00001")
+        activities.updateFailure = IllegalStateException("test finish failure")
+
+        composeRule.onNodeWithTag("stop_activity_fab").performClick()
+
+        composeRule.onNodeWithText("Failed to leave activity $activityId").assertIsDisplayed()
+        composeRule.onNodeWithText("Try again").assertIsDisplayed()
+        assertEquals(IturActivityStatus.ONGOING, activities.activity(activityId)?.status)
+        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.onNodeWithTag("stop_activity_fab").assertIsDisplayed()
+    }
+
+    @Test
     fun uc15_participantExitsWithoutFinishingActivity() {
         launch(TestFixtures.ONGOING_ACTIVITY_ID.url)
         joinAsParticipant()
@@ -355,7 +431,39 @@ class CanonicalUseCasesTest {
         composeRule.onNodeWithText(
             "Failed to leave activity ${TestFixtures.ONGOING_ACTIVITY_ID}",
         ).assertIsDisplayed()
+        composeRule.onNodeWithText("Try again").assertIsDisplayed()
+        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.onNodeWithTag("hail_organiser_fab").assertIsDisplayed()
+        assertTrue(users.anonymous.id in activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)?.participantIds.orEmpty())
+    }
+
+    @Test
+    fun uc17_locationProviderFailureIsVisibleAndCanRetry() {
+        locationClient.requestFailure = IllegalStateException("provider unavailable")
+        launch()
+
+        composeRule.onNodeWithText("Location provider is unavailable.").assertIsDisplayed()
+        composeRule.onNodeWithText("Try again").assertIsDisplayed()
+        locationClient.requestFailure = null
+        composeRule.onNodeWithText("Try again").performClick()
+        composeRule.waitUntil { locationClient.hasActiveRequest }
         composeRule.onNodeWithTag("join_activity_fab").assertIsDisplayed()
+    }
+
+    @Test
+    fun uc17_locationWriteFailureShowsRecoverableDegradedState() {
+        launch()
+        startAsOrganizer()
+        locations.updateFailure = IllegalStateException("test location write failure")
+
+        locationClient.emit(51.5, -0.1)
+
+        composeRule.onNodeWithText("Location sharing is temporarily unavailable.")
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Try again").assertIsDisplayed()
+        assertEquals(1, locations.updateCount.get())
+        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.onNodeWithTag("stop_activity_fab").assertIsDisplayed()
     }
 
     @Test
@@ -363,6 +471,7 @@ class CanonicalUseCasesTest {
         launch()
         startAsOrganizer()
         locationClient.emit(51.5, -0.1)
+        composeRule.waitUntil { locations.updateCount.get() == 1 }
 
         composeRule.onNodeWithTag("recenter_fab").performClick()
 
@@ -381,20 +490,143 @@ class CanonicalUseCasesTest {
     }
 
     @Test
-    fun uc19_participantHailsOrganizerExactlyOnce() {
+    fun uc19_participantCanEscalateAndClearSafetySignal() {
         launch(TestFixtures.ONGOING_ACTIVITY_ID.url)
         joinAsParticipant()
+        val participantId = users.anonymous.id
+
+        composeRule.onNodeWithTag("safety_delayed_fab").performClick()
+        composeRule.waitUntil {
+            activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)
+                ?.participantSignals
+                ?.get(participantId) == ParticipantSignal.DELAYED
+        }
+        composeRule.onNodeWithTag("safety_delayed_fab").assertIsNotEnabled()
+        composeRule.onNodeWithTag("safety_ok_fab").assertIsDisplayed()
+        assertEquals(1, activities.signalRequestCount.get())
 
         composeRule.onNodeWithTag("hail_organiser_fab").performClick()
-        composeRule.waitUntil { activities.attentionRequestCount.get() == 1 }
+        composeRule.waitUntil {
+            activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)
+                ?.participantSignals
+                ?.get(participantId) == ParticipantSignal.NEEDS_HELP
+        }
 
-        assertEquals(1, activities.attentionRequestCount.get())
-        assertEquals(
-            ParticipantSignal.NEEDS_HELP,
-            activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)!!
-                .participantSignals[users.anonymous.id],
-        )
+        composeRule.onNodeWithTag("hail_organiser_fab").assertIsNotEnabled()
+        assertEquals(2, activities.signalRequestCount.get())
+        composeRule.onNodeWithTag("safety_ok_fab").performClick()
+        composeRule.waitUntil {
+            participantId !in activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)
+                ?.participantSignals.orEmpty()
+        }
+        composeRule.onNodeWithTag("safety_ok_fab").assertDoesNotExist()
+        assertEquals(3, activities.signalRequestCount.get())
+        composeRule.onNodeWithTag("safety_delayed_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("hail_organiser_fab").assertIsDisplayed()
+    }
+
+    @Test
+    fun uc19_safetyWriteFailurePreservesConfirmedStateAndCanRetry() {
+        launch(TestFixtures.ONGOING_ACTIVITY_ID.url)
+        joinAsParticipant()
+        activities.signalFailure = IllegalStateException("offline")
+
+        composeRule.onNodeWithTag("safety_delayed_fab").performClick()
+        waitForText("Safety status could not be updated.")
+        assertEquals(
+            null,
+            activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)
+                ?.participantSignals
+                ?.get(users.anonymous.id),
+        )
+        activities.signalFailure = null
+        composeRule.onNodeWithText("Try again").performClick()
+        composeRule.waitUntil {
+            activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)
+                ?.participantSignals
+                ?.get(users.anonymous.id) == ParticipantSignal.DELAYED
+        }
+        composeRule.onNodeWithTag("safety_ok_fab").assertIsDisplayed()
+    }
+
+    @Test
+    fun uc19_terminalActivityRejectsAStaleSafetyAction() {
+        launch(TestFixtures.ONGOING_ACTIVITY_ID.url)
+        joinAsParticipant()
+        activities.replaceActivities(
+            listOf(
+                activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)!!.copy(
+                    status = IturActivityStatus.FINISHED,
+                ),
+            ),
+        )
+
+        composeRule.onNodeWithTag("safety_delayed_fab").performClick()
+        waitForText("Safety status could not be updated.")
+        assertEquals(
+            null,
+            activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)
+                ?.participantSignals
+                ?.get(users.anonymous.id),
+        )
+    }
+
+    @Test
+    fun broadcastAppearsInAppDuringAnOngoingActivity() {
+        activities.addBroadcast(
+            TestFixtures.ONGOING_ACTIVITY_ID,
+            Broadcast("return", "Return to the meeting point", Date()),
+        )
+        launch(
+            scanCode = TestFixtures.ONGOING_ACTIVITY_ID.url,
+            broadcastPollIntervalMillis = 25L,
+        )
+        joinAsParticipant()
+
+        waitForText("Alert: Return to the meeting point")
+        assertTrue(activities.broadcastReadCount.get() > 0)
+    }
+
+    @Test
+    fun broadcastReadFailureIsSilentAndLaterPollDeliversTheAlert() {
+        activities.addBroadcast(
+            TestFixtures.ONGOING_ACTIVITY_ID,
+            Broadcast("retry", "The route has changed", Date()),
+        )
+        activities.broadcastFailure = IllegalStateException("temporarily offline")
+        launch(
+            scanCode = TestFixtures.ONGOING_ACTIVITY_ID.url,
+            broadcastPollIntervalMillis = 25L,
+        )
+        joinAsParticipant()
+        composeRule.waitUntil { activities.broadcastReadCount.get() > 0 }
+        composeRule.onNodeWithText("Safety status could not be updated.").assertDoesNotExist()
+
+        activities.broadcastFailure = null
+        waitForText("Alert: The route has changed")
+    }
+
+    @Test
+    fun broadcastPollingStopsAfterLeavingTheActivity() {
+        launch(
+            scanCode = TestFixtures.ONGOING_ACTIVITY_ID.url,
+            broadcastPollIntervalMillis = 25L,
+        )
+        joinAsParticipant()
+        composeRule.waitUntil { activities.broadcastReadCount.get() > 0 }
+
+        composeRule.onNodeWithTag("stop_activity_fab").performClick()
+        waitForTag("join_activity_fab")
+        val readsAfterLeave = activities.broadcastReadCount.get()
+        activities.addBroadcast(
+            TestFixtures.ONGOING_ACTIVITY_ID,
+            Broadcast("after-leave", "This must not be shown", Date()),
+        )
+        SystemClock.sleep(150L)
+        composeRule.waitForIdle()
+
+        assertEquals(readsAfterLeave, activities.broadcastReadCount.get())
+        composeRule.onNodeWithText("Alert: This must not be shown").assertDoesNotExist()
     }
 
     @Test
@@ -443,6 +675,7 @@ class CanonicalUseCasesTest {
 
         composeRule.onNodeWithTag("zoom_group_fab").performClick()
 
+        composeRule.onNodeWithText("No group locations are available yet.").assertIsDisplayed()
         composeRule.onNodeWithTag("show_qr_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("stop_activity_fab").assertIsDisplayed()
     }
@@ -474,7 +707,7 @@ class CanonicalUseCasesTest {
         users.current = users.registered
         activities.getActivitySuccessesBeforeFailure = 1
         activities.getActivityFailuresRemaining = 1
-        launch()
+        launch(initialTag = "map_state_recoverable_error")
 
         waitForText("The ongoing activity could not be resumed.")
         composeRule.onNodeWithText("The ongoing activity could not be resumed.").assertIsDisplayed()

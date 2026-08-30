@@ -6,10 +6,10 @@
 - JDK 17
 - Android SDK (API 36)
 
-Build the demo flavour to get started without any credentials:
+Build the local development flavour to get started without production Firebase configuration:
 
 ```bash
-./gradlew assembleDemoDebug
+./gradlew assembleLocalDebug
 ```
 
 See the [Getting started](README.md#getting-started) section of the README for the full setup.

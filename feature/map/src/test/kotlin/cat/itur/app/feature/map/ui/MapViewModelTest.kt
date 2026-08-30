@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-@file:Suppress("LargeClass", "MaxLineLength", "UseCheckOrError")
-
 package cat.itur.app.feature.map.ui
 
 import android.content.Context
@@ -19,6 +17,7 @@ import cat.itur.app.core.data.repository.FakeActivityRepository
 import cat.itur.app.core.data.repository.FakeLocationRepository
 import cat.itur.app.core.data.repository.FakeUserRepository
 import cat.itur.app.core.data.repository.LocationRepository
+import cat.itur.app.core.data.repository.ParticipantSignalRepository
 import cat.itur.app.core.data.repository.SignInFailureReason
 import cat.itur.app.core.data.repository.SignInResult
 import cat.itur.app.core.data.repository.UserRepository
@@ -30,6 +29,7 @@ import cat.itur.app.core.model.Broadcast
 import cat.itur.app.core.model.IturActivity
 import cat.itur.app.core.model.IturActivityStatus
 import cat.itur.app.core.model.Location
+import cat.itur.app.core.model.ParticipantSignal
 import cat.itur.app.feature.map.config.LocationUpdateConfig
 import cat.itur.app.feature.map.config.MapStyleConfig
 import cat.itur.app.feature.map.notifications.BroadcastNotifier
@@ -620,6 +620,7 @@ class MapViewModelTest {
             locationRepo.updateForParticipant(organizerId, activityId, Location(latitude = 52.0, longitude = 1.0))
 
             vm.leaveActivity()
+            runCurrent()
 
             // With no stored location left, getForActivity regenerates a fresh position from
             // scratch (near the default fallback location), which lands far away from the
@@ -980,7 +981,13 @@ class MapViewModelTest {
             displayName = "Cloud Firestore",
             recognizesCause = true,
         )
-        val activityRepo = mockk<ActivityRepository>()
+        val participantActivity = TestFixtures.ongoingActivity.copy(
+            organizerId = UserId("other-organizer"),
+            participantIds = listOf(TestFixtures.ORGANIZER_ID),
+        )
+        val activityRepo = mockk<ActivityRepository>(
+            moreInterfaces = arrayOf(ParticipantSignalRepository::class),
+        )
         coEvery { activityRepo.getActivities(any()) } returns DataResult.Success(emptyList())
         coEvery { activityRepo.getActiveActivityId(TestFixtures.ORGANIZER_ID) } returns DataResult.Success(null)
         coEvery {
@@ -988,13 +995,14 @@ class MapViewModelTest {
                 TestFixtures.ONGOING_ACTIVITY_ID,
                 TestFixtures.ORGANIZER_ID,
             )
-        } returns DataResult.Success(TestFixtures.ongoingActivity)
+        } returns DataResult.Success(participantActivity)
         coEvery { activityRepo.getActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns
-            DataResult.Success(TestFixtures.ongoingActivity)
+            DataResult.Success(participantActivity)
         coEvery {
-            activityRepo.requestAttention(
+            (activityRepo as ParticipantSignalRepository).setParticipantSignal(
                 TestFixtures.ONGOING_ACTIVITY_ID,
                 TestFixtures.ORGANIZER_ID,
+                ParticipantSignal.NEEDS_HELP,
             )
         } throws IllegalStateException("offline")
         val userRepo = userRepo().also { it.signIn(context) }
@@ -1004,12 +1012,13 @@ class MapViewModelTest {
             healthChecks = setOf(firestore),
         )
         vm.joinActivity(TestFixtures.ONGOING_ACTIVITY_ID, context)
-        val ongoing = assertIs<MapUiState.Ongoing>(vm.uiState.value)
+        assertIs<MapUiState.Ongoing>(vm.uiState.value)
 
         vm.requestAttention()
+        runCurrent()
 
         assertEquals(listOf(firestore.service), vm.backendAvailability.value.failingServices)
-        assertEquals(ongoing, vm.uiState.value)
+        assertIs<MapUiState.RecoverableError>(vm.uiState.value)
     }
 
     @Test

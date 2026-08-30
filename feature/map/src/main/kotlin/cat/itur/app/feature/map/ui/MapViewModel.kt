@@ -22,6 +22,7 @@ import cat.itur.app.core.data.repository.ActivityFilter
 import cat.itur.app.core.data.repository.ActivityRepository
 import cat.itur.app.core.data.repository.DataResult
 import cat.itur.app.core.data.repository.LocationRepository
+import cat.itur.app.core.data.repository.ParticipantSignalRepository
 import cat.itur.app.core.data.repository.SignInFailureReason
 import cat.itur.app.core.data.repository.SignInResult
 import cat.itur.app.core.data.repository.UserRepository
@@ -34,6 +35,7 @@ import cat.itur.app.core.model.Broadcast
 import cat.itur.app.core.model.IturActivity
 import cat.itur.app.core.model.IturActivityStatus
 import cat.itur.app.core.model.ParticipantLocation
+import cat.itur.app.core.model.ParticipantSignal
 import cat.itur.app.feature.map.config.LocationUpdateConfig
 import cat.itur.app.feature.map.config.MapStyleConfig
 import cat.itur.app.feature.map.health.BackendHealthRecoveryCoordinator
@@ -174,7 +176,6 @@ constructor(
         }
     }
 
-    @Suppress("CyclomaticComplexMethod", "ReturnCount", "ThrowsCount")
     private suspend fun findOngoingActivity(): IturActivity? {
         val user = _currentUser.value ?: return null
 
@@ -182,37 +183,23 @@ constructor(
         // membership to separate documents, leaving the legacy participantIds array frozen.
         // Resolve that exact activity first; the queries below remain as compatibility fallback
         // for pre-reservation installs and legacy activity records.
-        val reservedActivityId = when (val result = activityRepository.getActiveActivityId(user.id)) {
-            is DataResult.Success -> result.data
-            is DataResult.Error -> throw BackendInitializationException(result.message)
-            is DataResult.NotFound -> null
-        }
-        if (reservedActivityId != null) {
-            when (val result = activityRepository.getActivity(reservedActivityId)) {
-                is DataResult.Success -> if (result.data.status == IturActivityStatus.ONGOING) return result.data
-                is DataResult.Error -> throw BackendInitializationException(result.message)
-                is DataResult.NotFound -> Unit
-            }
-        }
+        val reserved = activityRepository.getActiveActivityId(user.id)
+            .dataOrNullOrThrow()
+            ?.let { activityRepository.getActivity(it).dataOrNullOrThrow() }
+            ?.takeIf { it.status == IturActivityStatus.ONGOING }
+        return reserved
+            ?: activityRepository.getActivities(ActivityFilter.OngoingByOrganizer(user.id))
+                .dataOrNullOrThrow()
+                ?.firstOrNull()
+            ?: activityRepository.getActivities(ActivityFilter.OngoingByParticipant(user.id))
+                .dataOrNullOrThrow()
+                ?.firstOrNull()
+    }
 
-        val organized = when (
-            val result = activityRepository.getActivities(
-                ActivityFilter.OngoingByOrganizer(user.id),
-            )
-        ) {
-            is DataResult.Success -> result.data.firstOrNull()
-            is DataResult.Error -> throw BackendInitializationException(result.message)
-            is DataResult.NotFound -> null
-        }
-        return organized ?: when (
-            val result = activityRepository.getActivities(
-                ActivityFilter.OngoingByParticipant(user.id),
-            )
-        ) {
-            is DataResult.Success -> result.data.firstOrNull()
-            is DataResult.Error -> throw BackendInitializationException(result.message)
-            is DataResult.NotFound -> null
-        }
+    private fun <T> DataResult<T>.dataOrNullOrThrow(): T? = when (this) {
+        is DataResult.Success -> data
+        is DataResult.Error -> throw BackendInitializationException(message)
+        is DataResult.NotFound -> null
     }
 
     /**
@@ -448,6 +435,7 @@ constructor(
         viewModelScope.launch {
             // If there is an ongoing activity...
             _ongoingActivityId.value?.let { activityId ->
+                val previousState = _uiState.value
                 try {
                     currentUser.value?.let {
                         if (_organizerId.value == it.id) {
@@ -479,9 +467,12 @@ constructor(
                 } catch (e: Exception) {
                     val message = "Failed to leave activity $activityId"
                     Log.e("MapViewModel", message, e)
-                    if (!reportBackendFailure(e)) {
-                        _uiState.value = MapUiState.Error(message)
-                    }
+                    reportBackendFailure(e)
+                    _uiState.value = MapUiState.RecoverableError(
+                        message = message,
+                        onRetry = ::leaveActivity,
+                        onCancel = { _uiState.value = previousState },
+                    )
                 }
             }
         }
@@ -535,7 +526,6 @@ constructor(
         }
     }
 
-    @Suppress("TooGenericExceptionCaught")
     private suspend fun triggerOngoingState(activity: IturActivity, context: Context) {
         val locations = locationsRepository.getForActivity(activity.id)
         // Keep a record of activity's organiser ID.
@@ -544,12 +534,11 @@ constructor(
         _ongoingActivityId.value = activity.id
         // Show the ongoing activity state.
         _participantLocations.value = locations
-        val organizer = try {
+        val organizer = runCatching {
             userRepository.getAll(listOf(activity.organizerId))
                 .firstOrNull() ?: AnonymousUser(activity.organizerId)
-        } catch (cancellation: CancellationException) {
-            throw cancellation
-        } catch (failure: Exception) {
+        }.getOrElse { failure ->
+            if (failure is CancellationException) throw failure
             // User profiles are not required to restore the activity. In particular, a
             // participant can read their activity without being allowed to read the organizer's
             // private profile; preserve the backend-derived ongoing state with an ID-only label.
@@ -617,6 +606,7 @@ constructor(
         activityId: IturActivityId,
         location: Location,
     ) {
+        val previousState = _uiState.value
         try {
             locationsRepository.updateForParticipant(
                 userId,
@@ -631,23 +621,66 @@ constructor(
                 e,
             )
             reportBackendFailure(e)
+            _uiState.value = MapUiState.RecoverableError(
+                message = "Location sharing is temporarily unavailable.",
+                onRetry = {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        updateUserLocation(userId, activityId, location)
+                    }
+                },
+                onCancel = { _uiState.value = previousState },
+            )
         }
     }
 
     /**
-     * A participant requests attention from the organiser.
+     * Changes the current participant's safety signal. Absence is the canonical okay state;
+     * the backend remains authoritative for membership and terminal-state checks.
      */
-    fun requestAttention() {
+    fun setParticipantSignal(signal: ParticipantSignal?) {
         val activityId = _ongoingActivityId.value ?: return
-        val userId = currentUser.value?.id ?: return
+        val userId = currentUser.value?.id
+        if (userId == null || _organizerId.value == userId) return
+        val previousState = _uiState.value
         viewModelScope.launch {
             try {
-                activityRepository.requestAttention(activityId, userId)
+                val signals = activityRepository as? ParticipantSignalRepository
+                    ?: error("Activity repository does not support safety signals")
+                val result = if (signal == null) {
+                    signals.clearParticipantSignal(activityId, userId)
+                } else {
+                    signals.setParticipantSignal(activityId, userId, signal)
+                }
+                requireSuccessfulBackendWrite(result)
+                val updated = (result as DataResult.Success).data
+                // A leave/end may win the race while the write is in flight. Do not restore a
+                // stale ongoing UI from its response.
+                if (_ongoingActivityId.value == activityId) updateOngoingActivity(updated)
             } catch (e: Exception) {
-                Log.e("MapViewModel", "Failed to request attention for activity $activityId", e)
+                Log.e("MapViewModel", "Failed to update safety signal for activity $activityId", e)
                 reportBackendFailure(e)
+                _uiState.value = MapUiState.RecoverableError(
+                    message = "Safety status could not be updated.",
+                    onRetry = {
+                        _uiState.value = previousState
+                        setParticipantSignal(signal)
+                    },
+                    onCancel = { _uiState.value = previousState },
+                )
             }
         }
+    }
+
+    /** Compatibility entry point for callers that only expose the historic hail action. */
+    fun requestAttention() = setParticipantSignal(ParticipantSignal.NEEDS_HELP)
+
+    private fun updateOngoingActivity(activity: IturActivity) {
+        val current = _uiState.value as? Ongoing ?: return
+        _organizerId.value = activity.organizerId
+        _uiState.value = current.copy(
+            activity = activity,
+            participantIds = activity.participantIds,
+        )
     }
 
     // The callback to use when the device's location is received.
@@ -689,12 +722,22 @@ constructor(
     private fun beginLocationUpdates() {
         if (locationUpdatesActive) return
         Log.d("MapScreen", "Requesting location updates")
-        locationClient.requestUpdates(
-            locationUpdateConfig.updateIntervalMillis,
-            locationCallback,
-        )
-        locationUpdatesActive = true
-        Log.d("MapScreen", "Location updates requested successfully")
+        val previousState = _uiState.value
+        try {
+            locationClient.requestUpdates(
+                locationUpdateConfig.updateIntervalMillis,
+                locationCallback,
+            )
+            locationUpdatesActive = true
+            Log.d("MapScreen", "Location updates requested successfully")
+        } catch (e: Exception) {
+            Log.e("MapScreen", "Location provider is unavailable", e)
+            _uiState.value = MapUiState.RecoverableError(
+                message = "Location provider is unavailable.",
+                onRetry = ::beginLocationUpdates,
+                onCancel = { _uiState.value = previousState },
+            )
+        }
     }
 
     /**

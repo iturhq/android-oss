@@ -17,6 +17,8 @@ import cat.itur.app.core.model.Location
 import cat.itur.app.core.model.ParticipantLocation
 import cat.itur.app.core.ui.theme.IturTheme
 import cat.itur.app.feature.map.ui.components.map.MapLibreView
+import cat.itur.app.feature.map.ui.components.map.MapLibreViewCallbacks
+import cat.itur.app.feature.map.ui.components.map.MapLibreViewInput
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import org.junit.Rule
@@ -88,13 +90,15 @@ class MapReadyDeviceTest {
         composeRule.setContent {
             IturTheme {
                 MapLibreView(
-                    styleUrl = mapStyleUrl(),
-                    isActivityOngoing = false,
-                    locationPermissionGranted = true,
-                    currentUserId = null,
-                    organizerId = organizerId,
-                    participantLocations = participants(participantCount),
-                    onMapReady = { readyMap = it },
+                    input = MapLibreViewInput(
+                        styleUrl = mapStyleUrl(),
+                        isActivityOngoing = false,
+                        locationPermissionGranted = true,
+                        currentUserId = null,
+                        organizerId = organizerId,
+                        participantLocations = participants(participantCount),
+                    ),
+                    callbacks = MapLibreViewCallbacks(onMapReady = { readyMap = it }),
                 )
             }
         }

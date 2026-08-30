@@ -148,6 +148,14 @@ class FakeActivityRepositoryTest {
         assertEquals(ORGANIZER_ID, result.data.organizerId)
     }
 
+    @Test
+    fun `WHEN creating an activity THEN its organizer is an initial participant`() = runBlocking {
+        val result = repository().createActivity(ORGANIZER_ID)
+        assertIs<DataResult.Success<IturActivity>>(result)
+        assertEquals(listOf(ORGANIZER_ID), result.data.participantIds)
+        assertEquals(IturActivityStatus.ONGOING, result.data.status)
+    }
+
     // --- addParticipant ---
 
     @Test
@@ -156,6 +164,19 @@ class FakeActivityRepositoryTest {
         val result = repository(ACTIVITY).addParticipant(ACTIVITY_ID, newUser)
         assertIs<DataResult.Success<IturActivity>>(result)
         assertTrue(newUser in result.data.participantIds)
+    }
+
+    @Test
+    fun `GIVEN a terminal activity WHEN adding a participant THEN membership is not written`() = runBlocking {
+        val newUser = UserId("new-user")
+        val repository = repository(ACTIVITY.copy(status = IturActivityStatus.FINISHED))
+
+        val result = repository.addParticipant(ACTIVITY_ID, newUser)
+
+        val error = assertIs<DataResult.Error>(result)
+        assertEquals("Activity ${ACTIVITY_ID.value} has ended", error.message)
+        val stored = assertIs<DataResult.Success<IturActivity>>(repository.getActivity(ACTIVITY_ID)).data
+        assertTrue(newUser !in stored.participantIds)
     }
 
     @Test

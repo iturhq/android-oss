@@ -13,6 +13,14 @@
 | Deciders    | Max Noé
 |===
 
+== NSID migration update
+
+NSID retired the installable `demo` flavor. The current contract is now
+production-only observability: `prod` links Firebase Crashlytics and
+Performance, while `local` has a no-op initializer and links neither runtime
+library. Deterministic fakes are test-scoped infrastructure. The original
+decision record below is retained as historical context.
+
 == Context
 
 The app had no production crash reporting or performance monitoring. `prod`

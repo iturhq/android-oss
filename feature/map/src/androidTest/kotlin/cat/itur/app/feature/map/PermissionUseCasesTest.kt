@@ -51,6 +51,9 @@ class PermissionUseCasesTest {
     val hiltRule = HiltAndroidRule(this)
 
     @get:Rule(order = 1)
+    val notificationPermissionRule = NotificationPermissionRule()
+
+    @get:Rule(order = 2)
     val composeRule = createAndroidComposeRule<HiltTestActivity>()
 
     private val instrumentation = InstrumentationRegistry.getInstrumentation()

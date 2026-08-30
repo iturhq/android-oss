@@ -15,15 +15,16 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import cat.itur.app.feature.map.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+
+internal val LocalBroadcastPollIntervalMillis = staticCompositionLocalOf { BROADCAST_POLL_INTERVAL_MS }
 
 @Composable
 internal fun MapScreenEffects(
@@ -38,9 +39,27 @@ internal fun MapScreenEffects(
     MessageEffects(presentation, interaction, snackbarHostState)
     LocationUpdatesEffect(viewModel, environment.context, interaction.locationPermissionGranted)
     LocationPermissionEffect(viewModel, environment, interaction)
+    RecentLocationHistoryEffect(presentation, interaction)
     InitialCenteringEffect(presentation, interaction)
+    ContinuousCameraTrackingEffect(presentation, interaction)
     NotificationPermissionEffect(environment.context, interaction.locationPermissionGranted)
-    ActivityStateEffects(viewModel, environment.context, presentation)
+    ActivityStateEffects(
+        viewModel,
+        environment.context,
+        presentation,
+        interaction,
+        LocalBroadcastPollIntervalMillis.current,
+    )
+}
+
+@Composable
+private fun RecentLocationHistoryEffect(
+    presentation: MapPresentation,
+    interaction: MapInteractionState,
+) {
+    LaunchedEffect(presentation.lastLocation) {
+        presentation.lastLocation?.let(interaction::recordLocation)
+    }
 }
 
 @Composable
@@ -93,24 +112,22 @@ private fun MessageEffects(
     interaction: MapInteractionState,
     snackbarHostState: SnackbarHostState,
 ) {
-    val rawDisplayMessage = when (val state = presentation.uiState) {
+    val displayMessage = when (val state = presentation.uiState) {
         is MapUiState.Idle -> state.message
         is MapUiState.Error -> state.message
         else -> interaction.localMessage
     } ?: interaction.localMessage
-    val displayMessage = rawDisplayMessage?.let { localizedMapMessage(it) }
 
     LaunchedEffect(displayMessage) {
         displayMessage?.let {
             snackbarHostState.showSnackbar(it)
-            if (interaction.localMessage == rawDisplayMessage) interaction.localMessage = null
+            if (interaction.localMessage == it) interaction.localMessage = null
         }
     }
-    val localizedBroadcast = presentation.latestBroadcastMessage?.let {
-        stringResource(R.string.feature_map_alert, it)
-    }
-    LaunchedEffect(localizedBroadcast) {
-        localizedBroadcast?.let { snackbarHostState.showSnackbar(it) }
+    LaunchedEffect(presentation.latestBroadcastMessage) {
+        presentation.latestBroadcastMessage?.let {
+            snackbarHostState.showSnackbar("Alert: $it")
+        }
     }
 }
 
@@ -195,12 +212,59 @@ private fun InitialCenteringEffect(
         interaction.mapLibreMap,
         presentation.lastLocation,
         interaction.centeredOnInitialLocation,
+        interaction.hasManualZoomOverride,
     ) {
         interaction.centeredOnInitialLocation = centerOnInitialLocationIfReady(
             map = interaction.mapLibreMap,
             location = presentation.lastLocation,
             alreadyCentered = interaction.centeredOnInitialLocation,
+            center = { map, location ->
+                if (!interaction.hasManualZoomOverride) {
+                    zoomOnUser(
+                        map = map,
+                        location = location,
+                        recentLocations = interaction.recentLocations,
+                        viewportHeightPixels = interaction.mapViewportHeightPixels,
+                        isDirectionOfTravel = interaction.isDirectionOfTravel,
+                    )
+                }
+            },
         )
+    }
+}
+
+@Composable
+private fun ContinuousCameraTrackingEffect(
+    presentation: MapPresentation,
+    interaction: MapInteractionState,
+) {
+    LaunchedEffect(
+        interaction.cameraTrackingMode,
+        interaction.mapLibreMap,
+        presentation.lastLocation,
+        presentation.participantLocations,
+        interaction.recentLocations,
+        interaction.mapViewportHeightPixels,
+        interaction.isDirectionOfTravel,
+    ) {
+        val map = interaction.mapLibreMap ?: return@LaunchedEffect
+        when (interaction.cameraTrackingMode) {
+            CameraTrackingMode.NONE -> Unit
+            CameraTrackingMode.USER -> presentation.lastLocation?.let { location ->
+                zoomOnUser(
+                    map = map,
+                    location = location,
+                    recentLocations = interaction.recentLocations,
+                    viewportHeightPixels = interaction.mapViewportHeightPixels,
+                    isDirectionOfTravel = interaction.isDirectionOfTravel,
+                )
+            }
+            CameraTrackingMode.GROUP -> zoomOnGroup(
+                map = map,
+                participantLocations = presentation.participantLocations,
+                currentLocation = presentation.lastLocation,
+            )
+        }
     }
 }
 
@@ -225,11 +289,15 @@ private fun ActivityStateEffects(
     viewModel: MapViewModel,
     context: Context,
     presentation: MapPresentation,
+    interaction: MapInteractionState,
+    broadcastPollIntervalMillis: Long,
 ) {
     LaunchedEffect(presentation.ongoingActivityId) {
         presentation.ongoingActivityId?.let {
             viewModel.triggerOngoingState(it, context)
         } ?: run {
+            interaction.isDirectionOfTravel = false
+            interaction.stopCameraTracking()
             if (presentation.uiState !is MapUiState.Idle) viewModel.triggerIdleState()
         }
     }
@@ -237,7 +305,7 @@ private fun ActivityStateEffects(
         if (presentation.ongoingActivityId != null) {
             while (isActive) {
                 viewModel.pollBroadcastsOnce()
-                delay(BROADCAST_POLL_INTERVAL_MS)
+                delay(broadcastPollIntervalMillis)
             }
         }
     }

@@ -88,11 +88,16 @@ class ScenarioActivityRepository :
     var addFailure: String? = null
     var removeFailure: Throwable? = null
     var updateFailure: Throwable? = null
+    var signalFailure: Throwable? = null
+    var broadcastFailure: Throwable? = null
     var getActivitySuccessesBeforeFailure = 0
     var getActivityFailuresRemaining = 0
     val initialLookupComplete = AtomicBoolean()
     val addParticipantCount = AtomicInteger()
     val attentionRequestCount = AtomicInteger()
+    val signalRequestCount = AtomicInteger()
+    val broadcastReadCount = AtomicInteger()
+    private val broadcasts = mutableMapOf<IturActivityId, MutableList<Broadcast>>()
 
     fun replaceActivities(replacement: List<IturActivity>) {
         activities.clear()
@@ -100,6 +105,10 @@ class ScenarioActivityRepository :
     }
 
     fun activity(id: IturActivityId): IturActivity? = activities.firstOrNull { it.id == id }
+
+    fun addBroadcast(activityId: IturActivityId, broadcast: Broadcast) {
+        broadcasts.getOrPut(activityId) { mutableListOf() }.add(broadcast)
+    }
 
     override suspend fun getActivities(filter: ActivityFilter): DataResult<List<IturActivity>> = DataResult.Success(
         when (filter) {
@@ -147,7 +156,8 @@ class ScenarioActivityRepository :
         val activity = IturActivity(
             id = IturActivityId("createdActivity00001"),
             organizerId = organizerId,
-            participantIds = emptyList(),
+            status = IturActivityStatus.ONGOING,
+            participantIds = listOf(organizerId),
         )
         activities.add(activity)
         return DataResult.Success(activity)
@@ -180,6 +190,9 @@ class ScenarioActivityRepository :
         addFailure?.let { return DataResult.Error(it) }
         val index = activities.indexOfFirst { it.id == activityId }
         if (index < 0) return DataResult.NotFound(activityId.value)
+        if (activities[index].status != IturActivityStatus.ONGOING) {
+            return DataResult.Error("Activity ${activityId.value} has ended")
+        }
         activities[index] = activities[index].copy(
             participantIds = (activities[index].participantIds + userId).distinct(),
         )
@@ -205,8 +218,18 @@ class ScenarioActivityRepository :
         userId: UserId,
         signal: ParticipantSignal,
     ): DataResult<IturActivity> {
+        signalRequestCount.incrementAndGet()
+        signalFailure?.let { throw it }
         val index = activities.indexOfFirst { it.id == activityId }
         if (index < 0) return DataResult.NotFound(activityId.value)
+        val activity = activities[index]
+        if (
+            activity.status != IturActivityStatus.ONGOING ||
+            activity.organizerId == userId ||
+            userId !in activity.participantIds
+        ) {
+            return DataResult.Error("Only a current participant can change their safety signal")
+        }
         activities[index] = activities[index].copy(
             participantSignals = activities[index].participantSignals + (userId to signal),
         )
@@ -217,8 +240,18 @@ class ScenarioActivityRepository :
         activityId: IturActivityId,
         userId: UserId,
     ): DataResult<IturActivity> {
+        signalRequestCount.incrementAndGet()
+        signalFailure?.let { throw it }
         val index = activities.indexOfFirst { it.id == activityId }
         if (index < 0) return DataResult.NotFound(activityId.value)
+        val activity = activities[index]
+        if (
+            activity.status != IturActivityStatus.ONGOING ||
+            activity.organizerId == userId ||
+            userId !in activity.participantIds
+        ) {
+            return DataResult.Error("Only a current participant can change their safety signal")
+        }
         activities[index] = activities[index].copy(
             participantSignals = activities[index].participantSignals - userId,
         )
@@ -233,7 +266,11 @@ class ScenarioActivityRepository :
     override suspend fun getBroadcastsSince(
         activityId: IturActivityId,
         since: Date?,
-    ): List<Broadcast> = emptyList()
+    ): List<Broadcast> {
+        broadcastReadCount.incrementAndGet()
+        broadcastFailure?.let { throw it }
+        return broadcasts[activityId].orEmpty().filter { since == null || it.sentOn.after(since) }
+    }
 }
 
 class ScenarioLocationRepository(
@@ -246,6 +283,7 @@ class ScenarioLocationRepository(
     )
 
     var removeFailure: Throwable? = null
+    var updateFailure: Throwable? = null
     var recordedAt: Date? = Date()
     val updateCount = AtomicInteger()
     val removeCount = AtomicInteger()
@@ -273,6 +311,7 @@ class ScenarioLocationRepository(
         location: Location,
     ) {
         updateCount.incrementAndGet()
+        updateFailure?.let { throw it }
         locations.getOrPut(activityId) { mutableMapOf() }[userId] = location
     }
 

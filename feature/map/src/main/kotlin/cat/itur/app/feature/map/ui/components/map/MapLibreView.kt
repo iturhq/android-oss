@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -40,6 +41,7 @@ import org.maplibre.android.location.engine.LocationEngineRequest
 import org.maplibre.android.location.engine.LocationEngineRequest.PRIORITY_HIGH_ACCURACY
 import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapLibreMap.OnScaleListener
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
@@ -64,6 +66,8 @@ private const val CURRENT_MARKER_OPACITY = 1f
 private const val AGING_MARKER_OPACITY = 0.6f
 private const val STALE_MARKER_OPACITY = 0.3f
 private const val UNKNOWN_AGE_MARKER_OPACITY = 0.45f
+internal const val DIRECTION_OF_TRAVEL_POINTER_FRACTION = 0.8
+private const val IMMEDIATE_CAMERA_TRANSITION_DURATION_MS = 0L
 const val PERSISTENT_MAP_NATIVE_VIEW_TAG = "itur-persistent-map-native-view"
 
 internal data class LocationRecencyThresholds(
@@ -80,56 +84,135 @@ internal enum class LocationRecency {
     UNKNOWN,
 }
 
+data class MapLibreViewInput(
+    val styleUrl: String,
+    val isActivityOngoing: Boolean,
+    val locationPermissionGranted: Boolean,
+    val currentUserId: UserId?,
+    val organizerId: UserId?,
+    val participantLocations: List<ParticipantLocation>,
+    val isDirectionOfTravel: Boolean = false,
+)
+
+data class MapLibreViewCallbacks(
+    val onMapReady: (MapLibreMap) -> Unit = {},
+    val onViewportHeightChanged: (Int) -> Unit = {},
+    val onManualZoomChanged: () -> Unit = {},
+    val onStyleLoadFailed: () -> Unit = {},
+    val onStyleLoadSucceeded: () -> Unit = {},
+)
+
+private data class MapLocationTrackingState(
+    val isActivityOngoing: Boolean,
+    val isDirectionOfTravel: Boolean,
+    val locationPermissionGranted: Boolean,
+    val styleLoaded: Boolean,
+    val map: MapLibreMap?,
+    val viewportHeight: Int,
+) {
+    companion object {
+        fun from(
+            input: MapLibreViewInput,
+            styleLoaded: Boolean,
+            map: MapLibreMap?,
+            viewportHeight: Int,
+        ) = MapLocationTrackingState(
+            isActivityOngoing = input.isActivityOngoing,
+            isDirectionOfTravel = input.isDirectionOfTravel,
+            locationPermissionGranted = input.locationPermissionGranted,
+            styleLoaded = styleLoaded,
+            map = map,
+            viewportHeight = viewportHeight,
+        )
+    }
+}
+
+private data class MapMarkerState(
+    val styleLoaded: Boolean,
+    val map: MapLibreMap?,
+    val nowMillis: Long,
+    val recencyThresholds: LocationRecencyThresholds,
+)
+
+private data class MapStyleCallbacks(
+    val onMapAvailable: (MapLibreMap) -> Unit,
+    val onStyleLoaded: () -> Unit,
+    val onMapReady: (MapLibreMap) -> Unit,
+)
+
 /**
  * An implementation of the map view provided by MapLibre.
  */
 @Composable
 fun MapLibreView(
-    styleUrl: String,
-    isActivityOngoing: Boolean,
-    locationPermissionGranted: Boolean,
-    currentUserId: UserId?,
-    organizerId: UserId?,
-    participantLocations: List<ParticipantLocation>,
+    input: MapLibreViewInput,
     modifier: Modifier = Modifier,
-    onMapReady: (MapLibreMap) -> Unit = {},
-    onStyleLoadFailed: () -> Unit = {},
-    onStyleLoadSucceeded: () -> Unit = {},
+    callbacks: MapLibreViewCallbacks = MapLibreViewCallbacks(),
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val recencyThresholds = LocalLocationRecencyThresholds.current
     var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
-
-    // Keep a reference to the MapView and the map itself.
-    // - TextureView mode avoids a SIGSEGV in MapLibre's native RenderThread on
-    //   emulators using SwiftShader (the SurfaceView path crashes deterministically
-    //   with fault addr 0x18 right after eglMakeCurrent).
-    // - onCreate must be called here, before the view is attached to the hierarchy,
-    //   so the NativeMapView is initialised before the render thread starts.
-    val mapView = remember {
-        val options = MapLibreMapOptions.createFromAttributes(context).textureMode(true)
-        MapView(context, options).also {
-            it.tag = PERSISTENT_MAP_NATIVE_VIEW_TAG
-            it.onCreate(null)
-        }
-    }
+    val mapView = remember { MapViewHost.create(context) }
     var mapLibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
     var styleLoaded by remember { mutableStateOf(false) }
     var locationComponent by remember { mutableStateOf<LocationComponent?>(null) }
-    val accessibilityDescription = participantLocations
-        .filter { it.userId != currentUserId }
+    var mapViewportHeight by remember { mutableStateOf(0) }
+    val accessibilityDescription = input.participantLocations
+        .filter { it.userId != input.currentUserId }
         .joinToString(", ", prefix = "Participant locations. ") {
             it.accessibleAge(nowMillis, recencyThresholds)
         }
+    MapViewHost.UpdateRecencyClock { nowMillis = it }
 
-    LaunchedEffect(Unit) {
-        while (isActive) {
-            nowMillis = System.currentTimeMillis()
-            delay(RECENCY_REFRESH_INTERVAL_MILLIS)
-        }
-    }
+    MapRenderingCallbacks(mapView, callbacks.onStyleLoadFailed, callbacks.onStyleLoadSucceeded)
+    ManualZoomEffect(mapLibreMap, callbacks.onManualZoomChanged)
+    MapLifecycleEffect(lifecycle, mapView)
+    MapLocationComponentEffect(
+        state = MapLocationTrackingState.from(input, styleLoaded, mapLibreMap, mapViewportHeight),
+        context = context,
+        locationComponent = locationComponent,
+        onLocationComponentChanged = { locationComponent = it },
+    )
+    MapStyleInitializer.SetupEffect(
+        mapView = mapView,
+        context = context,
+        styleUrl = input.styleUrl,
+        callbacks = MapStyleCallbacks(
+            onMapAvailable = { mapLibreMap = it },
+            onStyleLoaded = { styleLoaded = true },
+            onMapReady = callbacks.onMapReady,
+        ),
+    )
+    MapMarkers.Effect(
+        input = input,
+        state = MapMarkerState(
+            styleLoaded = styleLoaded,
+            map = mapLibreMap,
+            nowMillis = nowMillis,
+            recencyThresholds = recencyThresholds,
+        ),
+        mapView = mapView,
+        accessibilityDescription = accessibilityDescription,
+    )
 
+    MapViewHost.Content(
+        mapView = mapView,
+        modifier = modifier,
+        accessibilityDescription = accessibilityDescription,
+        onViewportHeightChanged = {
+            mapViewportHeight = it
+            callbacks.onViewportHeightChanged(it)
+        },
+    )
+}
+
+@Composable
+private fun MapRenderingCallbacks(
+    mapView: MapView,
+    onStyleLoadFailed: () -> Unit,
+    onStyleLoadSucceeded: () -> Unit,
+) {
     DisposableEffect(mapView, onStyleLoadFailed, onStyleLoadSucceeded) {
         val failureListener = MapView.OnDidFailLoadingMapListener { onStyleLoadFailed() }
         val renderingListener = MapView.OnDidFinishRenderingMapListener { fully ->
@@ -147,8 +230,28 @@ fun MapLibreView(
             mapView.removeOnShaderCompileFailedListener(shaderFailureListener)
         }
     }
+}
 
-    // Forward lifecycle events to the map
+@Composable
+private fun ManualZoomEffect(map: MapLibreMap?, onManualZoomChanged: () -> Unit) {
+    DisposableEffect(map, onManualZoomChanged) {
+        val currentMap = map ?: return@DisposableEffect onDispose {}
+        val scaleListener = object : OnScaleListener {
+            override fun onScaleBegin(detector: org.maplibre.android.gestures.StandardScaleGestureDetector) = Unit
+
+            override fun onScale(detector: org.maplibre.android.gestures.StandardScaleGestureDetector) = Unit
+
+            override fun onScaleEnd(detector: org.maplibre.android.gestures.StandardScaleGestureDetector) {
+                onManualZoomChanged()
+            }
+        }
+        currentMap.addOnScaleListener(scaleListener)
+        onDispose { currentMap.removeOnScaleListener(scaleListener) }
+    }
+}
+
+@Composable
+private fun MapLifecycleEffect(lifecycle: Lifecycle, mapView: MapView) {
     DisposableEffect(lifecycle) {
         val observer = object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) = mapView.onStart()
@@ -157,167 +260,222 @@ fun MapLibreView(
             override fun onStop(owner: LifecycleOwner) = mapView.onStop()
             override fun onDestroy(owner: LifecycleOwner) = mapView.onDestroy()
         }
-
         lifecycle.addObserver(observer)
-        // This composable is normally added after the Activity has already reached RESUMED.
-        // Lifecycle observers do not replay past events, so bring MapView to the host's current
-        // state before a permission dialog (or any other overlay) can pause it again.
-        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-            mapView.onStart()
-        }
-        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-            mapView.onResume()
-        }
-        onDispose {
-            lifecycle.removeObserver(observer)
-        }
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) mapView.onStart()
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) mapView.onResume()
+        onDispose { lifecycle.removeObserver(observer) }
     }
+}
 
+@Composable
+private fun MapLocationComponentEffect(
+    state: MapLocationTrackingState,
+    context: Context,
+    locationComponent: LocationComponent?,
+    onLocationComponentChanged: (LocationComponent) -> Unit,
+) {
     @SuppressLint("MissingPermission")
-    LaunchedEffect(isActivityOngoing, locationPermissionGranted, styleLoaded, mapLibreMap) {
-        val map = mapLibreMap
+    LaunchedEffect(
+        state.isActivityOngoing,
+        state.isDirectionOfTravel,
+        state.locationPermissionGranted,
+        state.styleLoaded,
+        state.map,
+        state.viewportHeight,
+    ) {
+        val map = state.map
         val style = map?.style
-        if (locationPermissionGranted && styleLoaded && map != null && style != null) {
-            val component = locationComponent ?: createLocationComponent(map, context, style).also {
-                locationComponent = it
-            }
-            component.isLocationComponentEnabled = isActivityOngoing
-        } else {
+        if (!state.locationPermissionGranted || !state.styleLoaded) {
             locationComponent?.isLocationComponentEnabled = false
+        } else if (map == null || style == null) {
+            locationComponent?.isLocationComponentEnabled = false
+        } else {
+            val component = locationComponent ?: createLocationComponent(map, context, style).also {
+                onLocationComponentChanged(it)
+            }
+            component.isLocationComponentEnabled = state.isActivityOngoing
+            component.setCameraMode(
+                if (state.isActivityOngoing && state.isDirectionOfTravel) {
+                    CameraMode.TRACKING_GPS
+                } else {
+                    CameraMode.TRACKING_GPS_NORTH
+                },
+                IMMEDIATE_CAMERA_TRANSITION_DURATION_MS,
+                null,
+                null,
+                null,
+                null,
+            )
+            component.paddingWhileTracking(doubleArrayOf(0.0, state.trackingPadding(), 0.0, 0.0))
         }
     }
+}
 
-    // Set up the map once it's ready.
-    LaunchedEffect(Unit) {
-        mapView.getMapAsync { map ->
-            mapLibreMap = map
+private fun MapLocationTrackingState.trackingPadding(): Double = if (
+    isActivityOngoing && isDirectionOfTravel
+) {
+    viewportHeight * (2 * DIRECTION_OF_TRAVEL_POINTER_FRACTION - 1)
+} else {
+    0.0
+}
 
-            map.setStyle(styleUrl) { style ->
-
-                // Add marker for others.
-                vectorToBitmap(context, R.drawable.ic_location_other)?.let {
-                    style.addImage(MARKER_OTHER, it)
+private object MapStyleInitializer {
+    @Composable
+    fun SetupEffect(
+        mapView: MapView,
+        context: Context,
+        styleUrl: String,
+        callbacks: MapStyleCallbacks,
+    ) {
+        LaunchedEffect(Unit) {
+            mapView.getMapAsync { map ->
+                callbacks.onMapAvailable(map)
+                map.setStyle(styleUrl) { style ->
+                    addMapMarkers(style, context)
+                    addMapMarkerLayers(style)
+                    configureMapGestures(map)
+                    callbacks.onStyleLoaded()
+                    callbacks.onMapReady(map)
                 }
-
-                // Add marker for organiser.
-                vectorToBitmap(context, R.drawable.ic_location_organiser)?.let {
-                    style.addImage(MARKER_ORGANIZER, it)
-                }
-
-                // Create symbol layer for organiser
-                style.addSource(
-                    GeoJsonSource(
-                        ORGANIZER_SOURCE,
-                        FeatureCollection.fromFeatures(emptyList<Feature>()),
-                    ),
-                )
-                style.addLayer(
-                    SymbolLayer(ORGANIZER_LAYER, ORGANIZER_SOURCE).withProperties(
-                        iconImage(Expression.get("marker")),
-                        iconOpacity(Expression.get("opacity")),
-                    ),
-                )
-
-                // Create symbol layer for participants.
-                style.addSource(
-                    GeoJsonSource(
-                        PARTICIPANT_SOURCE,
-                        FeatureCollection.fromFeatures(emptyList<Feature>()),
-                    ),
-                )
-                style.addLayer(
-                    SymbolLayer(PARTICIPANT_LAYER, PARTICIPANT_SOURCE).withProperties(
-                        iconImage(Expression.get("marker")),
-                        iconOpacity(Expression.get("opacity")),
-                    ),
-                )
-
-                map.uiSettings.apply {
-                    isScrollGesturesEnabled = true
-                    isZoomGesturesEnabled = true
-                    // Disable rotation and tilt for the time being,
-                    // they may come in handy later on for a view
-                    // in the direction of movement.
-                    isRotateGesturesEnabled = false
-                    isTiltGesturesEnabled = false
-                }
-                styleLoaded = true
-
-                // The map is now ready.
-                onMapReady(map)
             }
         }
     }
 
-    // Update the GeoJsonSource when featureCollection changes
-    LaunchedEffect(participantLocations, styleLoaded, mapLibreMap, nowMillis, recencyThresholds) {
-        val style = mapLibreMap?.style
-        if (styleLoaded && style != null) {
-            style.getSourceAs<GeoJsonSource>(ORGANIZER_SOURCE)?.let { geoJsonSource ->
-                Log.d("MapLibreView", "Updating organiser feature collection")
+    private fun addMapMarkers(style: Style, context: Context) {
+        vectorToBitmap(context, R.drawable.ic_location_other)?.let { style.addImage(MARKER_OTHER, it) }
+        vectorToBitmap(context, R.drawable.ic_location_organiser)?.let { style.addImage(MARKER_ORGANIZER, it) }
+    }
 
-                // Add only the organiser.
-                participantLocations.firstOrNull { it.userId == organizerId }
-                    ?.let { organizerLocation ->
-                        geoJsonSource.setGeoJson(
-                            FeatureCollection.fromFeature(
-                                Feature.fromGeometry(
-                                    Point.fromLngLat(
-                                        organizerLocation.location.longitude,
-                                        organizerLocation.location.latitude,
-                                    ),
-                                ).apply {
-                                    addStringProperty("id", organizerLocation.userId.value)
-                                    addStringProperty("marker", MARKER_ORGANIZER)
-                                    addNumberProperty(
-                                        "opacity",
-                                        organizerLocation.markerOpacity(nowMillis, recencyThresholds),
-                                    )
-                                },
-                            ),
+    private fun addMapMarkerLayers(style: Style) {
+        style.addSource(GeoJsonSource(ORGANIZER_SOURCE, FeatureCollection.fromFeatures(emptyList<Feature>())))
+        style.addLayer(
+            SymbolLayer(ORGANIZER_LAYER, ORGANIZER_SOURCE).withProperties(
+                iconImage(Expression.get("marker")),
+                iconOpacity(Expression.get("opacity")),
+            ),
+        )
+        style.addSource(GeoJsonSource(PARTICIPANT_SOURCE, FeatureCollection.fromFeatures(emptyList<Feature>())))
+        style.addLayer(
+            SymbolLayer(PARTICIPANT_LAYER, PARTICIPANT_SOURCE).withProperties(
+                iconImage(Expression.get("marker")),
+                iconOpacity(Expression.get("opacity")),
+            ),
+        )
+    }
+
+    private fun configureMapGestures(map: MapLibreMap) = map.uiSettings.apply {
+        isScrollGesturesEnabled = true
+        isZoomGesturesEnabled = true
+        isRotateGesturesEnabled = false
+        isTiltGesturesEnabled = false
+    }
+}
+
+private object MapMarkers {
+    @Composable
+    fun Effect(
+        input: MapLibreViewInput,
+        state: MapMarkerState,
+        mapView: MapView,
+        accessibilityDescription: String,
+    ) {
+        LaunchedEffect(
+            input.participantLocations,
+            state.styleLoaded,
+            state.map,
+            state.nowMillis,
+            state.recencyThresholds,
+        ) {
+            state.map?.style?.takeIf { state.styleLoaded }?.let { style ->
+                if (updateOrganizerMarker(style, input, state)) {
+                    updateParticipantMarkers(style, input, state)
+                }
+            }
+            mapView.contentDescription = accessibilityDescription
+        }
+    }
+
+    private fun updateOrganizerMarker(style: Style, input: MapLibreViewInput, state: MapMarkerState): Boolean {
+        val source = style.getSourceAs<GeoJsonSource>(ORGANIZER_SOURCE) ?: return false
+        Log.d("MapLibreView", "Updating organiser feature collection")
+        input.participantLocations.firstOrNull { it.userId == input.organizerId }?.let { organizerLocation ->
+            source.setGeoJson(
+                FeatureCollection.fromFeature(
+                    Feature.fromGeometry(
+                        Point.fromLngLat(organizerLocation.location.longitude, organizerLocation.location.latitude),
+                    ).apply {
+                        addStringProperty("id", organizerLocation.userId.value)
+                        addStringProperty("marker", MARKER_ORGANIZER)
+                        addNumberProperty(
+                            "opacity",
+                            organizerLocation.markerOpacity(state.nowMillis, state.recencyThresholds),
                         )
-                    }
-
-                // Add the participants.
-                style.getSourceAs<GeoJsonSource>(PARTICIPANT_SOURCE)?.let {
-                    Log.d("MapLibreView", "Updating participant feature collection")
-                    it.setGeoJson(
-                        FeatureCollection.fromFeatures(
-                            participantLocations
-                                // Do not show the organiser, it's on another layer.
-                                .filter { it.userId != organizerId }
-                                // Do not show the current user, the map does.
-                                .filter { it.userId != currentUserId }
-                                .map {
-                                    Feature.fromGeometry(
-                                        Point.fromLngLat(
-                                            it.location.longitude,
-                                            it.location.latitude,
-                                        ),
-                                    ).apply {
-                                        addStringProperty("label", it.userName)
-                                        addStringProperty("id", it.userId.value)
-                                        addStringProperty("marker", MARKER_OTHER)
-                                        addNumberProperty(
-                                            "opacity",
-                                            it.markerOpacity(nowMillis, recencyThresholds),
-                                        )
-                                    }
-                                },
-                        ),
-                    )
-                }
-            }
+                    },
+                ),
+            )
         }
-        mapView.contentDescription = accessibilityDescription
+        return true
     }
 
-    AndroidView(
-        modifier = modifier.semantics {
-            contentDescription = accessibilityDescription
-        },
-        factory = { mapView },
-    )
+    private fun updateParticipantMarkers(style: Style, input: MapLibreViewInput, state: MapMarkerState) {
+        style.getSourceAs<GeoJsonSource>(PARTICIPANT_SOURCE)?.let { source ->
+            Log.d("MapLibreView", "Updating participant feature collection")
+            source.setGeoJson(
+                FeatureCollection.fromFeatures(
+                    input.participantLocations
+                        .filter { it.userId != input.organizerId && it.userId != input.currentUserId }
+                        .map { location ->
+                            Feature.fromGeometry(
+                                Point.fromLngLat(location.location.longitude, location.location.latitude),
+                            ).apply {
+                                addStringProperty("label", location.userName)
+                                addStringProperty("id", location.userId.value)
+                                addStringProperty("marker", MARKER_OTHER)
+                                addNumberProperty(
+                                    "opacity",
+                                    location.markerOpacity(state.nowMillis, state.recencyThresholds),
+                                )
+                            }
+                        },
+                ),
+            )
+        }
+    }
+}
+
+private object MapViewHost {
+    fun create(context: Context): MapView {
+        val options = MapLibreMapOptions.createFromAttributes(context).textureMode(true)
+        return MapView(context, options).also {
+            it.tag = PERSISTENT_MAP_NATIVE_VIEW_TAG
+            it.onCreate(null)
+        }
+    }
+
+    @Composable
+    fun Content(
+        mapView: MapView,
+        modifier: Modifier,
+        accessibilityDescription: String,
+        onViewportHeightChanged: (Int) -> Unit,
+    ) {
+        AndroidView(
+            modifier = modifier
+                .onSizeChanged { onViewportHeightChanged(it.height) }
+                .semantics { contentDescription = accessibilityDescription },
+            factory = { mapView },
+        )
+    }
+
+    @Composable
+    fun UpdateRecencyClock(onTick: (Long) -> Unit) {
+        LaunchedEffect(Unit) {
+            while (isActive) {
+                onTick(System.currentTimeMillis())
+                delay(RECENCY_REFRESH_INTERVAL_MILLIS)
+            }
+        }
+    }
 }
 
 internal fun ParticipantLocation.recency(
@@ -390,7 +548,7 @@ private fun createLocationComponent(
 
     return map.locationComponent.apply {
         activateLocationComponent(locationComponentActivationOptions)
-        cameraMode = CameraMode.TRACKING
+        cameraMode = CameraMode.TRACKING_GPS_NORTH
         // Enable only for ongoing activities.
         isLocationComponentEnabled = false
     }

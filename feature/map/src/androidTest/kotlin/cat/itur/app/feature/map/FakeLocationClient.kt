@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class FakeLocationClient : LocationClient {
 
     private var activeCallback: ((Location) -> Unit)? = null
+    var requestFailure: Throwable? = null
     val requestCount = AtomicInteger()
     val removeCount = AtomicInteger()
     val hasActiveRequest: Boolean
@@ -28,6 +29,7 @@ class FakeLocationClient : LocationClient {
         onLocation: (Location) -> Unit,
     ) {
         requestCount.incrementAndGet()
+        requestFailure?.let { throw it }
         activeCallback = onLocation
     }
 

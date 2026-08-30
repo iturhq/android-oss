@@ -9,6 +9,8 @@
         <activity
             android:name="cat.itur.app.feature.map.HiltTestActivity"
             android:exported="false"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+            android:showWhenLocked="true"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:turnScreenOn="true" />
     </application>
 </manifest>

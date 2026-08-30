@@ -7,6 +7,8 @@ package cat.itur.app.feature.map
 
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -133,11 +135,14 @@ class ServiceAwareControlsTest {
                         onQrRequested = {},
                         onTrackUserRequested = { tracked = true },
                         onTrackGroupRequested = {},
-                        onAttentionRequest = {},
+                        onOrientationToggleRequested = {},
+                        onParticipantSignalRequested = {},
                         onHelpRequested = {},
                     ),
-                    isOrganizer = false,
-                    activityActionsEnabled = false,
+                    presentation = OngoingState(
+                        isOrganizer = false,
+                        activityActionsEnabled = false,
+                    ),
                 )
             }
         }
@@ -147,5 +152,57 @@ class ServiceAwareControlsTest {
 
         assertFalse(stopped)
         assertTrue(tracked)
+    }
+
+    @Test
+    fun activeTrackingControlsExposeTheirSelectedState() {
+        composeRule.setContent {
+            IturTheme {
+                OngoingState(
+                    actions = OngoingStateActions(
+                        onStopRequested = {},
+                        onQrRequested = {},
+                        onTrackUserRequested = {},
+                        onTrackGroupRequested = {},
+                        onOrientationToggleRequested = {},
+                        onParticipantSignalRequested = {},
+                        onHelpRequested = {},
+                    ),
+                    presentation = OngoingState(
+                        isOrganizer = true,
+                        isUserTracking = true,
+                    ),
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("recenter_fab").assertIsSelected()
+        composeRule.onNodeWithTag("zoom_group_fab").assertIsNotSelected()
+    }
+
+    @Test
+    fun groupTrackingControlExposesItsSelectedState() {
+        composeRule.setContent {
+            IturTheme {
+                OngoingState(
+                    actions = OngoingStateActions(
+                        onStopRequested = {},
+                        onQrRequested = {},
+                        onTrackUserRequested = {},
+                        onTrackGroupRequested = {},
+                        onOrientationToggleRequested = {},
+                        onParticipantSignalRequested = {},
+                        onHelpRequested = {},
+                    ),
+                    presentation = OngoingState(
+                        isOrganizer = true,
+                        isGroupTracking = true,
+                    ),
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("recenter_fab").assertIsNotSelected()
+        composeRule.onNodeWithTag("zoom_group_fab").assertIsSelected()
     }
 }

@@ -11,15 +11,16 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import cat.itur.app.core.ui.IturIcons
-import cat.itur.app.feature.map.R
 import cat.itur.app.feature.map.ui.components.help.helpAnchor
 
 /**
@@ -63,19 +64,19 @@ internal fun UserFABs(
             onClick = onSignOutRequested,
             modifier = Modifier
                 .testTag("sign_out_fab")
-                .helpAnchor("sign_out_fab", stringResource(R.string.feature_map_help_sign_out)),
+                .helpAnchor("sign_out_fab", "Sign out of your account"),
         ) {
-            Icon(IturIcons.SignOut, contentDescription = stringResource(R.string.feature_map_sign_out))
+            Icon(IturIcons.SignOut, contentDescription = "Sign out")
         }
     } else if (!isSignedIn) {
         FloatingActionButton(
             onClick = { if (authenticationActionsEnabled) onSignInRequested() },
             modifier = Modifier
                 .testTag("sign_in_fab")
-                .helpAnchor("sign_in_fab", stringResource(R.string.feature_map_help_sign_in))
+                .helpAnchor("sign_in_fab", "Sign in to start or manage an activity")
                 .serviceAvailability(authenticationActionsEnabled),
         ) {
-            Icon(IturIcons.SignIn, contentDescription = stringResource(R.string.feature_map_sign_in))
+            Icon(IturIcons.SignIn, contentDescription = "Sign in")
         }
     }
 }
@@ -83,26 +84,63 @@ internal fun UserFABs(
 @Composable
 internal fun TrackingFABs(
     onTrackUserRequested: () -> Unit,
-    selfLocationAvailable: Boolean,
+    onOrientationToggleRequested: () -> Unit,
+    state: TrackingFabState,
     content: @Composable () -> Unit,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        FloatingActionButton(
+            onClick = onOrientationToggleRequested,
+            modifier = Modifier
+                .testTag("map_orientation_fab")
+                .helpAnchor(
+                    "map_orientation_fab",
+                    "Switch between north-up and direction-of-travel map views",
+                ),
+        ) {
+            Icon(
+                IturIcons.Orientation,
+                contentDescription = if (state.isDirectionOfTravel) {
+                    "Switch to north-up view"
+                } else {
+                    "Switch to direction-of-travel view"
+                },
+            )
+        }
+
         content()
 
-        if (selfLocationAvailable) {
+        if (state.selfLocationAvailable) {
             FloatingActionButton(
                 onClick = onTrackUserRequested,
                 modifier = Modifier
                     .testTag("recenter_fab")
-                    .helpAnchor("recenter_fab", stringResource(R.string.feature_map_help_recenter)),
+                    .semantics { selected = state.isUserTracking }
+                    .helpAnchor("recenter_fab", "Recenter the map on your own location"),
+                containerColor = if (state.isUserTracking) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.secondaryContainer
+                },
+                contentColor = if (state.isUserTracking) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                },
             ) {
-                Icon(IturIcons.ZoomSelf, contentDescription = stringResource(R.string.feature_map_recenter))
+                Icon(IturIcons.ZoomSelf, contentDescription = "Recenter")
             }
         }
     }
 }
+
+internal data class TrackingFabState(
+    val isDirectionOfTravel: Boolean,
+    val isUserTracking: Boolean,
+    val selfLocationAvailable: Boolean,
+)
 
 @Composable
 internal fun HelpFABs(onHelpRequested: () -> Unit) {
@@ -113,7 +151,7 @@ internal fun HelpFABs(onHelpRequested: () -> Unit) {
             onClick = onHelpRequested,
             modifier = Modifier.testTag("help_fab"),
         ) {
-            Icon(IturIcons.Help, contentDescription = stringResource(R.string.feature_map_get_help))
+            Icon(IturIcons.Help, contentDescription = "Get help")
         }
     }
 }
