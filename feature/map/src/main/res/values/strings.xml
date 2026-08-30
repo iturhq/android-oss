@@ -8,10 +8,18 @@
     <string name="feature_map_dismiss">Dismiss</string>
     <string name="feature_map_cancel">Cancel</string>
     <string name="feature_map_try_again">Try again</string>
+    <string name="feature_map_service_unavailable">Service unavailable</string>
+    <string name="feature_map_service_connection_failed">Failed connection to %1$s.</string>
+    <string name="feature_map_retrying_in">Retrying in %1$d s…</string>
+    <string name="feature_map_checking">Checking…</string>
+    <string name="feature_map_exit">Exit</string>
+    <string name="feature_map_retry_now">Retry now</string>
     <string name="feature_map_graphics_guidance">This device does not provide the graphics support required by the map.</string>
     <string name="feature_map_graphics_message">OpenGL ES 3.0 or newer is required; this device reports %1$s.</string>
     <string name="feature_map_location_permission_title">Location permission required</string>
     <string name="feature_map_location_permission_message">Allow location access to show the map and share your position during an activity.</string>
+    <string name="feature_map_location_disabled">Location access is off; self-location sharing is disabled.</string>
+    <string name="feature_map_enable_location">Enable location</string>
     <string name="feature_map_preparing_map">Preparing map…</string>
     <string name="feature_map_preparing_activity">Preparing activity…</string>
     <string name="feature_map_camera_permission_message">Camera access is required to scan an activity QR code</string>
@@ -52,6 +60,8 @@
     <string name="feature_map_activity_not_found">Activity %1$s not found</string>
     <string name="feature_map_failed_start">Failed to start an activity</string>
     <string name="feature_map_already_in_activity">You’re already in an activity — leave it first</string>
+    <string name="feature_map_activity_full">This activity is full.</string>
+    <string name="feature_map_activity_start_limit">The activity start limit has been reached.</string>
     <string name="feature_map_failed_join">Failed to join activity %1$s</string>
     <string name="feature_map_no_longer_participating">You are no longer participating in an activity</string>
     <string name="feature_map_failed_leave">Failed to leave activity %1$s</string>

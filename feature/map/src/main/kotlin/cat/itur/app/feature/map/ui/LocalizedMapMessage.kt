@@ -37,6 +37,8 @@ private val dynamicMapMessagePatterns = listOf(
 private val staticMapMessageResources = mapOf(
     "Failed to start an activity" to R.string.feature_map_failed_start,
     "You're already in an activity -- leave it first" to R.string.feature_map_already_in_activity,
+    "This activity is full." to R.string.feature_map_activity_full,
+    "Activity start limit reached." to R.string.feature_map_activity_start_limit,
     "You are no longer participating in an activity" to R.string.feature_map_no_longer_participating,
     "The ongoing activity could not be resumed." to R.string.feature_map_resume_failed,
     "No Google account is available. Add an account and try again." to

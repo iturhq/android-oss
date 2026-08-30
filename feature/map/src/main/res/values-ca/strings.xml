@@ -8,10 +8,18 @@
     <string name="feature_map_dismiss">Descarta</string>
     <string name="feature_map_cancel">Cancel·la</string>
     <string name="feature_map_try_again">Torna-ho a provar</string>
+    <string name="feature_map_service_unavailable">Servei no disponible</string>
+    <string name="feature_map_service_connection_failed">No s’ha pogut connectar amb %1$s.</string>
+    <string name="feature_map_retrying_in">Es tornarà a provar d’aquí a %1$d s…</string>
+    <string name="feature_map_checking">S’està comprovant…</string>
+    <string name="feature_map_exit">Surt</string>
+    <string name="feature_map_retry_now">Torna-ho a provar ara</string>
     <string name="feature_map_graphics_guidance">Aquest dispositiu no ofereix la compatibilitat gràfica que necessita el mapa.</string>
     <string name="feature_map_graphics_message">Cal OpenGL ES 3.0 o posterior; aquest dispositiu indica la versió %1$s.</string>
     <string name="feature_map_location_permission_title">Cal el permís d’ubicació</string>
     <string name="feature_map_location_permission_message">Permet l’accés a la ubicació per mostrar el mapa i compartir la teva posició durant una activitat.</string>
+    <string name="feature_map_location_disabled">L’accés a la ubicació està desactivat; no es compartirà la teva ubicació.</string>
+    <string name="feature_map_enable_location">Activa la ubicació</string>
     <string name="feature_map_preparing_map">S’està preparant el mapa…</string>
     <string name="feature_map_preparing_activity">S’està preparant l’activitat…</string>
     <string name="feature_map_camera_permission_message">Cal accedir a la càmera per escanejar el codi QR d’una activitat</string>
@@ -52,6 +60,8 @@
     <string name="feature_map_activity_not_found">No s’ha trobat l’activitat %1$s</string>
     <string name="feature_map_failed_start">No s’ha pogut començar una activitat</string>
     <string name="feature_map_already_in_activity">Ja participes en una activitat; surt-ne primer</string>
+    <string name="feature_map_activity_full">Aquesta activitat és plena.</string>
+    <string name="feature_map_activity_start_limit">S’ha assolit el límit d’inicis d’activitat.</string>
     <string name="feature_map_failed_join">No t’has pogut unir a l’activitat %1$s</string>
     <string name="feature_map_no_longer_participating">Ja no participes en cap activitat</string>
     <string name="feature_map_failed_leave">No s’ha pogut sortir de l’activitat %1$s</string>

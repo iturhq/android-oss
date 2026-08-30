@@ -134,19 +134,33 @@ fun BackendUnavailableDialog(
             tonalElevation = AlertDialogDefaults.TonalElevation,
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
-                Text("Service unavailable", style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    stringResource(R.string.feature_map_service_unavailable),
+                    style = MaterialTheme.typography.headlineSmall,
+                )
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Failed connection to ${failingServiceNames.joinToString()}.")
+                Text(
+                    stringResource(
+                        R.string.feature_map_service_connection_failed,
+                        failingServiceNames.joinToString(),
+                    ),
+                )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    countdown?.let { "Retrying in ${it}s…" } ?: "Checking…",
+                    countdown?.let {
+                        stringResource(R.string.feature_map_retrying_in, it)
+                    } ?: stringResource(R.string.feature_map_checking),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(modifier = Modifier.align(Alignment.End)) {
-                    TextButton(onClick = onExit) { Text("Exit") }
-                    TextButton(onClick = onRetryNow) { Text("Retry now") }
+                    TextButton(onClick = onExit) {
+                        Text(stringResource(R.string.feature_map_exit))
+                    }
+                    TextButton(onClick = onRetryNow) {
+                        Text(stringResource(R.string.feature_map_retry_now))
+                    }
                 }
             }
         }

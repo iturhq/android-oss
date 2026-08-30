@@ -17,9 +17,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cat.itur.app.core.ui.R
+import cat.itur.app.feature.map.R as MapR
 
 /** A consistent full-surface message for states that prevent the map from being used. */
 @Composable
@@ -37,7 +39,7 @@ fun BlockingState(
     ) {
         Image(
             painter = painterResource(R.drawable.core_ui_itur_launcher),
-            contentDescription = "Itur",
+            contentDescription = stringResource(MapR.string.feature_map_itur_logo),
             modifier = Modifier.size(120.dp),
         )
         Text(

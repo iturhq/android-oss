@@ -121,7 +121,7 @@ private fun LocationPermissionNotice(onEnableLocation: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "Location access is off; self-location sharing is disabled.",
+                stringResource(R.string.feature_map_location_disabled),
                 modifier = Modifier.weight(1f),
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -129,7 +129,7 @@ private fun LocationPermissionNotice(onEnableLocation: () -> Unit) {
                 onClick = onEnableLocation,
                 modifier = Modifier.testTag("enable_location_button"),
             ) {
-                Text("Enable location")
+                Text(stringResource(R.string.feature_map_enable_location))
             }
         }
     }
