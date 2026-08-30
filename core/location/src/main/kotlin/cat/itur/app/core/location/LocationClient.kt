@@ -14,6 +14,7 @@ import android.location.Location
  * contract so feature modules can substitute a deterministic fake without depending on GMS.
  */
 interface LocationClient {
+    /** Production providers deliver fixes away from Android's main/UI thread. */
     fun requestUpdates(intervalMillis: Long, onLocation: (Location) -> Unit)
 
     fun removeUpdates(onLocation: (Location) -> Unit)

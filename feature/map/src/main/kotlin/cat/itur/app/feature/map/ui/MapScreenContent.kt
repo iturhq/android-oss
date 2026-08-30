@@ -90,6 +90,7 @@ private fun MapReadyContent(
                 locationPermissionGranted = interaction.locationPermissionGranted,
                 organizerId = presentation.organizerId,
                 currentUserId = presentation.currentUser?.id,
+                currentLocation = presentation.lastLocation,
                 participantLocations = presentation.participantLocations,
                 participantSignals = (presentation.uiState as? MapUiState.Ongoing)
                     ?.activity

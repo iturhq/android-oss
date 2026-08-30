@@ -277,7 +277,7 @@ constructor(
 
                 val result = activityRepository.createActivity(organizerId = organizer.id)
                 when (result) {
-                    is DataResult.Success -> triggerOngoingState(result.data, context)
+                    is DataResult.Success -> triggerOngoingState(result.data)
                     is DataResult.Error -> {
                         if (!isAlreadyActiveElsewhere(organizer.id, targetActivityId = null)) {
                             backendHealthCoordinator.recheckNow(viewModelScope)
@@ -380,7 +380,11 @@ constructor(
 
     /**
      * The current user joins an ongoing activity.
+     *
+     * [context] remains in this published API for source and binary compatibility; location
+     * acquisition is now owned exclusively by the screen lifecycle.
      */
+    @Suppress("UnusedParameter")
     fun joinActivity(activityId: IturActivityId, context: Context) {
         viewModelScope.launch {
             val previousState = _uiState.value
@@ -399,7 +403,7 @@ constructor(
                 val result = activityRepository.addParticipant(activityId, user.id)
                 // Change the UI state.
                 when (result) {
-                    is DataResult.Success -> triggerOngoingState(result.data, context)
+                    is DataResult.Success -> triggerOngoingState(result.data)
                     is DataResult.Error -> {
                         if (!isAlreadyActiveElsewhere(user.id, targetActivityId = activityId)) {
                             backendHealthCoordinator.recheckNow(viewModelScope)
@@ -498,7 +502,7 @@ constructor(
         val result = activityRepository.getActivity(activityId)
         when (result) {
             is DataResult.Success ->
-                triggerOngoingState(activity = result.data, context)
+                triggerOngoingState(activity = result.data)
 
             is DataResult.NotFound -> {
                 Log.e(
@@ -524,7 +528,7 @@ constructor(
         }
     }
 
-    private suspend fun triggerOngoingState(activity: IturActivity, context: Context) {
+    private suspend fun triggerOngoingState(activity: IturActivity) {
         val locations = locationsRepository.getForActivity(activity.id)
         // Keep a record of activity's organiser ID.
         _organizerId.value = activity.organizerId
@@ -549,8 +553,6 @@ constructor(
             participantIds = activity.participantIds,
             locations = locations,
         )
-        // Start updating the location.
-        startLocationUpdates(context)
         // Reset broadcast tracking for the new activity; the UI drives the actual polling
         // (see pollBroadcastsOnce and MapScreen's LaunchedEffect).
         lastBroadcastSeen = null

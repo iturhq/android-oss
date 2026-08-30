@@ -8,13 +8,15 @@ package cat.itur.app.core.location
 import android.annotation.SuppressLint
 import android.content.Context
 import android.location.Location
-import android.os.Looper
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
  * A [LocationClient] backed by [FusedLocationProviderClient].
@@ -27,24 +29,24 @@ import com.google.android.gms.location.Priority
  */
 class GmsLocationClient private constructor(
     fusedProvider: () -> FusedLocationProviderClient,
-    looperProvider: () -> Looper,
+    callbackExecutorProvider: () -> Executor,
 ) : LocationClient {
 
     constructor(context: Context) : this(
         fusedProvider = { LocationServices.getFusedLocationProviderClient(context) },
-        looperProvider = { Looper.getMainLooper() },
+        callbackExecutorProvider = ::newLocationCallbackExecutor,
     )
 
     internal constructor(
         fused: FusedLocationProviderClient,
-        looper: Looper,
+        callbackExecutor: Executor,
     ) : this(
         fusedProvider = { fused },
-        looperProvider = { looper },
+        callbackExecutorProvider = { callbackExecutor },
     )
 
     private val fused by lazy(fusedProvider)
-    private val looper by lazy(looperProvider)
+    private val callbackExecutor by lazy(callbackExecutorProvider)
     private val callbacks = mutableMapOf<(Location) -> Unit, LocationCallback>()
 
     @SuppressLint("MissingPermission")
@@ -60,10 +62,18 @@ class GmsLocationClient private constructor(
         callbacks.put(onLocation, callback)?.let(fused::removeLocationUpdates)
         val request =
             LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, intervalMillis).build()
-        fused.requestLocationUpdates(request, callback, looper)
+        fused.requestLocationUpdates(request, callbackExecutor, callback)
     }
 
     override fun removeUpdates(onLocation: (Location) -> Unit) {
         callbacks.remove(onLocation)?.let(fused::removeLocationUpdates)
+    }
+}
+
+internal const val LOCATION_THREAD_NAME = "itur-location"
+
+internal fun newLocationCallbackExecutor(): ExecutorService = Executors.newSingleThreadExecutor { task ->
+    Thread(task, LOCATION_THREAD_NAME).apply {
+        priority = Thread.NORM_PRIORITY
     }
 }

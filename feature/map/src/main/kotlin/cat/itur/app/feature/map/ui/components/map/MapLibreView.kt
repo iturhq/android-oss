@@ -8,6 +8,7 @@ package cat.itur.app.feature.map.ui.components.map
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
+import android.location.Location
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -37,8 +38,6 @@ import kotlinx.coroutines.isActive
 import org.maplibre.android.location.LocationComponent
 import org.maplibre.android.location.LocationComponentActivationOptions.builder
 import org.maplibre.android.location.LocationComponentOptions
-import org.maplibre.android.location.engine.LocationEngineRequest
-import org.maplibre.android.location.engine.LocationEngineRequest.PRIORITY_HIGH_ACCURACY
 import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMap.OnScaleListener
@@ -89,6 +88,7 @@ data class MapLibreViewInput(
     val locationPermissionGranted: Boolean,
     val currentUserId: UserId?,
     val organizerId: UserId?,
+    val currentLocation: Location? = null,
     val participantLocations: List<ParticipantLocation>,
     val participantSignals: Map<UserId, ParticipantSignal> = emptyMap(),
     val isDirectionOfTravel: Boolean = false,
@@ -106,6 +106,7 @@ private data class MapLocationTrackingState(
     val isActivityOngoing: Boolean,
     val isDirectionOfTravel: Boolean,
     val locationPermissionGranted: Boolean,
+    val currentLocation: Location?,
     val styleLoaded: Boolean,
     val map: MapLibreMap?,
     val viewportHeight: Int,
@@ -120,6 +121,7 @@ private data class MapLocationTrackingState(
             isActivityOngoing = input.isActivityOngoing,
             isDirectionOfTravel = input.isDirectionOfTravel,
             locationPermissionGranted = input.locationPermissionGranted,
+            currentLocation = input.currentLocation,
             styleLoaded = styleLoaded,
             map = map,
             viewportHeight = viewportHeight,
@@ -279,9 +281,11 @@ private fun MapLocationComponentEffect(
         state.isActivityOngoing,
         state.isDirectionOfTravel,
         state.locationPermissionGranted,
+        state.currentLocation,
         state.styleLoaded,
         state.map,
         state.viewportHeight,
+        locationComponent,
     ) {
         val map = state.map
         val style = map?.style
@@ -294,6 +298,7 @@ private fun MapLocationComponentEffect(
                 onLocationComponentChanged(it)
             }
             component.isLocationComponentEnabled = state.isActivityOngoing
+            if (state.isActivityOngoing) state.currentLocation?.let(component::forceLocationUpdate)
             component.setCameraMode(
                 if (state.isActivityOngoing && state.isDirectionOfTravel) {
                     CameraMode.TRACKING_GPS
@@ -549,13 +554,7 @@ private fun createLocationComponent(
                 .pulseEnabled(true)
                 .build(),
         )
-        .locationEngineRequest(
-            LocationEngineRequest.Builder(5000)
-                .setFastestInterval(1000)
-                .setPriority(PRIORITY_HIGH_ACCURACY)
-                .build(),
-        )
-        .useDefaultLocationEngine(true)
+        .useDefaultLocationEngine(false)
         .build()
 
     return map.locationComponent.apply {
