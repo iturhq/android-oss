@@ -42,7 +42,7 @@ jobs:
               {
                 "client_info": {
                   "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
-                "android_client_info": { "package_name": "cat.itur.app.oss" }
+                  "android_client_info": { "package_name": "cat.itur.app.oss" }
                 },
                 "oauth_client": [],
                 "api_key": [{ "current_key": "stub" }],
@@ -51,7 +51,7 @@ jobs:
               {
                 "client_info": {
                   "mobilesdk_app_id": "1:000000000000:android:0000000000000000000001",
-                "android_client_info": { "package_name": "cat.itur.app.oss.debug" }
+                  "android_client_info": { "package_name": "cat.itur.app.oss.debug" }
                 },
                 "oauth_client": [],
                 "api_key": [{ "current_key": "stub" }],

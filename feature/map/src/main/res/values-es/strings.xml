@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Itur © 2025 by Max Noé <code@itur.cat>
+  ~ SPDX-License-Identifier: GPL-3.0-or-later
+  -->
+<resources>
+    <string name="feature_track_interests">Seguir</string>
+    <string name="feature_map_dismiss">Descartar</string>
+    <string name="feature_map_cancel">Cancelar</string>
+    <string name="feature_map_try_again">Reintentar</string>
+    <string name="feature_map_service_unavailable">Servicio no disponible</string>
+    <string name="feature_map_service_connection_failed">No se ha podido conectar con %1$s.</string>
+    <string name="feature_map_retrying_in">Se reintentará en %1$d s…</string>
+    <string name="feature_map_checking">Comprobando…</string>
+    <string name="feature_map_exit">Salir</string>
+    <string name="feature_map_retry_now">Reintentar ahora</string>
+    <string name="feature_map_graphics_guidance">Este dispositivo no ofrece la compatibilidad gráfica que necesita el mapa.</string>
+    <string name="feature_map_graphics_message">Se requiere OpenGL ES 3.0 o posterior; este dispositivo indica la versión %1$s.</string>
+    <string name="feature_map_location_permission_title">Se necesita permiso de ubicación</string>
+    <string name="feature_map_location_permission_message">Permite el acceso a la ubicación para mostrar el mapa y compartir tu posición durante una actividad.</string>
+    <string name="feature_map_location_disabled">El acceso a la ubicación está desactivado; no se compartirá tu ubicación.</string>
+    <string name="feature_map_enable_location">Activar ubicación</string>
+    <string name="feature_map_preparing_map">Preparando el mapa…</string>
+    <string name="feature_map_preparing_activity">Preparando la actividad…</string>
+    <string name="feature_map_camera_permission_message">Se necesita acceso a la cámara para escanear el código QR de una actividad</string>
+    <string name="feature_map_scan_qr">Escanea el QR de una actividad para unirte</string>
+    <string name="feature_map_scan_this_qr">Escanea este QR para unirte a la actividad</string>
+    <string name="feature_map_qr_generation_failed">No se ha podido generar el código QR</string>
+    <string name="feature_map_alert">Aviso: %1$s</string>
+    <string name="feature_map_dismiss_help">Cerrar la ayuda</string>
+    <string name="feature_map_close_help_hint">Toca en cualquier lugar para cerrar</string>
+    <string name="feature_map_help_recenter">Vuelve a centrar el mapa en tu ubicación</string>
+    <string name="feature_map_help_track_group">Aleja el mapa para ver a todos los participantes</string>
+    <string name="feature_map_help_show_qr">Muestra el código QR para que otras personas se unan a esta actividad</string>
+    <string name="feature_map_help_sign_out">Cierra la sesión de tu cuenta</string>
+    <string name="feature_map_sign_out">Cerrar sesión</string>
+    <string name="feature_map_help_sign_in">Inicia sesión para empezar o gestionar una actividad</string>
+    <string name="feature_map_sign_in">Iniciar sesión</string>
+    <string name="feature_map_recenter">Volver a centrar</string>
+    <string name="feature_map_get_help">Obtener ayuda</string>
+    <string name="feature_map_track_group">Seguir al grupo</string>
+    <string name="feature_map_show_qr">Mostrar QR</string>
+    <string name="feature_map_help_hail_organiser">Pide la atención del organizador</string>
+    <string name="feature_map_hail_organiser">Avisar al organizador</string>
+    <string name="feature_map_help_stop_activity">Detén la actividad para todos</string>
+    <string name="feature_map_help_leave_activity">Sal de la actividad</string>
+    <string name="feature_map_stop_activity">Detener actividad</string>
+    <string name="feature_map_exit_activity">Salir de la actividad</string>
+    <string name="feature_map_itur_logo">Logotipo de Itur</string>
+    <string name="feature_map_help_join_activity">Únete a una actividad escaneando su código QR</string>
+    <string name="feature_map_join_activity">Unirse a una actividad</string>
+    <string name="feature_map_help_start_activity">Empieza una actividad nueva</string>
+    <string name="feature_map_start_activity">Empezar actividad</string>
+    <string name="feature_map_placeholder">Espacio del mapa</string>
+    <string name="feature_map_error_guidance">Ponte en contacto con el fabricante</string>
+    <string name="feature_map_error_title">No se puede mostrar el mapa</string>
+    <string name="feature_map_notification_channel">Avisos de actividad</string>
+    <string name="feature_map_notification_channel_description">Mensajes enviados por el organizador de la actividad o el operador del sistema.</string>
+    <string name="feature_map_notification_title">Aviso de actividad</string>
+    <string name="feature_map_activity_not_found">No se ha encontrado la actividad %1$s</string>
+    <string name="feature_map_failed_start">No se ha podido empezar una actividad</string>
+    <string name="feature_map_already_in_activity">Ya participas en una actividad; sal de ella primero</string>
+    <string name="feature_map_activity_full">Esta actividad está completa.</string>
+    <string name="feature_map_activity_start_limit">Se ha alcanzado el límite de inicios de actividad.</string>
+    <string name="feature_map_failed_join">No has podido unirte a la actividad %1$s</string>
+    <string name="feature_map_no_longer_participating">Ya no participas en ninguna actividad</string>
+    <string name="feature_map_failed_leave">No se ha podido salir de la actividad %1$s</string>
+    <string name="feature_map_resume_failed">No se ha podido reanudar la actividad en curso.</string>
+    <string name="feature_map_sign_in_no_account">No hay ninguna cuenta de Google disponible. Añade una y vuelve a intentarlo.</string>
+    <string name="feature_map_sign_in_not_configured">El inicio de sesión no está configurado para esta aplicación.</string>
+    <string name="feature_map_sign_in_unavailable">El inicio de sesión no está disponible temporalmente. Comprueba la conexión y vuelve a intentarlo.</string>
+    <string name="feature_map_sign_in_failed">No se ha podido completar el inicio de sesión. Vuelve a intentarlo.</string>
+</resources>

@@ -16,7 +16,9 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import cat.itur.app.feature.map.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,7 +39,7 @@ fun QRScanSheet(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "Scan an activity QR to join",
+                text = stringResource(R.string.feature_map_scan_qr),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),

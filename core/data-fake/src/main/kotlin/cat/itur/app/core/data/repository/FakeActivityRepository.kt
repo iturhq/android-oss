@@ -143,7 +143,7 @@ class FakeActivityRepository(
 
     override suspend fun getBroadcastsSince(activityId: IturActivityId, since: Date?): List<Broadcast> = broadcasts[activityId].orEmpty().filter { since == null || it.sentOn.after(since) }
 
-    /** Test/demo helper: simulates an operator broadcast arriving for an activity. */
+    /** Test helper: simulates an operator broadcast arriving for an activity. */
     fun addBroadcast(activityId: IturActivityId, broadcast: Broadcast) {
         broadcasts.getOrPut(activityId) { mutableListOf() }.add(broadcast)
     }

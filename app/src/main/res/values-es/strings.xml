@@ -4,6 +4,6 @@
   ~ SPDX-License-Identifier: GPL-3.0-or-later
   -->
 <resources>
-    <string name="core_ui_fuzzy_countdown_is_over">started</string>
-    <string name="core_ui_splash_icon">Itur logo</string>
+    <string name="app_name">Itur</string>
+    <string name="open_source_licenses">Licencias de código abierto</string>
 </resources>

@@ -13,7 +13,7 @@ import cat.itur.app.core.model.Location
 import cat.itur.app.core.model.ParticipantLocation
 
 /**
- * Deterministic test data shared between demo fake repositories and androidTest setup methods.
+ * Deterministic test data shared between fake repositories and androidTest setup methods.
  *
  * User IDs match those defined in [cat.itur.app.core.data.repository.FakeUserRepository].
  */

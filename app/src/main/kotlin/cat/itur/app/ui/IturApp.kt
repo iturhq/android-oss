@@ -30,8 +30,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
+import cat.itur.app.R
 import cat.itur.app.core.ui.IturIcons
 import cat.itur.app.core.ui.components.IturBackground
 import com.google.android.gms.oss.licenses.OssLicensesMenuActivity
@@ -106,7 +108,7 @@ internal fun IturApp(
                         .align(Alignment.TopStart)
                         .testTag("oss_licenses_button"),
                 ) {
-                    Icon(IturIcons.Info, contentDescription = "Open source licenses")
+                    Icon(IturIcons.Info, contentDescription = stringResource(R.string.open_source_licenses))
                 }
             }
         }

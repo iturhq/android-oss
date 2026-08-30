@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cat.itur.app.core.ui.R
@@ -54,7 +55,7 @@ fun IturProgressIndicator(
             }
             Icon(
                 painter = painterResource(R.drawable.core_ui_itur_overlay),
-                contentDescription = "Splash Icon",
+                contentDescription = stringResource(R.string.core_ui_splash_icon),
                 modifier =
                 Modifier
                     .padding(top = 64.dp)

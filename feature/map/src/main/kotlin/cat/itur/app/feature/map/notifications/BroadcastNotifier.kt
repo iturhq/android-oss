@@ -36,10 +36,10 @@ constructor(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Activity alerts",
+                context.getString(R.string.feature_map_notification_channel),
                 NotificationManager.IMPORTANCE_HIGH,
             ).apply {
-                description = "Messages sent by the activity organiser or system operator."
+                description = context.getString(R.string.feature_map_notification_channel_description)
             }
             context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
@@ -55,7 +55,7 @@ constructor(
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_broadcast)
-            .setContentTitle("Activity alert")
+            .setContentTitle(context.getString(R.string.feature_map_notification_title))
             .setContentText(broadcast.message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(broadcast.message))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
