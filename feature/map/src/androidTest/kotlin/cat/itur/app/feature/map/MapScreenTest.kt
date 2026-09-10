@@ -12,6 +12,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -23,6 +24,7 @@ import cat.itur.app.feature.map.ui.MapScreen
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -132,6 +134,52 @@ class MapScreenTest {
     }
 
     @Test
+    fun idleControlsOccupyTopRightAndBottomRightZonesWithoutOverlap() {
+        val topRightZone = boundsOf("map_zone_tr")
+        val rightZone = boundsOf("map_zone_r")
+        val help = boundsOf("help_fab")
+        val signIn = boundsOf("sign_in_fab")
+        val join = boundsOf("join_activity_fab")
+        val rootWidth = composeRule.onRoot().fetchSemanticsNode().boundsInRoot.width
+
+        assertTrue(topRightZone.center.x > rootWidth / 2f)
+        assertTrue(rightZone.center.x > rootWidth / 2f)
+        assertTrue(help.bottom <= signIn.top)
+        assertContains(topRightZone, help)
+        assertContains(rightZone, signIn)
+        assertContains(rightZone, join)
+        assertNoOverlaps(help, signIn, join)
+    }
+
+    @Test
+    fun ongoingControlsOccupyTopRightAndSeparateBottomLanes() {
+        startAsOrganizer()
+
+        val topRightZone = boundsOf("map_zone_tr")
+        val leftZone = boundsOf("map_zone_l")
+        val rightZone = boundsOf("map_zone_r")
+        val help = boundsOf("help_fab")
+        val zoomGroup = boundsOf("zoom_group_fab")
+        val recenter = boundsOf("recenter_fab")
+        val showQr = boundsOf("show_qr_fab")
+        val stop = boundsOf("stop_activity_fab")
+        val rootWidth = composeRule.onRoot().fetchSemanticsNode().boundsInRoot.width
+
+        assertTrue(topRightZone.center.x > rootWidth / 2f)
+        assertTrue(leftZone.center.x < rootWidth / 2f)
+        assertTrue(rightZone.center.x > rootWidth / 2f)
+        assertContains(topRightZone, help)
+        assertContains(leftZone, zoomGroup)
+        assertContains(leftZone, recenter)
+        assertContains(rightZone, showQr)
+        assertContains(rightZone, stop)
+        assertTrue(help.bottom <= showQr.top)
+        assertTrue(recenter.bottom >= zoomGroup.bottom)
+        assertTrue(stop.bottom >= showQr.bottom)
+        assertNoOverlaps(help, zoomGroup, recenter, showQr, stop)
+    }
+
+    @Test
     fun helpButtonExplainsTheOrganizerControls() {
         startAsOrganizer()
 
@@ -181,5 +229,29 @@ class MapScreenTest {
         composeRule.onNodeWithTag("map_orientation_fab").performClick()
         composeRule.onNodeWithContentDescription("Switch to direction-of-travel view")
             .assertIsDisplayed()
+    }
+
+    private fun boundsOf(tag: String) = composeRule.onNodeWithTag(tag)
+        .fetchSemanticsNode().boundsInRoot
+
+    private fun assertContains(
+        container: androidx.compose.ui.geometry.Rect,
+        child: androidx.compose.ui.geometry.Rect,
+    ) {
+        assertTrue(
+            "Zone $container does not contain control $child",
+            child.left >= container.left &&
+                child.top >= container.top &&
+                child.right <= container.right &&
+                child.bottom <= container.bottom,
+        )
+    }
+
+    private fun assertNoOverlaps(vararg bounds: androidx.compose.ui.geometry.Rect) {
+        bounds.forEachIndexed { index, first ->
+            bounds.drop(index + 1).forEach { second ->
+                assertTrue("Control bounds overlap: $first and $second", !first.overlaps(second))
+            }
+        }
     }
 }
