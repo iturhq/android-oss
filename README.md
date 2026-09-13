@@ -34,8 +34,12 @@ Code style is enforced by [KTLint](https://pinterest.github.io/ktlint/) via [Spo
 app/
 core/
   auth/          Firebase authentication
-  data/          Firestore repositories
-  datastore/     User preferences (DataStore + Proto)
+  data-api/      Repository interfaces and backend contracts
+  data-firebase/ Firebase repository implementations
+  data-fake/     Deterministic repositories for tests
+  data/          Application data wiring
+  datastore/     User preferences (DataStore)
+  datastore-proto-jvm/  Protocol Buffer schema and generated types
   domain/        Business logic, use cases
   location/      Location services
   model/         Shared data models
