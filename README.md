@@ -13,7 +13,7 @@ Participants join a shared map session, see each other's real-time positions, an
 
 - **Live map**: follows the user's position using [MapLibre](https://maplibre.org/).
 - **Join via QR**: scan a QR code to join an ongoing activity.
-- **Start & manage activities**: organisers start activities, share a QR for others to join, broadcast an SOS, and end the session.
+- **Start & manage activities**: signed-in organisers start activities, share a QR for others to join, and end the session. Participants can request the organiser's attention; the app receives operator broadcasts.
 - **Google Sign-In**: Firebase-backed authentication. Anyone with a Google account can sign in and become an organiser.
 - **Real-time positions**: participant and organiser locations synced through Firestore.
 - **Local flavour**: development build that targets the Firebase Emulator Suite; it requires no production Firebase configuration.
