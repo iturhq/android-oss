@@ -50,7 +50,7 @@ feature/
 
 ## Build flavours
 
-* `local`: Connects to Firebase Emulator Suite running in [itur-dashboard](https://github.com/mnohe/itur-dashboard). It is credential-free and uses no-op observability.
+* `local`: Connects to the Firebase Emulator Suite supplied by the private administrator project. It uses bundled local Firebase placeholders and no-op observability.
 * `prod`: Live Firebase backend, requires `local.properties` and `google-services.json`. Reports crashes/performance to Firebase.
 
 Deterministic fake repositories are test infrastructure only; there is no installable demo flavour.
@@ -85,11 +85,11 @@ Install the resulting APK, or run directly on a device/emulator:
 ./gradlew assembleProdDebug
 ```
 
-### Emulated Firestore (development)
+### Emulated backend (maintainers)
 
-To test against an emulated Firestore without requiring live Firebase credentials:
+To test against the emulated backend without using production Firebase data, you need access to the private administrator project that owns the emulator configuration, Firestore rules, and Cloud Functions.
 
-1. Set up and run the Firebase Emulator Suite using the [itur-dashboard](https://github.com/mnohe/itur-dashboard) project:
+1. In that project, set up and run the Firebase Emulator Suite:
    ```bash
    cd itur-dashboard
    firebase emulators:start --only firestore,auth,functions
@@ -102,7 +102,7 @@ To test against an emulated Firestore without requiring live Firebase credential
    ./gradlew installLocalDebug
    ```
 
-The `local` flavour connects to the Firebase Emulator Suite and works alongside the [itur-dashboard](https://github.com/mnohe/itur-dashboard) web dashboard for full system testing.
+The `local` flavour connects to the Firebase Emulator Suite for full-system testing when the private administrator project is available.
 
 ## Running the tests
 
