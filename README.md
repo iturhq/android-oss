@@ -65,6 +65,10 @@ Deterministic fake repositories are test infrastructure only; there is no instal
 
 ### Local development build (no production Firebase configuration required)
 
+Copy `local.properties.example` to `local.properties` and provide `MAPLIBRE_API_KEY` and
+`MAPTILER_API_KEY`. To use Google Sign-In, also provide `GOOGLE_WEB_CLIENT_ID`; without it,
+the app can run anonymously but cannot start an activity.
+
 ```bash
 ./gradlew assembleLocalDebug
 ```
@@ -95,7 +99,7 @@ To test against the emulated backend without using production Firebase data, you
    firebase emulators:start --only firestore,auth,functions
    ```
 
-2. Copy `local.properties.example` to `local.properties` and fill in your MapLibre credentials (Google OAuth is not required for the emulator).
+2. Copy `local.properties.example` to `local.properties` and fill in `MAPLIBRE_API_KEY` and `MAPTILER_API_KEY`. To test Google Sign-In, also supply `GOOGLE_WEB_CLIENT_ID`; otherwise the app remains usable as an anonymous participant only.
 
 3. Build and run the `local` flavour:
    ```bash
