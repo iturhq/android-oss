@@ -28,6 +28,7 @@ import cat.itur.app.core.ui.IturIcons
 import cat.itur.app.core.ui.R
 import cat.itur.app.core.ui.theme.IturTheme
 import cat.itur.app.feature.map.ui.components.help.helpAnchor
+import cat.itur.app.feature.map.R as MapR
 
 /**
  * A composable to use when there is no ongoing activity.
