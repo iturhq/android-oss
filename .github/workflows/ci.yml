@@ -1,26 +1,31 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           java-version: '17'
           distribution: 'temurin'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Create local.properties
         run: |
@@ -78,7 +83,18 @@ jobs:
         run: ./gradlew detekt
 
       - name: Run unit tests with coverage
-        run: ./gradlew :app:testProdDebugUnitTest :core:auth:createLocalDebugUnitTestCoverageReport :core:data-fake:createDebugUnitTestCoverageReport :feature:map:createDebugUnitTestCoverageReport :core:datastore:createDebugUnitTestCoverageReport
+        run: >-
+          ./gradlew
+          :app:testProdDebugUnitTest
+          :core:auth:createLocalDebugUnitTestCoverageReport
+          :core:data-api:testDebugUnitTest
+          :core:data-fake:createDebugUnitTestCoverageReport
+          :core:data-firebase:testDebugUnitTest
+          :core:datastore:createDebugUnitTestCoverageReport
+          :core:domain:testDebugUnitTest
+          :core:location:testDebugUnitTest
+          :core:model:testDebugUnitTest
+          :feature:map:createDebugUnitTestCoverageReport
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -96,20 +112,18 @@ jobs:
 
   map-screen-instrumented-tests:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           java-version: '17'
           distribution: 'temurin'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Create local.properties
         run: |
@@ -139,38 +153,14 @@ jobs:
             './gradlew :feature:map:connectedDebugAndroidTest
             --console=plain --stacktrace 2>&1 | tee emulator-test.log'
 
-      - name: Mark MapScreen emulator verification
-        if: github.event_name == 'push'
-        run: |
-          short_sha=${GITHUB_SHA:0:7}
-          tag="ui-verified-map-screen-${short_sha}"
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git tag -a "$tag" -m "MapScreen instrumented tests passed on a hosted Android emulator"
-          git push origin "$tag"
-
-      - name: Mark MapScreen emulator failure with diagnostics
-        if: failure() && github.event_name == 'push'
-        run: |
-          short_sha=${GITHUB_SHA:0:7}
-          tag="ui-failed-map-screen-${short_sha}"
-          if test -f emulator-test.log; then
-            {
-              echo "=== Gradle failure summary ==="
-              grep -E \
-                'FAILURE:|What went wrong|Execution failed for task|Caused by:|> .*failed|BUILD FAILED' \
-                emulator-test.log || true
-              echo "=== Android test result XML ==="
-              find feature/map/build/outputs/androidTest-results \
-                -type f -name '*.xml' -print -exec tail -160 {} \; 2>/dev/null || true
-              echo "=== Final Gradle output ==="
-              tail -120 emulator-test.log
-            } > emulator-test-tail.log
-          else
-            echo "The emulator action failed before Gradle produced emulator-test.log." \
-              > emulator-test-tail.log
-          fi
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git tag -a "$tag" -F emulator-test-tail.log
-          git push origin "$tag"
+      - name: Upload emulator diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: map-screen-emulator-diagnostics
+          path: |
+            emulator-test.log
+            feature/map/build/outputs/androidTest-results/
+            feature/map/build/reports/androidTests/
+          if-no-files-found: warn
+          retention-days: 14
