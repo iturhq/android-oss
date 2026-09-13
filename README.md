@@ -91,7 +91,7 @@ To test against the emulated backend without using production Firebase data, you
 
 1. In that project, set up and run the Firebase Emulator Suite:
    ```bash
-   cd itur-dashboard
+   cd <administrator-project>
    firebase emulators:start --only firestore,auth,functions
    ```
 
