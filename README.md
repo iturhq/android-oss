@@ -1,6 +1,6 @@
 # Itur Android Client
 
-[![CI](https://github.com/mnohe/itur-android/actions/workflows/ci.yml/badge.svg)](https://github.com/mnohe/itur-android/actions/workflows/ci.yml)
+[![CI](https://github.com/iturhq/android-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/iturhq/android-oss/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/mnohe/itur-android/graph/badge.svg)](https://codecov.io/gh/mnohe/itur-android)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Min SDK 24](https://img.shields.io/badge/minSdk-24-brightgreen.svg)](https://developer.android.com/about/versions/nougat)
