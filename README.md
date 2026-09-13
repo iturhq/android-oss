@@ -73,11 +73,14 @@ the app can run anonymously but cannot start an activity.
 ./gradlew assembleLocalDebug
 ```
 
-Install the resulting APK, or run directly on a device/emulator:
+Install the resulting APK on an Android Emulator:
 
 ```bash
 ./gradlew installLocalDebug
 ```
+
+The local flavour reaches the host emulator suite through Android Emulator's `10.0.2.2` alias.
+It is not configured for a physical device; that requires separate backend routing or a code change.
 
 ### Production build
 
