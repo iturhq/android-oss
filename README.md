@@ -4,7 +4,7 @@
 [![codecov](https://codecov.io/gh/iturhq/android-oss/graph/badge.svg)](https://codecov.io/gh/iturhq/android-oss)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Min SDK 24](https://img.shields.io/badge/minSdk-24-brightgreen.svg)](https://developer.android.com/about/versions/nougat)
-[![Kotlin 2.2](https://img.shields.io/badge/Kotlin-2.2-purple.svg)](https://kotlinlang.org/)
+[![Kotlin 2.3](https://img.shields.io/badge/Kotlin-2.3-purple.svg)](https://kotlinlang.org/)
 
 Android app for the **Itur** group activity tracking system.
 Participants join a shared map session, see each other's real-time positions, and coordinate through a minimal, map-first interface.
