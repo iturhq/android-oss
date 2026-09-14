@@ -12,6 +12,7 @@ import cat.itur.app.core.data.health.BackendService
 import cat.itur.app.core.data.repository.ActivityFilter
 import cat.itur.app.core.data.repository.ActivityRepository
 import cat.itur.app.core.data.repository.DataResult
+import cat.itur.app.core.data.repository.LocationReportMeasurement
 import cat.itur.app.core.data.repository.LocationRepository
 import cat.itur.app.core.data.repository.ParticipantSignalRepository
 import cat.itur.app.core.data.repository.SignInResult
@@ -311,6 +312,7 @@ class ScenarioLocationRepository(
         userId: UserId,
         activityId: IturActivityId,
         location: Location,
+        measurement: LocationReportMeasurement,
     ) {
         lastUpdateThreadName.set(Thread.currentThread().name)
         updateCount.incrementAndGet()

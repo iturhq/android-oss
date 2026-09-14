@@ -73,6 +73,7 @@ class FakeLocationRepository constructor(
         userId: UserId,
         activityId: IturActivityId,
         location: Location,
+        measurement: LocationReportMeasurement,
     ) {
         locationsByActivity.getOrPut(activityId) { mutableMapOf() }
             .apply {

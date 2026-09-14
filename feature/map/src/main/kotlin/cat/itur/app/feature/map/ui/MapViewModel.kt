@@ -21,6 +21,9 @@ import cat.itur.app.core.data.health.BackendService
 import cat.itur.app.core.data.repository.ActivityFilter
 import cat.itur.app.core.data.repository.ActivityRepository
 import cat.itur.app.core.data.repository.DataResult
+import cat.itur.app.core.data.repository.LocationReportMeasurement
+import cat.itur.app.core.data.repository.LocationReportOutcome
+import cat.itur.app.core.data.repository.LocationReportStage
 import cat.itur.app.core.data.repository.LocationRepository
 import cat.itur.app.core.data.repository.ParticipantSignalRepository
 import cat.itur.app.core.data.repository.SignInFailureReason
@@ -605,32 +608,63 @@ constructor(
         userId: UserId,
         activityId: IturActivityId,
         location: Location,
+        measurement: LocationReportMeasurement,
     ) {
         val previousState = _uiState.value
         try {
+            measurement.stageStarted(LocationReportStage.NORMALIZATION)
+            val normalizedLocation =
+                try {
+                    location.toIturLocation()
+                } finally {
+                    measurement.stageFinished(LocationReportStage.NORMALIZATION)
+                }
             locationsRepository.updateForParticipant(
                 userId,
                 activityId,
-                location.toIturLocation(),
+                normalizedLocation,
+                measurement,
             )
+            // The reporting boundary is the completed repository write/PUBACK. The subsequent
+            // activity read refresh is deliberately excluded from GPS-to-broker latency.
+            measurement.complete(LocationReportOutcome.SUCCESS)
             refreshParticipantLocations()
+        } catch (e: CancellationException) {
+            measurement.complete(LocationReportOutcome.CANCELLED)
+            handleLocationUpdateFailure(e, userId, activityId, location, previousState)
         } catch (e: Exception) {
-            Log.e(
-                "MapViewModel",
-                "Failed to update the location of user ${userId.value} in activity ${activityId.value}",
-                e,
-            )
-            reportBackendFailure(e)
-            _uiState.value = MapUiState.RecoverableError(
-                message = "Location sharing is temporarily unavailable.",
-                onRetry = {
-                    viewModelScope.launch(Dispatchers.IO) {
-                        updateUserLocation(userId, activityId, location)
-                    }
-                },
-                onCancel = { _uiState.value = previousState },
-            )
+            measurement.complete(LocationReportOutcome.FAILED)
+            handleLocationUpdateFailure(e, userId, activityId, location, previousState)
         }
+    }
+
+    private fun handleLocationUpdateFailure(
+        cause: Exception,
+        userId: UserId,
+        activityId: IturActivityId,
+        location: Location,
+        previousState: MapUiState,
+    ) {
+        // Preserve this callback's pre-instrumentation semantics: it reports and absorbs update
+        // failures (including cancellation) rather than changing coroutine behavior.
+        Log.e(
+            "MapViewModel",
+            "Failed to update the location of user ${userId.value} in activity ${activityId.value}",
+            cause,
+        )
+        reportBackendFailure(cause)
+        _uiState.value = MapUiState.RecoverableError(
+            message = "Location sharing is temporarily unavailable.",
+            onRetry = {
+                val retryMeasurement = locationsRepository.newReportMeasurement()
+                retryMeasurement.stageStarted(LocationReportStage.CALLBACK_QUEUE)
+                viewModelScope.launch(Dispatchers.IO) {
+                    retryMeasurement.stageFinished(LocationReportStage.CALLBACK_QUEUE)
+                    updateUserLocation(userId, activityId, location, retryMeasurement)
+                }
+            },
+            onCancel = { _uiState.value = previousState },
+        )
     }
 
     /**
@@ -690,12 +724,15 @@ constructor(
         // update the user's location for that activity.
         ongoingActivityId.value?.let { activityId ->
             currentUser.value?.let { participant ->
+                val measurement = locationsRepository.newReportMeasurement()
+                measurement.stageStarted(LocationReportStage.CALLBACK_QUEUE)
                 // Tied to viewModelScope (instead of an unmanaged CoroutineScope) so this
                 // work is cancelled along with the rest of the ViewModel's work, rather
                 // than continuing to run -- and potentially update now-stale state --
                 // after the ViewModel is cleared.
                 viewModelScope.launch(Dispatchers.IO) {
-                    updateUserLocation(participant.id, activityId, location)
+                    measurement.stageFinished(LocationReportStage.CALLBACK_QUEUE)
+                    updateUserLocation(participant.id, activityId, location, measurement)
                 }
             }
         }

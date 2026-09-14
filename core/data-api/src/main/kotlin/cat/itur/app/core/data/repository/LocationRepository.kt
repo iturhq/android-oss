@@ -14,6 +14,9 @@ import cat.itur.app.core.model.ParticipantLocation
  * A repository to handle the locations of an ongoing activity's participants.
  */
 interface LocationRepository {
+    /** Starts an identifier-free report measurement; non-instrumented backends remain no-op. */
+    fun newReportMeasurement(): LocationReportMeasurement = LocationReportMeasurement.None
+
     /**
      * The locations of all participants in an activity.
      */
@@ -26,6 +29,7 @@ interface LocationRepository {
         userId: UserId,
         activityId: IturActivityId,
         location: Location,
+        measurement: LocationReportMeasurement = LocationReportMeasurement.None,
     )
 
     /**

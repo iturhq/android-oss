@@ -120,6 +120,7 @@ constructor(
         userId: UserId,
         activityId: IturActivityId,
         location: Location,
+        measurement: LocationReportMeasurement,
     ): Unit = withContext(Dispatchers.IO) {
         val querySnapshot = locationsCollection
             .whereEqualTo("activityId", activityId.value)
