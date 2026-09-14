@@ -23,6 +23,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cat.itur.app.core.model.ParticipantSignal
+import cat.itur.app.core.ui.GeneratedPreview
 import cat.itur.app.core.ui.IturIcons
 import cat.itur.app.feature.map.ui.components.help.helpAnchor
 
@@ -227,18 +228,20 @@ private fun SafetySignalFAB(
     }
 }
 
+@GeneratedPreview
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 private fun OrganizerOngoingStatePreview() {
     OngoingState(
         actions = OngoingStateActions(
-            onStopRequested = {},
-            onQrRequested = {},
-            onTrackUserRequested = {},
-            onTrackGroupRequested = {},
-            onOrientationToggleRequested = {},
-            onParticipantSignalRequested = {},
-            onHelpRequested = {},
+            onStopRequested = @GeneratedPreview {},
+            onQrRequested = @GeneratedPreview {},
+            onTrackUserRequested = @GeneratedPreview {},
+            onTrackGroupRequested = @GeneratedPreview {},
+            onOrientationToggleRequested = @GeneratedPreview {},
+            onParticipantSignalRequested = @GeneratedPreview {},
+            onHelpRequested = @GeneratedPreview {},
         ),
         presentation = OngoingState(isOrganizer = true),
     )

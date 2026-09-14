@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import cat.itur.app.core.ui.GeneratedPreview
 import cat.itur.app.core.ui.theme.IturTheme
 
 @Composable
@@ -59,6 +60,7 @@ enum class ActionButtonType {
     WARNING,
 }
 
+@GeneratedPreview
 @Preview(showBackground = true)
 @Composable
 fun DefaultButtonPreview() {
@@ -67,6 +69,7 @@ fun DefaultButtonPreview() {
     }
 }
 
+@GeneratedPreview
 @Preview
 @Composable
 fun SecondaryButtonPreview() {
@@ -75,6 +78,7 @@ fun SecondaryButtonPreview() {
     }
 }
 
+@GeneratedPreview
 @Preview
 @Composable
 fun WarningButtonPreview() {
@@ -83,6 +87,7 @@ fun WarningButtonPreview() {
     }
 }
 
+@GeneratedPreview
 @Preview
 @Composable
 fun DangerButtonPreview() {

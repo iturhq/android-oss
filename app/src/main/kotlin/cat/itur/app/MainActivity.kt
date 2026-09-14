@@ -14,6 +14,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.rememberNavController
+import cat.itur.app.core.ui.GeneratedPreview
 import cat.itur.app.core.ui.theme.IturTheme
 import cat.itur.app.ui.IturApp
 import cat.itur.app.ui.rememberIturAppState
@@ -39,6 +40,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@GeneratedPreview
 @Preview(showBackground = true)
 @Composable
 fun MainActivityPreview() {

@@ -83,26 +83,21 @@ jobs:
         run: ./gradlew detekt
 
       - name: Run unit tests with coverage
-        run: >-
-          ./gradlew
-          :app:testProdDebugUnitTest
-          :core:auth:createLocalDebugUnitTestCoverageReport
-          :core:data-api:testDebugUnitTest
-          :core:data-fake:createDebugUnitTestCoverageReport
-          :core:data-firebase:testDebugUnitTest
-          :core:datastore:createDebugUnitTestCoverageReport
-          :core:domain:testDebugUnitTest
-          :core:location:testDebugUnitTest
-          :core:model:testDebugUnitTest
-          :feature:map:createDebugUnitTestCoverageReport
+        run: ./gradlew unitTestCoverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          disable_search: true
           files: |
             core/auth/build/reports/coverage/test/local/debug/report.xml
-            core/data-fake/build/reports/coverage/test/debug/report.xml
+            core/data-api/build/reports/coverage/test/debug/report.xml
+            core/data-firebase/build/reports/coverage/test/debug/report.xml
+            core/domain/build/reports/coverage/test/debug/report.xml
+            core/location/build/reports/coverage/test/debug/report.xml
+            core/model/build/reports/coverage/test/debug/report.xml
+            core/ui/build/reports/coverage/test/debug/report.xml
             feature/map/build/reports/coverage/test/debug/report.xml
             core/datastore/build/reports/coverage/test/debug/report.xml
           fail_ci_if_error: true

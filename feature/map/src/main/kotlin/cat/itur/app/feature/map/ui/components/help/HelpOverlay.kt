@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import cat.itur.app.core.ui.GeneratedPreview
 import cat.itur.app.core.ui.theme.IturTheme
 import kotlin.math.roundToInt
 
@@ -135,6 +136,8 @@ private val HelpOverlayScrimColor = Color.Black.copy(alpha = 0.72f)
 private val HelpLabelGap = 12.dp
 private val HelpLabelMaxWidth = 220.dp
 
+@GeneratedPreview
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 private fun HelpOverlayPreview() {

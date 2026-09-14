@@ -63,3 +63,21 @@ subprojects {
         }
     }
 }
+
+tasks.register("unitTestCoverage") {
+    group = "verification"
+    description = "Runs unit tests and generates every available production coverage report."
+    dependsOn(
+        ":app:testProdDebugUnitTest",
+        ":core:auth:createLocalDebugUnitTestCoverageReport",
+        ":core:data-api:createDebugUnitTestCoverageReport",
+        ":core:data-fake:testDebugUnitTest",
+        ":core:data-firebase:createDebugUnitTestCoverageReport",
+        ":core:datastore:createDebugUnitTestCoverageReport",
+        ":core:domain:createDebugUnitTestCoverageReport",
+        ":core:location:createDebugUnitTestCoverageReport",
+        ":core:model:createDebugUnitTestCoverageReport",
+        ":core:ui:createDebugUnitTestCoverageReport",
+        ":feature:map:createDebugUnitTestCoverageReport",
+    )
+}

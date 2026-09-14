@@ -29,6 +29,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
+import cat.itur.app.core.ui.GeneratedPreview
 import cat.itur.app.feature.map.R
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
@@ -221,6 +222,8 @@ internal fun String.isValidQrUrl(): Boolean {
         !uri.host.isNullOrBlank()
 }
 
+@GeneratedPreview
+@Suppress("UnusedPrivateMember")
 @Preview
 @Composable
 private fun PreviewQRImage() {

@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import cat.itur.app.core.ui.GeneratedPreview
 import cat.itur.app.core.ui.IturIcons
 import cat.itur.app.core.ui.R
 import cat.itur.app.core.ui.theme.IturTheme
@@ -132,6 +133,8 @@ private fun Modifier.serviceDisabled(): Modifier = alpha(DISABLED_ACTION_ALPHA).
 
 private const val DISABLED_ACTION_ALPHA = 0.38f
 
+@GeneratedPreview
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true)
 @Composable
 private fun IdleMapPreview() {

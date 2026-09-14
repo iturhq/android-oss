@@ -30,6 +30,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import cat.itur.app.core.ui.GeneratedPreview
 import cat.itur.app.feature.map.R
 
 /** A composable with a map and controls driven by [MapViewModel]. */
@@ -167,8 +168,9 @@ fun BackendUnavailableDialog(
     }
 }
 
+@GeneratedPreview
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun PreviewModalAlert() {
-    ModalAlert("This is a modal alert.") {}
+    ModalAlert("This is a modal alert.") @GeneratedPreview {}
 }

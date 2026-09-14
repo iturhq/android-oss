@@ -14,3 +14,4 @@ include::features.adoc[leveloffset=+1]
 
 include::technical-constraints.adoc[leveloffset=+1]
 
+include::coverage-plan.adoc[leveloffset=+1]
