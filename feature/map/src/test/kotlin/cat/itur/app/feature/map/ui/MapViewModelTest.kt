@@ -16,6 +16,9 @@ import cat.itur.app.core.data.repository.DataResult
 import cat.itur.app.core.data.repository.FakeActivityRepository
 import cat.itur.app.core.data.repository.FakeLocationRepository
 import cat.itur.app.core.data.repository.FakeUserRepository
+import cat.itur.app.core.data.repository.LocationReportMeasurement
+import cat.itur.app.core.data.repository.LocationReportOutcome
+import cat.itur.app.core.data.repository.LocationReportStage
 import cat.itur.app.core.data.repository.LocationRepository
 import cat.itur.app.core.data.repository.ParticipantSignalRepository
 import cat.itur.app.core.data.repository.SignInFailureReason
@@ -33,17 +36,23 @@ import cat.itur.app.core.model.ParticipantSignal
 import cat.itur.app.feature.map.config.LocationUpdateConfig
 import cat.itur.app.feature.map.config.MapStyleConfig
 import cat.itur.app.feature.map.notifications.BroadcastNotifier
+import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.mockkStatic
+import io.mockk.slot
 import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -492,6 +501,8 @@ class MapViewModelTest {
             userRepo = userRepo,
             locationRepo = locationRepo,
         )
+        vm.signIn(context)
+        runCurrent()
         vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
         assertEquals(initialLocations, vm.participantLocations.value)
 
@@ -514,6 +525,99 @@ class MapViewModelTest {
         } finally {
             vm.stopParticipantLocationMonitoring()
         }
+    }
+
+    @Test
+    fun `GIVEN an accepted GPS callback WHEN reporting succeeds THEN timing spans queue normalization and repository`() = runTest {
+        val measurement = RecordingLocationReportMeasurement()
+        val updateCompleted = CompletableDeferred<Unit>()
+        val locationRepo = mockk<LocationRepository>()
+        every { locationRepo.newReportMeasurement() } returns measurement
+        coEvery { locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns emptyList()
+        coEvery {
+            locationRepo.updateForParticipant(
+                TestFixtures.ORGANIZER_ID,
+                TestFixtures.ONGOING_ACTIVITY_ID,
+                any(),
+                measurement,
+            )
+        } answers {
+            updateCompleted.complete(Unit)
+        }
+        val callback = slot<(android.location.Location) -> Unit>()
+        every { locationClient.requestUpdates(any(), capture(callback)) } just Runs
+        val userRepo = userRepo().also { it.signIn(context) }
+        val vm = viewModel(
+            activityRepo = activityRepo(TestFixtures.ongoingActivity),
+            userRepo = userRepo,
+            locationRepo = locationRepo,
+        )
+        vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+        vm.onLocationPermissionChanged(granted = true)
+        val location = mockk<android.location.Location>(relaxed = true)
+        every { location.latitude } returns 41.3874
+        every { location.longitude } returns 2.1686
+
+        callback.captured(location)
+
+        assertEquals("start:${LocationReportStage.CALLBACK_QUEUE}", measurement.events.first())
+        withContext(Dispatchers.Default) {
+            withTimeout(5_000L) { updateCompleted.await() }
+            withTimeout(5_000L) { measurement.completed.await() }
+        }
+        assertEquals(
+            listOf(
+                "start:${LocationReportStage.CALLBACK_QUEUE}",
+                "finish:${LocationReportStage.CALLBACK_QUEUE}",
+                "start:${LocationReportStage.NORMALIZATION}",
+                "finish:${LocationReportStage.NORMALIZATION}",
+                "complete:${LocationReportOutcome.SUCCESS}",
+            ),
+            measurement.events,
+        )
+        coVerify(exactly = 1) {
+            locationRepo.updateForParticipant(
+                TestFixtures.ORGANIZER_ID,
+                TestFixtures.ONGOING_ACTIVITY_ID,
+                any(),
+                measurement,
+            )
+        }
+    }
+
+    @Test
+    fun `GIVEN repository cancellation WHEN reporting a GPS callback THEN measurement is cancelled`() = runTest {
+        val measurement = RecordingLocationReportMeasurement()
+        val locationRepo = mockk<LocationRepository>()
+        every { locationRepo.newReportMeasurement() } returns measurement
+        coEvery { locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns emptyList()
+        coEvery {
+            locationRepo.updateForParticipant(
+                TestFixtures.ORGANIZER_ID,
+                TestFixtures.ONGOING_ACTIVITY_ID,
+                any(),
+                measurement,
+            )
+        } throws kotlinx.coroutines.CancellationException("superseded work")
+        val callback = slot<(android.location.Location) -> Unit>()
+        every { locationClient.requestUpdates(any(), capture(callback)) } just Runs
+        val userRepo = userRepo().also { it.signIn(context) }
+        val vm = viewModel(
+            activityRepo = activityRepo(TestFixtures.ongoingActivity),
+            userRepo = userRepo,
+            locationRepo = locationRepo,
+        )
+        vm.signIn(context)
+        runCurrent()
+        vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+        vm.onLocationPermissionChanged(granted = true)
+
+        callback.captured(mockk(relaxed = true))
+
+        withContext(Dispatchers.Default) {
+            withTimeout(5_000L) { measurement.completed.await() }
+        }
+        assertEquals(LocationReportOutcome.CANCELLED, measurement.outcome)
     }
 
     @Test
@@ -1123,6 +1227,32 @@ class MapViewModelTest {
             val state = assertIs<MapUiState.Error>(vm.uiState.value)
             assertEquals("quota exceeded", state.message)
         }
+    }
+}
+
+private class RecordingLocationReportMeasurement : LocationReportMeasurement {
+    private val mutableEvents = mutableListOf<String>()
+    val completed = CompletableDeferred<Unit>()
+    var outcome: LocationReportOutcome? = null
+        private set
+
+    val events: List<String>
+        get() = synchronized(mutableEvents) { mutableEvents.toList() }
+
+    override fun stageStarted(stage: LocationReportStage) {
+        synchronized(mutableEvents) { mutableEvents += "start:$stage" }
+    }
+
+    override fun stageFinished(stage: LocationReportStage) {
+        synchronized(mutableEvents) { mutableEvents += "finish:$stage" }
+    }
+
+    override fun complete(outcome: LocationReportOutcome) {
+        synchronized(mutableEvents) {
+            this.outcome = outcome
+            mutableEvents += "complete:$outcome"
+        }
+        completed.complete(Unit)
     }
 }
 
