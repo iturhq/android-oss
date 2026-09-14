@@ -54,54 +54,82 @@ internal fun OngoingState(
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
-        FabSideColumn(horizontalAlignment = Alignment.Start, modifier = Modifier.padding(16.dp)) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp)
+                .testTag("map_zone_tr"),
+        ) {
             HelpFABs(onHelpRequested = actions.onHelpRequested)
-            TrackingFABs(
-                onTrackUserRequested = actions.onTrackUserRequested,
-                onOrientationToggleRequested = actions.onOrientationToggleRequested,
-                state = TrackingFabState(
-                    isDirectionOfTravel = presentation.isDirectionOfTravel,
-                    isUserTracking = presentation.isUserTracking,
-                    selfLocationAvailable = presentation.selfLocationAvailable,
-                ),
-            ) {
-                FloatingActionButton(
-                    onClick = actions.onTrackGroupRequested,
-                    modifier = Modifier
-                        .testTag("zoom_group_fab")
-                        .semantics { selected = presentation.isGroupTracking }
-                        .helpAnchor("zoom_group_fab", "Zoom out to fit every participant on the map"),
-                    containerColor = if (presentation.isGroupTracking) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    },
-                    contentColor = if (presentation.isGroupTracking) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSecondaryContainer
-                    },
-                ) {
-                    Icon(IturIcons.ZoomAll, contentDescription = "Track group")
-                }
-            }
         }
-        // End FABs
-        FabSideColumn(horizontalAlignment = Alignment.End, modifier = Modifier.padding(16.dp)) {
-            // User actions not available during an activity.
-            // Column left for layout.
-            Column { }
 
-            // Activity actions.
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+        OngoingTrackingZone(actions, presentation)
+        OngoingActivityZone(actions, presentation)
+    }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.OngoingTrackingZone(
+    actions: OngoingStateActions,
+    presentation: OngoingState,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalAlignment = Alignment.Start,
+        modifier = Modifier
+            .align(Alignment.BottomStart)
+            .padding(16.dp)
+            .testTag("map_zone_l"),
+    ) {
+        TrackingFABs(
+            onTrackUserRequested = actions.onTrackUserRequested,
+            onOrientationToggleRequested = actions.onOrientationToggleRequested,
+            state = TrackingFabState(
+                isDirectionOfTravel = presentation.isDirectionOfTravel,
+                isUserTracking = presentation.isUserTracking,
+                selfLocationAvailable = presentation.selfLocationAvailable,
+            ),
+        ) {
+            FloatingActionButton(
+                onClick = actions.onTrackGroupRequested,
+                modifier = Modifier
+                    .testTag("zoom_group_fab")
+                    .semantics { selected = presentation.isGroupTracking }
+                    .helpAnchor("zoom_group_fab", "Zoom out to fit every participant on the map"),
+                containerColor = if (presentation.isGroupTracking) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.secondaryContainer
+                },
+                contentColor = if (presentation.isGroupTracking) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                },
             ) {
-                OngoingActivityFABs(
-                    actions = actions,
-                    presentation = presentation,
-                )
+                Icon(IturIcons.ZoomAll, contentDescription = "Track group")
             }
         }
+    }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.OngoingActivityZone(
+    actions: OngoingStateActions,
+    presentation: OngoingState,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalAlignment = Alignment.End,
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .padding(16.dp)
+            .testTag("map_zone_r"),
+    ) {
+        OngoingActivityFABs(
+            actions = actions,
+            presentation = presentation,
+        )
     }
 }
 

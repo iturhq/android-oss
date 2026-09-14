@@ -58,39 +58,35 @@ fun IdleState(
                 .padding(8.dp),
         )
 
-        FabSideColumn(
-            horizontalAlignment = Alignment.Start,
-            modifier = Modifier.padding(16.dp),
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp)
+                .testTag("map_zone_tr"),
         ) {
             HelpFABs(onHelpRequested = onHelpRequested)
         }
 
-        FabSideColumn(horizontalAlignment = Alignment.End) {
-            // User actions, top right.
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.padding(16.dp),
-            ) {
-                UserFABs(
-                    onSignInRequested,
-                    onSignOutRequested,
-                    isSignedIn,
-                    authenticationActionsEnabled,
-                )
-            }
-
-            // Activity actions.
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.padding(16.dp),
-            ) {
-                ActivityFABs(
-                    onStartRequested = onStartRequested,
-                    isSignedIn = isSignedIn,
-                    onQRRequested = onQRRequested,
-                    activityActionsEnabled = activityActionsEnabled,
-                )
-            }
+        Column(
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.End,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+                .testTag("map_zone_r"),
+        ) {
+            UserFABs(
+                onSignInRequested,
+                onSignOutRequested,
+                isSignedIn,
+                authenticationActionsEnabled,
+            )
+            ActivityFABs(
+                onStartRequested = onStartRequested,
+                isSignedIn = isSignedIn,
+                onQRRequested = onQRRequested,
+                activityActionsEnabled = activityActionsEnabled,
+            )
         }
     }
 }
