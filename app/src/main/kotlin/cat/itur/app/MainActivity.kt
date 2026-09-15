@@ -17,6 +17,7 @@ import androidx.navigation.compose.rememberNavController
 import cat.itur.app.core.ui.GeneratedPreview
 import cat.itur.app.core.ui.theme.IturTheme
 import cat.itur.app.ui.IturApp
+import cat.itur.app.ui.IturAppState
 import cat.itur.app.ui.rememberIturAppState
 import dagger.hilt.android.AndroidEntryPoint
 
