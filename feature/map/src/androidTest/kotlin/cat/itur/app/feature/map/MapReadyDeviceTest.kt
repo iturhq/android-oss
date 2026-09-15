@@ -21,6 +21,8 @@ import cat.itur.app.feature.map.ui.components.map.MapLibreViewCallbacks
 import cat.itur.app.feature.map.ui.components.map.MapLibreViewInput
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.maplibre.android.MapLibre
@@ -28,6 +30,7 @@ import org.maplibre.android.WellKnownTileServer
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.style.sources.GeoJsonSource
 import kotlin.time.Duration.Companion.seconds
+import android.location.Location as AndroidLocation
 
 // Mirrors the private source IDs `MapLibreView` publishes its GeoJSON features under; not part
 // of its public API, so duplicated here rather than exported just for this test.
@@ -143,5 +146,58 @@ class MapReadyDeviceTest {
     @Test
     fun mapReadyAndMarkersLoadAt125Participants() {
         assertMapReadyAndMarkersLoad(participantCount = 125)
+    }
+
+    @Test
+    fun appOwnedCompleteFixFeedsSelfMarkerWithoutMapLibreEngine() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            MapLibre.getInstance(
+                ApplicationProvider.getApplicationContext<Context>(),
+                "",
+                WellKnownTileServer.MapLibre,
+            )
+        }
+        val fix = AndroidLocation("gps").apply {
+            latitude = 41.3874
+            longitude = 2.1686
+            time = 1_787_558_400_123L
+            altitude = 37.5
+            speed = 4.25f
+            bearing = 123.5f
+            accuracy = 2.75f
+        }
+        var readyMap: MapLibreMap? = null
+        composeRule.setContent {
+            IturTheme {
+                MapLibreView(
+                    input = MapLibreViewInput(
+                        styleUrl = mapStyleUrl(),
+                        isActivityOngoing = true,
+                        locationPermissionGranted = true,
+                        currentUserId = organizerId,
+                        organizerId = organizerId,
+                        currentLocation = fix,
+                        participantLocations = participants(1),
+                    ),
+                    callbacks = MapLibreViewCallbacks(onMapReady = { readyMap = it }),
+                )
+            }
+        }
+
+        composeRule.waitUntil(timeoutMillis = 30.seconds.inWholeMilliseconds) {
+            runCatching {
+                readyMap?.locationComponent?.lastKnownLocation?.latitude == fix.latitude
+            }.getOrDefault(false)
+        }
+        val component = requireNotNull(readyMap).locationComponent
+        val displayedFix = requireNotNull(component.lastKnownLocation)
+        assertNull(component.locationEngine)
+        assertEquals(fix.latitude, displayedFix.latitude, 0.0)
+        assertEquals(fix.longitude, displayedFix.longitude, 0.0)
+        assertEquals(fix.time, displayedFix.time)
+        assertEquals(fix.altitude, displayedFix.altitude, 0.0)
+        assertEquals(fix.speed, displayedFix.speed, 0f)
+        assertEquals(fix.bearing, displayedFix.bearing, 0f)
+        assertEquals(fix.accuracy, displayedFix.accuracy, 0f)
     }
 }

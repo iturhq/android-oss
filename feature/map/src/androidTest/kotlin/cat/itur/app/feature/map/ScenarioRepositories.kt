@@ -29,6 +29,7 @@ import kotlinx.coroutines.CompletableDeferred
 import java.util.Date
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 class ScenarioBackendHealthCheck : BackendHealthCheck {
     override val service = BackendService("scenario-backend", "Scenario backend")
@@ -286,6 +287,7 @@ class ScenarioLocationRepository(
     var updateFailure: Throwable? = null
     var recordedAt: Date? = Date()
     val updateCount = AtomicInteger()
+    val lastUpdateThreadName = AtomicReference<String?>()
     val removeCount = AtomicInteger()
 
     override suspend fun getForActivity(
@@ -310,6 +312,7 @@ class ScenarioLocationRepository(
         activityId: IturActivityId,
         location: Location,
     ) {
+        lastUpdateThreadName.set(Thread.currentThread().name)
         updateCount.incrementAndGet()
         updateFailure?.let { throw it }
         locations.getOrPut(activityId) { mutableMapOf() }[userId] = location

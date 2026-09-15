@@ -470,12 +470,27 @@ class CanonicalUseCasesTest {
     fun uc17_recenterAfterLocationFixKeepsOngoingState() {
         launch()
         startAsOrganizer()
-        locationClient.emit(51.5, -0.1)
-        composeRule.waitUntil { locations.updateCount.get() == 1 }
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            locationClient.emit(51.5, -0.1)
+        }
+        composeRule.waitUntil(timeoutMillis = 10_000) { locations.updateCount.get() == 1 }
 
         composeRule.onNodeWithTag("recenter_fab").performClick()
 
         composeRule.onNodeWithTag("stop_activity_fab").assertIsDisplayed()
+        assertFalse(locations.lastUpdateThreadName.get().orEmpty().contains("main", ignoreCase = true))
+    }
+
+    @Test
+    fun idleLocationFixDoesNotPublish() {
+        launch()
+
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            locationClient.emit(51.5, -0.1)
+        }
+        composeRule.waitForIdle()
+
+        assertEquals(0, locations.updateCount.get())
     }
 
     @Test

@@ -14,6 +14,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
@@ -24,6 +25,7 @@ import cat.itur.app.feature.map.ui.MapScreen
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -95,6 +97,22 @@ class MapScreenTest {
     @Test
     fun idleMapRequestsADeviceLocationForInitialCentering() {
         composeRule.waitUntil(timeoutMillis = 10_000) { locationClient.hasActiveRequest }
+        composeRule.waitForIdle()
+        assertEquals(1, locationClient.requestCount.get())
+    }
+
+    @Test
+    fun visibleSessionOwnsOneRequestAndStopRemovesIt() {
+        composeRule.waitUntil(timeoutMillis = 10_000) { locationClient.hasActiveRequest }
+        composeRule.onNodeWithTag("help_fab").performClick()
+        composeRule.onNodeWithTag("help_overlay").assertIsDisplayed()
+        composeRule.waitForIdle()
+        assertEquals(1, locationClient.requestCount.get())
+        assertEquals(0, locationClient.removeCount.get())
+
+        composeRule.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+        composeRule.waitUntil(timeoutMillis = 10_000) { !locationClient.hasActiveRequest }
+        assertEquals(locationClient.requestCount.get(), locationClient.removeCount.get())
     }
 
     @Test
