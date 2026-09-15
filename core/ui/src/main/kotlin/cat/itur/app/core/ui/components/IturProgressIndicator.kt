@@ -116,16 +116,20 @@ private fun AnchoredSweepProgressIndicator() {
 @Preview(showBackground = true)
 @Composable
 fun IturProgressIndicatorPreview() {
-    IturTheme {
-        IturProgressIndicator()
-    }
+    IturProgressIndicatorPreviewContent()
 }
+
+@GeneratedPreview
+@Composable
+private fun IturProgressIndicatorPreviewContent() = IturProgressIndicator()
 
 @GeneratedPreview
 @Preview(showBackground = true)
 @Composable
 fun IturProgressIndicatorWithTextPreview() {
-    IturTheme {
-        IturProgressIndicator(label = "Loading...")
-    }
+    IturProgressIndicatorWithTextPreviewContent()
 }
+
+@GeneratedPreview
+@Composable
+private fun IturProgressIndicatorWithTextPreviewContent() = IturProgressIndicator(label = "Loading...")

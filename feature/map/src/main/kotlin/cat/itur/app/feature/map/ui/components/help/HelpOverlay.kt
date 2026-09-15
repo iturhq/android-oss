@@ -141,8 +141,7 @@ private val HelpLabelMaxWidth = 220.dp
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 private fun HelpOverlayPreview() {
-    IturTheme {
-        HelpOverlay(
+    HelpOverlay(
             anchors = mapOf(
                 "recenter_fab" to HelpAnchor(
                     "Recenter the map on your own location",
@@ -157,7 +156,9 @@ private fun HelpOverlayPreview() {
                     Rect(Offset(900f, 1000f), Size(56f, 56f)),
                 ),
             ),
-            onDismissRequest = {},
+            onDismissRequest = ::previewNoOp,
         )
-    }
 }
+
+@GeneratedPreview
+private fun previewNoOp() = Unit

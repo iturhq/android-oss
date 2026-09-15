@@ -45,7 +45,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainActivityPreview() {
     val appState = rememberIturAppState(rememberNavController())
-    IturTheme {
-        IturApp(appState)
-    }
+    MainActivityPreviewContent(appState)
 }
+
+@GeneratedPreview
+@Composable
+private fun MainActivityPreviewContent(appState: IturAppState) = IturApp(appState)

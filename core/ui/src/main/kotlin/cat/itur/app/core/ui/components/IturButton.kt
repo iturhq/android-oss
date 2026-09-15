@@ -64,34 +64,45 @@ enum class ActionButtonType {
 @Preview(showBackground = true)
 @Composable
 fun DefaultButtonPreview() {
-    IturTheme {
-        IturButton(label = "Some action", onClick = {})
-    }
+    DefaultButtonPreviewContent()
 }
+
+@GeneratedPreview
+@Composable
+private fun DefaultButtonPreviewContent() = IturButton(label = "Some action", onClick = ::previewNoOp)
 
 @GeneratedPreview
 @Preview
 @Composable
 fun SecondaryButtonPreview() {
-    IturTheme {
-        IturButton(type = ActionButtonType.SECONDARY, label = "Some action", onClick = {})
-    }
+    SecondaryButtonPreviewContent()
 }
+
+@GeneratedPreview
+@Composable
+private fun SecondaryButtonPreviewContent() = IturButton(type = ActionButtonType.SECONDARY, label = "Some action", onClick = ::previewNoOp)
 
 @GeneratedPreview
 @Preview
 @Composable
 fun WarningButtonPreview() {
-    IturTheme {
-        IturButton(type = ActionButtonType.WARNING, label = "Be careful", onClick = {})
-    }
+    WarningButtonPreviewContent()
 }
+
+@GeneratedPreview
+@Composable
+private fun WarningButtonPreviewContent() = IturButton(type = ActionButtonType.WARNING, label = "Be careful", onClick = ::previewNoOp)
 
 @GeneratedPreview
 @Preview
 @Composable
 fun DangerButtonPreview() {
-    IturTheme {
-        IturButton(type = ActionButtonType.DANGER, label = "Take dangerous action", onClick = {})
-    }
+    DangerButtonPreviewContent()
 }
+
+@GeneratedPreview
+@Composable
+private fun DangerButtonPreviewContent() = IturButton(type = ActionButtonType.DANGER, label = "Take dangerous action", onClick = ::previewNoOp)
+
+@GeneratedPreview
+private fun previewNoOp() = Unit

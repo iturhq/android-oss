@@ -138,14 +138,19 @@ private const val DISABLED_ACTION_ALPHA = 0.38f
 @Preview(showBackground = true)
 @Composable
 private fun IdleMapPreview() {
-    IturTheme {
-        IdleState(
-            onStartRequested = {},
-            onSignInRequested = {},
-            onSignOutRequested = {},
-            onQRRequested = {},
-            onHelpRequested = {},
-            isSignedIn = true,
-        )
-    }
+    IdleMapPreviewContent()
 }
+
+@GeneratedPreview
+@Composable
+private fun IdleMapPreviewContent() = IdleState(
+    onStartRequested = ::previewNoOp,
+    onSignInRequested = ::previewNoOp,
+    onSignOutRequested = ::previewNoOp,
+    onQRRequested = ::previewNoOp,
+    onHelpRequested = ::previewNoOp,
+    isSignedIn = true,
+)
+
+@GeneratedPreview
+private fun previewNoOp() = Unit
