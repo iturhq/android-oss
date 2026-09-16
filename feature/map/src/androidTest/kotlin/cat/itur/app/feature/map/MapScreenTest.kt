@@ -7,6 +7,7 @@ package cat.itur.app.feature.map
 
 import android.Manifest
 import android.content.Context
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -22,6 +23,7 @@ import cat.itur.app.core.data.TestFixtures
 import cat.itur.app.core.data.repository.ActivityRepository
 import cat.itur.app.core.ui.theme.IturTheme
 import cat.itur.app.feature.map.ui.MapScreen
+import cat.itur.app.feature.map.ui.cameraFitInsets
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.runBlocking
@@ -32,6 +34,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.maplibre.android.MapLibre
 import org.maplibre.android.WellKnownTileServer
+import kotlin.test.assertTrue
 import javax.inject.Inject
 
 /**
@@ -198,6 +201,25 @@ class MapScreenTest {
     }
 
     @Test
+    fun ongoingGroupFitInsetsClearTheRenderedBottomLanes() {
+        startAsOrganizer()
+
+        val map = boundsOf("persistent_map_surface")
+        val leftLane = union(boundsOf("recenter_fab"), boundsOf("zoom_group_fab"))
+        val rightLane = union(boundsOf("show_qr_fab"), boundsOf("stop_activity_fab"))
+        val insets = cameraFitInsets(
+            mapBounds = map,
+            leftControlBounds = leftLane,
+            rightControlBounds = rightLane,
+            horizontalFallback = 0,
+            verticalPadding = 1,
+        )
+
+        assertTrue(insets.left > leftLane.right - map.left)
+        assertTrue(insets.right > map.right - rightLane.left)
+    }
+
+    @Test
     fun helpButtonExplainsTheOrganizerControls() {
         startAsOrganizer()
 
@@ -272,4 +294,11 @@ class MapScreenTest {
             }
         }
     }
+
+    private fun union(first: Rect, second: Rect) = Rect(
+        left = minOf(first.left, second.left),
+        top = minOf(first.top, second.top),
+        right = maxOf(first.right, second.right),
+        bottom = maxOf(first.bottom, second.bottom),
+    )
 }
