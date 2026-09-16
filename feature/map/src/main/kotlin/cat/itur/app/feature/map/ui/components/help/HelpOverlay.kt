@@ -8,14 +8,18 @@ package cat.itur.app.feature.map.ui.components.help
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,21 +58,27 @@ internal fun HelpOverlay(
     modifier: Modifier = Modifier,
 ) {
     var overlayOrigin by remember { mutableStateOf(Offset.Zero) }
+    var selectedAnchor by remember { mutableStateOf<HelpAnchor?>(null) }
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .onGloballyPositioned { overlayOrigin = it.boundsInRoot().topLeft }
-            .background(HelpOverlayScrimColor)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClickLabel = "Dismiss help",
-                onClick = onDismissRequest,
-            )
-            .testTag("help_overlay"),
+            .onGloballyPositioned { overlayOrigin = it.boundsInRoot().topLeft },
     ) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(HelpOverlayScrimColor)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClickLabel = "Dismiss help",
+                    onClick = onDismissRequest,
+                )
+                .testTag("help_overlay"),
+        )
+
         Text(
-            text = "Tap anywhere to close",
+            text = "Tap a label for more information · Tap elsewhere to close",
             color = Color.White,
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier
@@ -83,9 +93,37 @@ internal fun HelpOverlay(
                 anchor = anchor,
                 overlayOrigin = overlayOrigin,
                 overlayWidthPx = overlayWidthPx,
+                onClick = { selectedAnchor = anchor },
             )
         }
     }
+
+    selectedAnchor?.let { anchor ->
+        HelpDetailDialog(anchor = anchor, onDismissRequest = { selectedAnchor = null })
+    }
+}
+
+@Composable
+private fun HelpDetailDialog(anchor: HelpAnchor, onDismissRequest: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = { Text(anchor.description) },
+        text = {
+            Text(
+                text = anchor.detail,
+                modifier = Modifier.testTag("help_detail_text"),
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onDismissRequest,
+                modifier = Modifier.testTag("dismiss_help_detail"),
+            ) {
+                Text("Close")
+            }
+        },
+        modifier = Modifier.testTag("help_detail_dialog"),
+    )
 }
 
 /**
@@ -100,6 +138,7 @@ private fun HelpLabel(
     anchor: HelpAnchor,
     overlayOrigin: Offset,
     overlayWidthPx: Float,
+    onClick: () -> Unit,
 ) {
     val density = LocalDensity.current
     val localBounds = anchor.bounds.translate(-overlayOrigin)
@@ -107,12 +146,11 @@ private fun HelpLabel(
     val gapPx = with(density) { HelpLabelGap.toPx() }
     val maxWidthPx = with(density) { HelpLabelMaxWidth.toPx() }
 
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 4.dp,
+    OutlinedButton(
+        onClick = onClick,
         shape = MaterialTheme.shapes.medium,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         modifier = Modifier
-            .widthIn(max = HelpLabelMaxWidth)
             .offset {
                 val x = if (placeToTheRight) {
                     localBounds.right + gapPx
@@ -121,12 +159,12 @@ private fun HelpLabel(
                 }
                 IntOffset(x = x.roundToInt(), y = localBounds.top.roundToInt())
             }
+            .widthIn(max = HelpLabelMaxWidth)
             .testTag("help_label_$key"),
     ) {
         Text(
             text = anchor.description,
             style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
         )
     }
 }
@@ -143,16 +181,20 @@ private fun HelpOverlayPreview() {
     HelpOverlay(
         anchors = mapOf(
             "recenter_fab" to HelpAnchor(
-                "Recenter the map on your own location",
-                Rect(Offset(24f, 900f), Size(56f, 56f)),
+                description = "Recenter the map on your own location",
+                detail = "Moves the map back to your latest known position without changing " +
+                    "location sharing or tracking.",
+                bounds = Rect(Offset(24f, 900f), Size(56f, 56f)),
             ),
             "zoom_group_fab" to HelpAnchor(
-                "Zoom out to fit every participant on the map",
-                Rect(Offset(24f, 1000f), Size(56f, 56f)),
+                description = "Zoom out to fit every participant on the map",
+                detail = "Adjusts the map so all currently visible participant positions fit on screen.",
+                bounds = Rect(Offset(24f, 1000f), Size(56f, 56f)),
             ),
             "show_qr_fab" to HelpAnchor(
-                "Show the QR code for others to join this activity",
-                Rect(Offset(900f, 1000f), Size(56f, 56f)),
+                description = "Show the QR code for others to join this activity",
+                detail = "Opens this activity's QR code so nearby participants can scan it and request to join.",
+                bounds = Rect(Offset(900f, 1000f), Size(56f, 56f)),
             ),
         ),
         onDismissRequest = ::previewNoOp,

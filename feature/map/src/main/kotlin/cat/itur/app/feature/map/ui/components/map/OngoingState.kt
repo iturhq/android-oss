@@ -103,7 +103,11 @@ private fun BoxScope.OngoingTrackingLane(
                 modifier = Modifier
                     .testTag("zoom_group_fab")
                     .semantics { selected = presentation.isGroupTracking }
-                    .helpAnchor("zoom_group_fab", "Zoom out to fit every participant on the map"),
+                    .helpAnchor(
+                        "zoom_group_fab",
+                        "Zoom out to fit every participant on the map",
+                        "Adjusts the map so every participant with a known location fits in the unobscured view.",
+                    ),
                 containerColor = if (presentation.isGroupTracking) {
                     MaterialTheme.colorScheme.primaryContainer
                 } else {
@@ -155,7 +159,11 @@ private fun OngoingActivityFABs(
             onClick = actions.onQrRequested,
             modifier = Modifier
                 .testTag("show_qr_fab")
-                .helpAnchor("show_qr_fab", "Show the QR code for others to join this activity"),
+                .helpAnchor(
+                    "show_qr_fab",
+                    "Show the QR code for others to join this activity",
+                    "Displays this activity's QR code so another person can scan it and request to join.",
+                ),
         ) {
             Icon(IturIcons.Join, contentDescription = "Show QR")
         }
@@ -176,6 +184,11 @@ private fun OngoingActivityFABs(
             .helpAnchor(
                 "stop_activity_fab",
                 if (presentation.isOrganizer) "Stop the activity for everyone" else "Leave the activity",
+                if (presentation.isOrganizer) {
+                    "Ends the activity for every participant after confirmation; it cannot continue once stopped."
+                } else {
+                    "Removes you from this activity and stops sharing your activity location with its participants."
+                },
             )
             .serviceAvailability(presentation.activityActionsEnabled),
     ) {
@@ -229,12 +242,25 @@ private fun SafetySignalFAB(
         onClick = onClick,
         modifier = Modifier
             .testTag(tag)
-            .helpAnchor(tag, contentDescription)
+            .helpAnchor(
+                tag,
+                contentDescription,
+                safetySignalHelpDetail(tag),
+            )
             .serviceAvailability(enabled),
         containerColor = color,
     ) {
         Icon(IturIcons.Warning, contentDescription = contentDescription)
     }
+}
+
+private fun safetySignalHelpDetail(tag: String): String = when (tag) {
+    "safety_delayed_fab" -> "Tells the organiser and participants that you are stopping and they may continue ahead."
+    "hail_organiser_fab" ->
+        "Sends an urgent request for the organiser and participants " +
+            "to converge on your current position."
+    "safety_ok_fab" -> "Clears your earlier safety signal and tells the group that you are okay."
+    else -> "Updates the safety signal shared with the organiser and other participants."
 }
 
 @GeneratedPreview

@@ -8,15 +8,19 @@ package cat.itur.app.feature.map
 import android.Manifest
 import android.content.Context
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.espresso.Espresso.pressBack
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
 import cat.itur.app.core.data.TestFixtures
@@ -229,6 +233,17 @@ class MapScreenTest {
             .assertIsDisplayed()
         composeRule.onNodeWithText("Switch between north-up and direction-of-travel map views")
             .assertIsDisplayed()
+        composeRule.onNodeWithTag("help_label_show_qr_fab", useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.onNodeWithTag("help_overlay").assertIsDisplayed()
+        val showQrDetail =
+            "Displays this activity's QR code so another person can scan it and request to join."
+        composeRule.onNodeWithTag("help_detail_text", useUnmergedTree = true)
+            .assertTextContains(showQrDetail)
+        pressBack()
+        composeRule.onNodeWithTag("help_detail_text", useUnmergedTree = true).assertDoesNotExist()
+        composeRule.onNodeWithTag("help_overlay").assertIsDisplayed()
+        composeRule.onNodeWithTag("help_label_show_qr_fab").assertIsDisplayed()
         // The organiser doesn't see "hail organiser", so the overlay must not describe it either
         // -- it only annotates buttons actually visible in the current state.
         composeRule.onNodeWithTag("help_label_hail_organiser_fab").assertDoesNotExist()
@@ -240,7 +255,21 @@ class MapScreenTest {
         composeRule.onNodeWithTag("help_fab").assertIsDisplayed().performClick()
 
         composeRule.onNodeWithTag("help_overlay").assertIsDisplayed()
+        composeRule.onNodeWithTag("help_overlay_hint", useUnmergedTree = true)
+            .assertTextContains("Tap a label for more information", substring = true)
         composeRule.onNodeWithText("Join an activity by scanning its QR code").assertIsDisplayed()
+        composeRule.onNodeWithTag("help_label_join_activity_fab", useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.onNodeWithTag("help_overlay").assertIsDisplayed()
+        val joinDetail =
+            "Opens the camera to scan an organiser's activity QR code, then asks to join that activity."
+        composeRule.onNodeWithTag("help_detail_text", useUnmergedTree = true)
+            .assertTextContains(joinDetail)
+        composeRule.onNodeWithTag("dismiss_help_detail", useUnmergedTree = true).assertIsDisplayed()
+        pressBack()
+        composeRule.onNodeWithTag("help_detail_text", useUnmergedTree = true).assertDoesNotExist()
+        composeRule.onNodeWithTag("help_overlay").assertIsDisplayed()
+        composeRule.onNodeWithTag("help_label_join_activity_fab").assertIsDisplayed()
         // Not signed in yet, so "sign in" is visible but "sign out" isn't -- the overlay must
         // describe only what's actually on screen.
         composeRule.onNodeWithText("Sign in to start or manage an activity").assertIsDisplayed()

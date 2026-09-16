@@ -19,7 +19,11 @@ import androidx.compose.ui.layout.onGloballyPositioned
  * [cat.itur.app.feature.map.ui.components.help.HelpOverlay] can draw the description next to
  * the real button instead of in a fixed list. Registered by [Modifier.helpAnchor].
  */
-internal data class HelpAnchor(val description: String, val bounds: Rect)
+internal data class HelpAnchor(
+    val description: String,
+    val detail: String,
+    val bounds: Rect,
+)
 
 /**
  * Live registry of the help-described buttons currently in composition, keyed by a stable id
@@ -47,15 +51,19 @@ internal class HelpAnchorRegistry {
 internal val LocalHelpAnchorRegistry = compositionLocalOf<HelpAnchorRegistry?> { null }
 
 /**
- * Registers this FAB's on-screen position and [description] with the ambient
+ * Registers this FAB's on-screen position, short [description], and longer [detail] with the ambient
  * [HelpAnchorRegistry] (via [LocalHelpAnchorRegistry]) for as long as it stays composed.
  */
-internal fun Modifier.helpAnchor(key: String, description: String): Modifier = composed {
+internal fun Modifier.helpAnchor(
+    key: String,
+    description: String,
+    detail: String,
+): Modifier = composed {
     val registry = LocalHelpAnchorRegistry.current
     DisposableEffect(registry, key) {
         onDispose { registry?.unregister(key) }
     }
     onGloballyPositioned { coordinates ->
-        registry?.register(key, HelpAnchor(description, coordinates.boundsInRoot()))
+        registry?.register(key, HelpAnchor(description, detail, coordinates.boundsInRoot()))
     }
 }

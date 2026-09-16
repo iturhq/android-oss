@@ -107,7 +107,11 @@ private fun ActivityFABs(
         onClick = onQRRequested,
         modifier = Modifier
             .testTag("join_activity_fab")
-            .helpAnchor("join_activity_fab", "Join an activity by scanning its QR code"),
+            .helpAnchor(
+                "join_activity_fab",
+                "Join an activity by scanning its QR code",
+                "Opens the camera to scan an organiser's activity QR code, then asks to join that activity.",
+            ),
     ) {
         Icon(IturIcons.Join, contentDescription = "Join activity")
     }
@@ -118,7 +122,11 @@ private fun ActivityFABs(
             onClick = { if (activityActionsEnabled) onStartRequested() },
             modifier = Modifier
                 .testTag("start_activity_fab")
-                .helpAnchor("start_activity_fab", "Start a new activity")
+                .helpAnchor(
+                    "start_activity_fab",
+                    "Start a new activity",
+                    "Creates a new activity for you to organise and opens its joining details for participants.",
+                )
                 .serviceAvailability(activityActionsEnabled),
         ) {
             Icon(IturIcons.Add, contentDescription = "Start activity")
