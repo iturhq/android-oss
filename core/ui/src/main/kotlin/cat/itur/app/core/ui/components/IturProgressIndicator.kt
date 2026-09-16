@@ -40,7 +40,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cat.itur.app.core.ui.GeneratedPreview
 import cat.itur.app.core.ui.R
-import cat.itur.app.core.ui.theme.IturTheme
 
 @Composable
 fun IturProgressIndicator(

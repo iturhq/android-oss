@@ -18,7 +18,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cat.itur.app.core.ui.GeneratedPreview
-import cat.itur.app.core.ui.theme.IturTheme
 
 @Composable
 fun IturButton(
@@ -80,7 +79,11 @@ fun SecondaryButtonPreview() {
 
 @GeneratedPreview
 @Composable
-private fun SecondaryButtonPreviewContent() = IturButton(type = ActionButtonType.SECONDARY, label = "Some action", onClick = ::previewNoOp)
+private fun SecondaryButtonPreviewContent() = IturButton(
+    type = ActionButtonType.SECONDARY,
+    label = "Some action",
+    onClick = ::previewNoOp,
+)
 
 @GeneratedPreview
 @Preview
@@ -91,7 +94,11 @@ fun WarningButtonPreview() {
 
 @GeneratedPreview
 @Composable
-private fun WarningButtonPreviewContent() = IturButton(type = ActionButtonType.WARNING, label = "Be careful", onClick = ::previewNoOp)
+private fun WarningButtonPreviewContent() = IturButton(
+    type = ActionButtonType.WARNING,
+    label = "Be careful",
+    onClick = ::previewNoOp,
+)
 
 @GeneratedPreview
 @Preview
@@ -102,7 +109,11 @@ fun DangerButtonPreview() {
 
 @GeneratedPreview
 @Composable
-private fun DangerButtonPreviewContent() = IturButton(type = ActionButtonType.DANGER, label = "Take dangerous action", onClick = ::previewNoOp)
+private fun DangerButtonPreviewContent() = IturButton(
+    type = ActionButtonType.DANGER,
+    label = "Take dangerous action",
+    onClick = ::previewNoOp,
+)
 
 @GeneratedPreview
 private fun previewNoOp() = Unit

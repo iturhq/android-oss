@@ -34,7 +34,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import cat.itur.app.core.ui.GeneratedPreview
-import cat.itur.app.core.ui.theme.IturTheme
 import kotlin.math.roundToInt
 
 /**
@@ -142,22 +141,22 @@ private val HelpLabelMaxWidth = 220.dp
 @Composable
 private fun HelpOverlayPreview() {
     HelpOverlay(
-            anchors = mapOf(
-                "recenter_fab" to HelpAnchor(
-                    "Recenter the map on your own location",
-                    Rect(Offset(24f, 900f), Size(56f, 56f)),
-                ),
-                "zoom_group_fab" to HelpAnchor(
-                    "Zoom out to fit every participant on the map",
-                    Rect(Offset(24f, 1000f), Size(56f, 56f)),
-                ),
-                "show_qr_fab" to HelpAnchor(
-                    "Show the QR code for others to join this activity",
-                    Rect(Offset(900f, 1000f), Size(56f, 56f)),
-                ),
+        anchors = mapOf(
+            "recenter_fab" to HelpAnchor(
+                "Recenter the map on your own location",
+                Rect(Offset(24f, 900f), Size(56f, 56f)),
             ),
-            onDismissRequest = ::previewNoOp,
-        )
+            "zoom_group_fab" to HelpAnchor(
+                "Zoom out to fit every participant on the map",
+                Rect(Offset(24f, 1000f), Size(56f, 56f)),
+            ),
+            "show_qr_fab" to HelpAnchor(
+                "Show the QR code for others to join this activity",
+                Rect(Offset(900f, 1000f), Size(56f, 56f)),
+            ),
+        ),
+        onDismissRequest = ::previewNoOp,
+    )
 }
 
 @GeneratedPreview

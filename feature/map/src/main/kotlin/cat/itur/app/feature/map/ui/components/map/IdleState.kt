@@ -27,7 +27,6 @@ import androidx.compose.ui.unit.dp
 import cat.itur.app.core.ui.GeneratedPreview
 import cat.itur.app.core.ui.IturIcons
 import cat.itur.app.core.ui.R
-import cat.itur.app.core.ui.theme.IturTheme
 import cat.itur.app.feature.map.ui.components.help.helpAnchor
 
 /**
