@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import cat.itur.app.core.data.health.BackendServiceIds
@@ -57,6 +58,9 @@ internal class MapInteractionState(
     centeredOnInitialLocationState: MutableState<Boolean>,
 ) {
     var mapLibreMap by mutableStateOf<MapLibreMap?>(null)
+    var mapBounds by mutableStateOf<Rect?>(null)
+    var leftControlBounds by mutableStateOf<Rect?>(null)
+    var rightControlBounds by mutableStateOf<Rect?>(null)
     var mapViewportHeightPixels by mutableIntStateOf(0)
     var recentLocations by mutableStateOf(emptyList<RecentLocation>())
     var hasManualZoomOverride by mutableStateOf(false)

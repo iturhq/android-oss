@@ -17,6 +17,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -238,6 +240,9 @@ private fun ContinuousCameraTrackingEffect(
     presentation: MapPresentation,
     interaction: MapInteractionState,
 ) {
+    val density = LocalDensity.current
+    val horizontalFallback = with(density) { 88.dp.roundToPx() }
+    val verticalPadding = with(density) { 32.dp.roundToPx() }
     LaunchedEffect(
         interaction.cameraTrackingMode,
         interaction.mapLibreMap,
@@ -246,6 +251,9 @@ private fun ContinuousCameraTrackingEffect(
         interaction.recentLocations,
         interaction.mapViewportHeightPixels,
         interaction.isDirectionOfTravel,
+        interaction.mapBounds,
+        interaction.leftControlBounds,
+        interaction.rightControlBounds,
     ) {
         val map = interaction.mapLibreMap ?: return@LaunchedEffect
         when (interaction.cameraTrackingMode) {
@@ -263,6 +271,13 @@ private fun ContinuousCameraTrackingEffect(
                 map = map,
                 participantLocations = presentation.participantLocations,
                 currentLocation = presentation.lastLocation,
+                insets = cameraFitInsets(
+                    mapBounds = interaction.mapBounds,
+                    leftControlBounds = interaction.leftControlBounds,
+                    rightControlBounds = interaction.rightControlBounds,
+                    horizontalFallback = horizontalFallback,
+                    verticalPadding = verticalPadding,
+                ),
             )
         }
     }

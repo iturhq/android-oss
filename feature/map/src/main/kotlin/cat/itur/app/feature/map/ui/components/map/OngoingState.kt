@@ -7,6 +7,7 @@ package cat.itur.app.feature.map.ui.components.map
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -16,7 +17,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -53,6 +57,8 @@ internal fun OngoingState(
     actions: OngoingStateActions,
     presentation: OngoingState,
     modifier: Modifier = Modifier,
+    onLeftControlBoundsChanged: (Rect) -> Unit = {},
+    onRightControlBoundsChanged: (Rect) -> Unit = {},
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         Box(
@@ -63,16 +69,16 @@ internal fun OngoingState(
         ) {
             HelpFABs(onHelpRequested = actions.onHelpRequested)
         }
-
-        OngoingTrackingZone(actions, presentation)
-        OngoingActivityZone(actions, presentation)
+        OngoingTrackingLane(actions, presentation, onLeftControlBoundsChanged)
+        OngoingActivityLane(actions, presentation, onRightControlBoundsChanged)
     }
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.BoxScope.OngoingTrackingZone(
+private fun BoxScope.OngoingTrackingLane(
     actions: OngoingStateActions,
     presentation: OngoingState,
+    onBoundsChanged: (Rect) -> Unit,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -80,7 +86,8 @@ private fun androidx.compose.foundation.layout.BoxScope.OngoingTrackingZone(
         modifier = Modifier
             .align(Alignment.BottomStart)
             .padding(16.dp)
-            .testTag("map_zone_l"),
+            .testTag("map_zone_l")
+            .onGloballyPositioned { onBoundsChanged(it.boundsInRoot()) },
     ) {
         TrackingFABs(
             onTrackUserRequested = actions.onTrackUserRequested,
@@ -115,9 +122,10 @@ private fun androidx.compose.foundation.layout.BoxScope.OngoingTrackingZone(
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.BoxScope.OngoingActivityZone(
+private fun BoxScope.OngoingActivityLane(
     actions: OngoingStateActions,
     presentation: OngoingState,
+    onBoundsChanged: (Rect) -> Unit,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -125,7 +133,8 @@ private fun androidx.compose.foundation.layout.BoxScope.OngoingActivityZone(
         modifier = Modifier
             .align(Alignment.BottomEnd)
             .padding(16.dp)
-            .testTag("map_zone_r"),
+            .testTag("map_zone_r")
+            .onGloballyPositioned { onBoundsChanged(it.boundsInRoot()) },
     ) {
         OngoingActivityFABs(
             actions = actions,

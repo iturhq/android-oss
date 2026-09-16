@@ -18,7 +18,6 @@ import kotlin.math.cos
 import kotlin.math.ln
 import kotlin.math.sin
 
-private const val PADDING: Int = 100
 internal const val MIN_SELF_FRAMING_DISTANCE_METERS = 50.0
 internal const val MAX_SELF_FRAMING_DISTANCE_METERS = 300.0
 private const val SPEED_TO_FRAMING_DISTANCE = 25.0
@@ -166,6 +165,8 @@ internal fun zoomOnGroup(
     map: MapLibreMap,
     participantLocations: List<ParticipantLocation>,
     currentLocation: Location?,
+    insets: CameraFitInsets,
+    fitBounds: (MapLibreMap, LatLngBounds, CameraFitInsets) -> Unit = ::animateToBounds,
 ) {
     Log.d("ZoomOnGroup", "Zooming on group")
     val points = buildList {
@@ -182,7 +183,7 @@ internal fun zoomOnGroup(
         }
         else -> try {
             val bounds = LatLngBounds.Builder().includes(points).build()
-            map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, PADDING))
+            fitBounds(map, bounds, insets)
             Log.d("ZoomOnGroup", "Map should be showing the group")
         } catch (e: Exception) {
             Log.e("MapScreen", "Zoom on group failed", e)

@@ -22,6 +22,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -101,6 +103,7 @@ private fun MapReadyContent(
             ),
             modifier = environment.modifier
                 .fillMaxSize()
+                .onGloballyPositioned { interaction.mapBounds = it.boundsInRoot() }
                 .testTag("persistent_map_surface"),
             callbacks = MapLibreViewCallbacks(
                 onMapReady = { interaction.mapLibreMap = it },
@@ -243,6 +246,8 @@ private fun OngoingControls(
             isGroupTracking = interaction.cameraTrackingMode == CameraTrackingMode.GROUP,
         ),
         modifier = environment.modifier.testTag(stateTag),
+        onLeftControlBoundsChanged = { interaction.leftControlBounds = it },
+        onRightControlBoundsChanged = { interaction.rightControlBounds = it },
     )
 }
 
