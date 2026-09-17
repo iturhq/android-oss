@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+@file:Suppress("MatchingDeclarationName")
+
 package cat.itur.app.core.ui.components
 
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -36,8 +38,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import cat.itur.app.core.ui.GeneratedPreview
 import cat.itur.app.core.ui.R
-import cat.itur.app.core.ui.theme.IturTheme
 
 @Composable
 fun IturProgressIndicator(
@@ -109,18 +111,24 @@ private fun AnchoredSweepProgressIndicator() {
     }
 }
 
+@GeneratedPreview
 @Preview(showBackground = true)
 @Composable
 fun IturProgressIndicatorPreview() {
-    IturTheme {
-        IturProgressIndicator()
-    }
+    IturProgressIndicatorPreviewContent()
 }
 
+@GeneratedPreview
+@Composable
+private fun IturProgressIndicatorPreviewContent() = IturProgressIndicator()
+
+@GeneratedPreview
 @Preview(showBackground = true)
 @Composable
 fun IturProgressIndicatorWithTextPreview() {
-    IturTheme {
-        IturProgressIndicator(label = "Loading...")
-    }
+    IturProgressIndicatorWithTextPreviewContent()
 }
+
+@GeneratedPreview
+@Composable
+private fun IturProgressIndicatorWithTextPreviewContent() = IturProgressIndicator(label = "Loading...")

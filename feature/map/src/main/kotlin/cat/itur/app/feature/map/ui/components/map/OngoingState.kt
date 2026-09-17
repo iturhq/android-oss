@@ -7,6 +7,7 @@ package cat.itur.app.feature.map.ui.components.map
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -16,13 +17,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cat.itur.app.core.model.ParticipantSignal
+import cat.itur.app.core.ui.GeneratedPreview
 import cat.itur.app.core.ui.IturIcons
 import cat.itur.app.feature.map.ui.components.help.helpAnchor
 
@@ -52,6 +57,8 @@ internal fun OngoingState(
     actions: OngoingStateActions,
     presentation: OngoingState,
     modifier: Modifier = Modifier,
+    onLeftControlBoundsChanged: (Rect) -> Unit = {},
+    onRightControlBoundsChanged: (Rect) -> Unit = {},
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         Box(
@@ -62,16 +69,16 @@ internal fun OngoingState(
         ) {
             HelpFABs(onHelpRequested = actions.onHelpRequested)
         }
-
-        OngoingTrackingZone(actions, presentation)
-        OngoingActivityZone(actions, presentation)
+        OngoingTrackingLane(actions, presentation, onLeftControlBoundsChanged)
+        OngoingActivityLane(actions, presentation, onRightControlBoundsChanged)
     }
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.BoxScope.OngoingTrackingZone(
+private fun BoxScope.OngoingTrackingLane(
     actions: OngoingStateActions,
     presentation: OngoingState,
+    onBoundsChanged: (Rect) -> Unit,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -79,7 +86,8 @@ private fun androidx.compose.foundation.layout.BoxScope.OngoingTrackingZone(
         modifier = Modifier
             .align(Alignment.BottomStart)
             .padding(16.dp)
-            .testTag("map_zone_l"),
+            .testTag("map_zone_l")
+            .onGloballyPositioned { onBoundsChanged(it.boundsInRoot()) },
     ) {
         TrackingFABs(
             onTrackUserRequested = actions.onTrackUserRequested,
@@ -95,7 +103,11 @@ private fun androidx.compose.foundation.layout.BoxScope.OngoingTrackingZone(
                 modifier = Modifier
                     .testTag("zoom_group_fab")
                     .semantics { selected = presentation.isGroupTracking }
-                    .helpAnchor("zoom_group_fab", "Zoom out to fit every participant on the map"),
+                    .helpAnchor(
+                        "zoom_group_fab",
+                        "Zoom out to fit every participant on the map",
+                        "Adjusts the map so every participant with a known location fits in the unobscured view.",
+                    ),
                 containerColor = if (presentation.isGroupTracking) {
                     MaterialTheme.colorScheme.primaryContainer
                 } else {
@@ -114,9 +126,10 @@ private fun androidx.compose.foundation.layout.BoxScope.OngoingTrackingZone(
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.BoxScope.OngoingActivityZone(
+private fun BoxScope.OngoingActivityLane(
     actions: OngoingStateActions,
     presentation: OngoingState,
+    onBoundsChanged: (Rect) -> Unit,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -124,7 +137,8 @@ private fun androidx.compose.foundation.layout.BoxScope.OngoingActivityZone(
         modifier = Modifier
             .align(Alignment.BottomEnd)
             .padding(16.dp)
-            .testTag("map_zone_r"),
+            .testTag("map_zone_r")
+            .onGloballyPositioned { onBoundsChanged(it.boundsInRoot()) },
     ) {
         OngoingActivityFABs(
             actions = actions,
@@ -145,7 +159,11 @@ private fun OngoingActivityFABs(
             onClick = actions.onQrRequested,
             modifier = Modifier
                 .testTag("show_qr_fab")
-                .helpAnchor("show_qr_fab", "Show the QR code for others to join this activity"),
+                .helpAnchor(
+                    "show_qr_fab",
+                    "Show the QR code for others to join this activity",
+                    "Displays this activity's QR code so another person can scan it and request to join.",
+                ),
         ) {
             Icon(IturIcons.Join, contentDescription = "Show QR")
         }
@@ -166,6 +184,11 @@ private fun OngoingActivityFABs(
             .helpAnchor(
                 "stop_activity_fab",
                 if (presentation.isOrganizer) "Stop the activity for everyone" else "Leave the activity",
+                if (presentation.isOrganizer) {
+                    "Ends the activity for every participant after confirmation; it cannot continue once stopped."
+                } else {
+                    "Removes you from this activity and stops sharing your activity location with its participants."
+                },
             )
             .serviceAvailability(presentation.activityActionsEnabled),
     ) {
@@ -219,7 +242,11 @@ private fun SafetySignalFAB(
         onClick = onClick,
         modifier = Modifier
             .testTag(tag)
-            .helpAnchor(tag, contentDescription)
+            .helpAnchor(
+                tag,
+                contentDescription,
+                safetySignalHelpDetail(tag),
+            )
             .serviceAvailability(enabled),
         containerColor = color,
     ) {
@@ -227,18 +254,29 @@ private fun SafetySignalFAB(
     }
 }
 
+private fun safetySignalHelpDetail(tag: String): String = when (tag) {
+    "safety_delayed_fab" -> "Tells the organiser and participants that you are stopping and they may continue ahead."
+    "hail_organiser_fab" ->
+        "Sends an urgent request for the organiser and participants " +
+            "to converge on your current position."
+    "safety_ok_fab" -> "Clears your earlier safety signal and tells the group that you are okay."
+    else -> "Updates the safety signal shared with the organiser and other participants."
+}
+
+@GeneratedPreview
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 private fun OrganizerOngoingStatePreview() {
     OngoingState(
         actions = OngoingStateActions(
-            onStopRequested = {},
-            onQrRequested = {},
-            onTrackUserRequested = {},
-            onTrackGroupRequested = {},
-            onOrientationToggleRequested = {},
-            onParticipantSignalRequested = {},
-            onHelpRequested = {},
+            onStopRequested = @GeneratedPreview {},
+            onQrRequested = @GeneratedPreview {},
+            onTrackUserRequested = @GeneratedPreview {},
+            onTrackGroupRequested = @GeneratedPreview {},
+            onOrientationToggleRequested = @GeneratedPreview {},
+            onParticipantSignalRequested = @GeneratedPreview {},
+            onHelpRequested = @GeneratedPreview {},
         ),
         presentation = OngoingState(isOrganizer = true),
     )

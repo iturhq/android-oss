@@ -64,7 +64,11 @@ internal fun UserFABs(
             onClick = onSignOutRequested,
             modifier = Modifier
                 .testTag("sign_out_fab")
-                .helpAnchor("sign_out_fab", "Sign out of your account"),
+                .helpAnchor(
+                    "sign_out_fab",
+                    "Sign out of your account",
+                    "Ends your registered session on this device and returns the map to its anonymous identity.",
+                ),
         ) {
             Icon(IturIcons.SignOut, contentDescription = "Sign out")
         }
@@ -73,7 +77,11 @@ internal fun UserFABs(
             onClick = { if (authenticationActionsEnabled) onSignInRequested() },
             modifier = Modifier
                 .testTag("sign_in_fab")
-                .helpAnchor("sign_in_fab", "Sign in to start or manage an activity")
+                .helpAnchor(
+                    "sign_in_fab",
+                    "Sign in to start or manage an activity",
+                    "Opens account sign-in. A registered account can create activities and manage ones it organises.",
+                )
                 .serviceAvailability(authenticationActionsEnabled),
         ) {
             Icon(IturIcons.SignIn, contentDescription = "Sign in")
@@ -98,6 +106,8 @@ internal fun TrackingFABs(
                 .helpAnchor(
                     "map_orientation_fab",
                     "Switch between north-up and direction-of-travel map views",
+                    "Changes whether the map remains north-up or rotates to follow your direction " +
+                        "of travel while tracking your location.",
                 ),
         ) {
             Icon(
@@ -118,7 +128,12 @@ internal fun TrackingFABs(
                 modifier = Modifier
                     .testTag("recenter_fab")
                     .semantics { selected = state.isUserTracking }
-                    .helpAnchor("recenter_fab", "Recenter the map on your own location"),
+                    .helpAnchor(
+                        "recenter_fab",
+                        "Recenter the map on your own location",
+                        "Moves the map back to your latest known position without changing " +
+                            "location sharing or tracking.",
+                    ),
                 containerColor = if (state.isUserTracking) {
                     MaterialTheme.colorScheme.primaryContainer
                 } else {

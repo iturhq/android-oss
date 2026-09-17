@@ -17,7 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import cat.itur.app.core.ui.theme.IturTheme
+import cat.itur.app.core.ui.GeneratedPreview
 
 @Composable
 fun IturButton(
@@ -59,34 +59,61 @@ enum class ActionButtonType {
     WARNING,
 }
 
+@GeneratedPreview
 @Preview(showBackground = true)
 @Composable
 fun DefaultButtonPreview() {
-    IturTheme {
-        IturButton(label = "Some action", onClick = {})
-    }
+    DefaultButtonPreviewContent()
 }
 
+@GeneratedPreview
+@Composable
+private fun DefaultButtonPreviewContent() = IturButton(label = "Some action", onClick = ::previewNoOp)
+
+@GeneratedPreview
 @Preview
 @Composable
 fun SecondaryButtonPreview() {
-    IturTheme {
-        IturButton(type = ActionButtonType.SECONDARY, label = "Some action", onClick = {})
-    }
+    SecondaryButtonPreviewContent()
 }
 
+@GeneratedPreview
+@Composable
+private fun SecondaryButtonPreviewContent() = IturButton(
+    type = ActionButtonType.SECONDARY,
+    label = "Some action",
+    onClick = ::previewNoOp,
+)
+
+@GeneratedPreview
 @Preview
 @Composable
 fun WarningButtonPreview() {
-    IturTheme {
-        IturButton(type = ActionButtonType.WARNING, label = "Be careful", onClick = {})
-    }
+    WarningButtonPreviewContent()
 }
 
+@GeneratedPreview
+@Composable
+private fun WarningButtonPreviewContent() = IturButton(
+    type = ActionButtonType.WARNING,
+    label = "Be careful",
+    onClick = ::previewNoOp,
+)
+
+@GeneratedPreview
 @Preview
 @Composable
 fun DangerButtonPreview() {
-    IturTheme {
-        IturButton(type = ActionButtonType.DANGER, label = "Take dangerous action", onClick = {})
-    }
+    DangerButtonPreviewContent()
 }
+
+@GeneratedPreview
+@Composable
+private fun DangerButtonPreviewContent() = IturButton(
+    type = ActionButtonType.DANGER,
+    label = "Take dangerous action",
+    onClick = ::previewNoOp,
+)
+
+@GeneratedPreview
+private fun previewNoOp() = Unit

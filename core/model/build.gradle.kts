@@ -9,6 +9,12 @@ plugins {
 android {
     namespace = "cat.itur.app.core.model"
     compileSdk = 36
+
+    buildTypes {
+        debug {
+            enableUnitTestCoverage = true
+        }
+    }
 }
 
 dependencies {

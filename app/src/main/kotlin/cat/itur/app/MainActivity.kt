@@ -14,8 +14,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.rememberNavController
+import cat.itur.app.core.ui.GeneratedPreview
 import cat.itur.app.core.ui.theme.IturTheme
 import cat.itur.app.ui.IturApp
+import cat.itur.app.ui.IturAppState
 import cat.itur.app.ui.rememberIturAppState
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -39,11 +41,14 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@GeneratedPreview
 @Preview(showBackground = true)
 @Composable
 fun MainActivityPreview() {
     val appState = rememberIturAppState(rememberNavController())
-    IturTheme {
-        IturApp(appState)
-    }
+    MainActivityPreviewContent(appState)
 }
+
+@GeneratedPreview
+@Composable
+private fun MainActivityPreviewContent(appState: IturAppState) = IturApp(appState)

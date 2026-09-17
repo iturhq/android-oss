@@ -10,6 +10,11 @@ plugins {
 android {
     namespace = "cat.itur.app.core.ui"
     compileSdk = 36
+    buildTypes {
+        debug {
+            enableUnitTestCoverage = true
+        }
+    }
     buildFeatures {
         compose = true
     }

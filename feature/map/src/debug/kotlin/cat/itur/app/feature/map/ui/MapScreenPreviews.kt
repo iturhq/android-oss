@@ -7,11 +7,13 @@ package cat.itur.app.feature.map.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
+import cat.itur.app.core.ui.GeneratedPreview
 import cat.itur.app.feature.map.ui.components.map.ErrorState
 import cat.itur.app.feature.map.ui.components.map.IdleState
 import cat.itur.app.feature.map.ui.components.map.OngoingState
 import cat.itur.app.feature.map.ui.components.map.OngoingStateActions
 
+@GeneratedPreview
 @Preview(
     showBackground = true,
     showSystemUi = true,
@@ -29,6 +31,7 @@ fun IdleStatePreview() {
     )
 }
 
+@GeneratedPreview
 @Preview(
     showBackground = true,
     showSystemUi = true,
@@ -50,6 +53,7 @@ fun OngoingStatePreview() {
     )
 }
 
+@GeneratedPreview
 @Preview(
     name = "Landscape",
     showBackground = true,

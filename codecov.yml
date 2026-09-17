@@ -1,3 +1,17 @@
+ignore:
+  # Test infrastructure is exercised by tests but is not shipped as application code.
+  - "core/data-fake/**/*"
+  # Debug-only activities and Compose tooling previews are not production behaviour.
+  - "**/src/debug/**/*"
+  # Annotation processors own these sources; handwritten DI modules remain in scope.
+  - "**/build/generated/**/*"
+  - "**/hilt_aggregated_deps/**/*"
+  - "**/*Factory.java"
+  - "**/*_MembersInjector.java"
+  - "**/Hilt_*.java"
+  - "**/*_HiltModules*.java"
+  - "**/*_GeneratedInjector.java"
+
 coverage:
   status:
     project:

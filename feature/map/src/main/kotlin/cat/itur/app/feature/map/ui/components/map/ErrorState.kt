@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import cat.itur.app.core.ui.GeneratedPreview
 import cat.itur.app.feature.map.R
 
 @Composable
@@ -27,6 +28,8 @@ fun ErrorState(
     )
 }
 
+@GeneratedPreview
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 private fun MapErrorPreview() {

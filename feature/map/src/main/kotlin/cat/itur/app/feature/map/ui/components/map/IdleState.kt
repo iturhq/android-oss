@@ -24,9 +24,9 @@ import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import cat.itur.app.core.ui.GeneratedPreview
 import cat.itur.app.core.ui.IturIcons
 import cat.itur.app.core.ui.R
-import cat.itur.app.core.ui.theme.IturTheme
 import cat.itur.app.feature.map.ui.components.help.helpAnchor
 
 /**
@@ -107,7 +107,11 @@ private fun ActivityFABs(
         onClick = onQRRequested,
         modifier = Modifier
             .testTag("join_activity_fab")
-            .helpAnchor("join_activity_fab", "Join an activity by scanning its QR code"),
+            .helpAnchor(
+                "join_activity_fab",
+                "Join an activity by scanning its QR code",
+                "Opens the camera to scan an organiser's activity QR code, then asks to join that activity.",
+            ),
     ) {
         Icon(IturIcons.Join, contentDescription = "Join activity")
     }
@@ -118,7 +122,11 @@ private fun ActivityFABs(
             onClick = { if (activityActionsEnabled) onStartRequested() },
             modifier = Modifier
                 .testTag("start_activity_fab")
-                .helpAnchor("start_activity_fab", "Start a new activity")
+                .helpAnchor(
+                    "start_activity_fab",
+                    "Start a new activity",
+                    "Creates a new activity for you to organise and opens its joining details for participants.",
+                )
                 .serviceAvailability(activityActionsEnabled),
         ) {
             Icon(IturIcons.Add, contentDescription = "Start activity")
@@ -132,17 +140,24 @@ private fun Modifier.serviceDisabled(): Modifier = alpha(DISABLED_ACTION_ALPHA).
 
 private const val DISABLED_ACTION_ALPHA = 0.38f
 
+@GeneratedPreview
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true)
 @Composable
 private fun IdleMapPreview() {
-    IturTheme {
-        IdleState(
-            onStartRequested = {},
-            onSignInRequested = {},
-            onSignOutRequested = {},
-            onQRRequested = {},
-            onHelpRequested = {},
-            isSignedIn = true,
-        )
-    }
+    IdleMapPreviewContent()
 }
+
+@GeneratedPreview
+@Composable
+private fun IdleMapPreviewContent() = IdleState(
+    onStartRequested = ::previewNoOp,
+    onSignInRequested = ::previewNoOp,
+    onSignOutRequested = ::previewNoOp,
+    onQRRequested = ::previewNoOp,
+    onHelpRequested = ::previewNoOp,
+    isSignedIn = true,
+)
+
+@GeneratedPreview
+private fun previewNoOp() = Unit
