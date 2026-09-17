@@ -90,16 +90,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           disable_search: true
-          files: |
-            core/auth/build/reports/coverage/test/local/debug/report.xml
-            core/data-api/build/reports/coverage/test/debug/report.xml
-            core/data-firebase/build/reports/coverage/test/debug/report.xml
-            core/domain/build/reports/coverage/test/debug/report.xml
-            core/location/build/reports/coverage/test/debug/report.xml
-            core/model/build/reports/coverage/test/debug/report.xml
-            core/ui/build/reports/coverage/test/debug/report.xml
-            feature/map/build/reports/coverage/test/debug/report.xml
-            core/datastore/build/reports/coverage/test/debug/report.xml
+          files: core/auth/build/reports/coverage/test/local/debug/report.xml,core/data-api/build/reports/coverage/test/debug/report.xml,core/data-firebase/build/reports/coverage/test/debug/report.xml,core/domain/build/reports/coverage/test/debug/report.xml,core/location/build/reports/coverage/test/debug/report.xml,core/model/build/reports/coverage/test/debug/report.xml,core/ui/build/reports/coverage/test/debug/report.xml,feature/map/build/reports/coverage/test/debug/report.xml,core/datastore/build/reports/coverage/test/debug/report.xml
           fail_ci_if_error: true
 
       - name: Assemble supported application variants
