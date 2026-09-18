@@ -6,10 +6,17 @@
 package cat.itur.app.core.auth.repository
 
 import android.content.Context
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialProviderConfigurationException
+import androidx.credentials.exceptions.GetCredentialUnsupportedException
+import androidx.credentials.exceptions.NoCredentialException
 import cat.itur.app.core.auth.config.GoogleSignInConfig
-import cat.itur.app.core.data.health.BackendHealthObservation
 import cat.itur.app.core.data.health.BackendHealthReporter
 import cat.itur.app.core.data.repository.FirestoreCollections
+import cat.itur.app.core.data.repository.SignInFailureReason
+import cat.itur.app.core.data.repository.SignInResult
 import cat.itur.app.core.domain.id.UserId
 import cat.itur.app.core.domain.model.User
 import com.google.firebase.auth.FirebaseAuth
@@ -21,6 +28,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
 import dagger.Lazy
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -54,15 +62,12 @@ class FirebaseUserRepositoryTest {
     private val firebaseAuth = mockk<FirebaseAuth>(relaxed = true)
     private val context = mockk<Context>(relaxed = true)
     private val googleSignInConfig = GoogleSignInConfig(webClientId = "test-client-id")
+    private val backendHealthReporter = mockk<BackendHealthReporter>(relaxed = true)
     private val repository = FirebaseUserRepository(
         firebaseAuth,
         context,
         googleSignInConfig,
-        Lazy {
-            object : BackendHealthReporter {
-                override fun report(serviceId: String, observation: BackendHealthObservation) = Unit
-            }
-        },
+        Lazy { backendHealthReporter },
     )
 
     @BeforeTest
@@ -121,10 +126,68 @@ class FirebaseUserRepositoryTest {
     // --- signOut ---
 
     @Test
+    fun `GIVEN an absent OAuth client ID WHEN signing in THEN exposes configuration failure without invoking credentials`() = runBlocking {
+        val unconfiguredRepository = FirebaseUserRepository(
+            firebaseAuth,
+            context,
+            GoogleSignInConfig(webClientId = ""),
+            Lazy { backendHealthReporter },
+        )
+
+        val result = unconfiguredRepository.signIn(context)
+
+        assertEquals(SignInResult.Failure(SignInFailureReason.NOT_CONFIGURED), result)
+        verify(exactly = 1) { backendHealthReporter.report(any(), any()) }
+    }
+
+    @Test
+    fun `GIVEN account selection is cancelled WHEN signing in THEN returns Cancelled without reporting a backend failure`() = runBlocking {
+        val repository = repositoryWithCredentialFailure(GetCredentialCancellationException())
+
+        assertEquals(SignInResult.Cancelled, repository.signIn(context))
+        verify(exactly = 0) { backendHealthReporter.report(any(), any()) }
+    }
+
+    @Test
+    fun `GIVEN no credential exists WHEN signing in THEN returns NO_ACCOUNT`() = runBlocking {
+        val repository = repositoryWithCredentialFailure(NoCredentialException())
+
+        assertEquals(SignInResult.Failure(SignInFailureReason.NO_ACCOUNT), repository.signIn(context))
+        verify(exactly = 0) { backendHealthReporter.report(any(), any()) }
+    }
+
+    @Test
+    fun `GIVEN credential provider is misconfigured WHEN signing in THEN returns NOT_CONFIGURED`() = runBlocking {
+        val repository = repositoryWithCredentialFailure(GetCredentialProviderConfigurationException())
+
+        assertEquals(SignInResult.Failure(SignInFailureReason.NOT_CONFIGURED), repository.signIn(context))
+        verify(exactly = 0) { backendHealthReporter.report(any(), any()) }
+    }
+
+    @Test
+    fun `GIVEN credential provider is unsupported WHEN signing in THEN returns NOT_CONFIGURED`() = runBlocking {
+        val repository = repositoryWithCredentialFailure(GetCredentialUnsupportedException())
+
+        assertEquals(SignInResult.Failure(SignInFailureReason.NOT_CONFIGURED), repository.signIn(context))
+        verify(exactly = 0) { backendHealthReporter.report(any(), any()) }
+    }
+
+    @Test
     fun `WHEN signing out THEN Firebase Auth's own sign-out is invoked`() = runBlocking {
         repository.signOut()
 
         verify(exactly = 1) { firebaseAuth.signOut() }
+    }
+
+    @Test
+    fun `GIVEN Firebase sign-out fails WHEN signing out THEN reports failure and preserves provider exception`() = runBlocking {
+        val failure = IllegalStateException("sign-out unavailable")
+        every { firebaseAuth.signOut() } throws failure
+
+        val thrown = assertFailsWith<IllegalStateException> { repository.signOut() }
+
+        assertEquals(failure, thrown)
+        verify(exactly = 1) { backendHealthReporter.report(any(), any()) }
     }
 
     // --- getAll ---
@@ -174,5 +237,19 @@ class FirebaseUserRepositoryTest {
 
         assertFailsWith<RuntimeException> { repository.getAll(listOf(UserId("id-1"))) }
         Unit
+    }
+
+    private fun repositoryWithCredentialFailure(failure: Throwable): FirebaseUserRepository {
+        val credentialManager = mockk<CredentialManager>()
+        coEvery {
+            credentialManager.getCredential(any<Context>(), any<GetCredentialRequest>())
+        } throws failure
+        return FirebaseUserRepository(
+            firebaseAuth,
+            context,
+            googleSignInConfig,
+            Lazy { backendHealthReporter },
+            credentialManagerFactory = { credentialManager },
+        )
     }
 }

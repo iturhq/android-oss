@@ -53,7 +53,18 @@ class FirebaseUserRepository @Inject constructor(
     private val googleSignInConfig: GoogleSignInConfig,
     private val backendHealthReporter: Lazy<BackendHealthReporter>,
 ) : UserRepository {
+    private var credentialManagerFactory: (Context) -> CredentialManager = CredentialManager::create
     private var currentUser: User? = null
+
+    internal constructor(
+        firebaseAuth: FirebaseAuth,
+        context: Context,
+        googleSignInConfig: GoogleSignInConfig,
+        backendHealthReporter: Lazy<BackendHealthReporter>,
+        credentialManagerFactory: (Context) -> CredentialManager,
+    ) : this(firebaseAuth, context, googleSignInConfig, backendHealthReporter) {
+        this.credentialManagerFactory = credentialManagerFactory
+    }
 
     override suspend fun getCurrentUser(): User {
         // Firebase restores a persisted session asynchronously during process startup. Reading
@@ -119,7 +130,7 @@ class FirebaseUserRepository @Inject constructor(
             backendHealthReporter.get().reportFirebaseAuthFailed(SignInFailureReason.NOT_CONFIGURED)
             return SignInResult.Failure(SignInFailureReason.NOT_CONFIGURED)
         }
-        val credentialManager = CredentialManager.create(context)
+        val credentialManager = credentialManagerFactory(context)
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
             .setServerClientId(googleSignInConfig.webClientId)
