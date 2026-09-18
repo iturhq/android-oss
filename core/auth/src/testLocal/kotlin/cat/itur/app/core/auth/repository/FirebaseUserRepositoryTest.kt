@@ -26,6 +26,10 @@ import cat.itur.app.core.domain.model.User
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.AuthCredential
+import com.google.firebase.auth.AuthResult
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldPath
@@ -36,7 +40,9 @@ import dagger.Lazy
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
 import io.mockk.mockkStatic
+import io.mockk.unmockkObject
 import io.mockk.slot
 import io.mockk.unmockkStatic
 import io.mockk.verify
@@ -174,6 +180,24 @@ class FirebaseUserRepositoryTest {
         verify(exactly = 1) { legacyEditor.remove("device_uuid") }
     }
 
+    @Test
+    fun `GIVEN neither store has an anonymous device ID WHEN getting the current user THEN creates and persists one`() = runBlocking {
+        val securePrefs = mockk<SharedPreferences>()
+        val encryptedEditor = mockk<SharedPreferences.Editor>(relaxed = true)
+        val legacyPrefs = mockk<SharedPreferences>()
+        every { firebaseAuth.currentUser } returns null
+        every { securePrefs.getString("device_uuid", null) } returns null
+        every { securePrefs.edit() } returns encryptedEditor
+        every { context.getSharedPreferences("itur_prefs", Context.MODE_PRIVATE) } returns legacyPrefs
+        every { legacyPrefs.getString("device_uuid", null) } returns null
+        every { legacyPrefs.contains("device_uuid") } returns false
+
+        val user = assertIs<User.AnonymousUser>(repositoryWithSecurePreferences(securePrefs).getCurrentUser())
+
+        assertTrue(user.id.value.isNotBlank())
+        verify(exactly = 1) { encryptedEditor.putString("device_uuid", user.id.value) }
+    }
+
     // --- signOut ---
 
     @Test
@@ -250,6 +274,62 @@ class FirebaseUserRepositoryTest {
     }
 
     @Test
+    fun `GIVEN a Google credential and Firebase user WHEN signing in THEN returns the mapped registered user`() = runBlocking {
+        mockkObject(GoogleIdTokenCredential.Companion)
+        mockkStatic(GoogleAuthProvider::class)
+        try {
+            val credentialManager = mockk<CredentialManager>()
+            val response = mockk<GetCredentialResponse>()
+            every { response.credential } returns googleCustomCredential()
+            coEvery { credentialManager.getCredential(any<Context>(), any<GetCredentialRequest>()) } returns response
+            val googleCredential = mockk<GoogleIdTokenCredential> { every { idToken } returns "id-token" }
+            every { GoogleIdTokenCredential.createFrom(any()) } returns googleCredential
+            val firebaseCredential = mockk<AuthCredential>()
+            every { GoogleAuthProvider.getCredential("id-token", null) } returns firebaseCredential
+            val firebaseUser = mockk<FirebaseUser> {
+                every { uid } returns "signed-in-id"
+                every { displayName } returns "Signed In"
+                every { email } returns "signed-in@example.com"
+            }
+            val authResult = mockk<AuthResult> { every { user } returns firebaseUser }
+            every { firebaseAuth.signInWithCredential(firebaseCredential) } returns successfulTask(authResult)
+            val repository = repositoryWithCredentialManager(credentialManager)
+
+            assertEquals(
+                SignInResult.Success(User.RegisteredUser(UserId("signed-in-id"), "Signed In", "signed-in@example.com")),
+                repository.signIn(context),
+            )
+            verify(exactly = 1) { backendHealthReporter.report(any(), any()) }
+        } finally {
+            unmockkStatic(GoogleAuthProvider::class)
+            unmockkObject(GoogleIdTokenCredential.Companion)
+        }
+    }
+
+    @Test
+    fun `GIVEN Firebase returns no user after a Google credential WHEN signing in THEN exposes an unexpected failure`() = runBlocking {
+        mockkObject(GoogleIdTokenCredential.Companion)
+        mockkStatic(GoogleAuthProvider::class)
+        try {
+            val credentialManager = mockk<CredentialManager>()
+            val response = mockk<GetCredentialResponse>()
+            every { response.credential } returns googleCustomCredential()
+            coEvery { credentialManager.getCredential(any<Context>(), any<GetCredentialRequest>()) } returns response
+            every { GoogleIdTokenCredential.createFrom(any()) } returns mockk { every { idToken } returns "id-token" }
+            val firebaseCredential = mockk<AuthCredential>()
+            every { GoogleAuthProvider.getCredential("id-token", null) } returns firebaseCredential
+            val authResult = mockk<AuthResult> { every { user } returns null }
+            every { firebaseAuth.signInWithCredential(firebaseCredential) } returns successfulTask(authResult)
+
+            assertEquals(SignInResult.Failure(SignInFailureReason.UNEXPECTED), repositoryWithCredentialManager(credentialManager).signIn(context))
+            verify(exactly = 1) { backendHealthReporter.report(any(), any()) }
+        } finally {
+            unmockkStatic(GoogleAuthProvider::class)
+            unmockkObject(GoogleIdTokenCredential.Companion)
+        }
+    }
+
+    @Test
     fun `GIVEN Firebase network authentication failure WHEN signing in THEN exposes service unavailable`() = runBlocking {
         val repository = repositoryWithCredentialFailure(com.google.firebase.FirebaseNetworkException("offline"))
 
@@ -274,6 +354,14 @@ class FirebaseUserRepositoryTest {
     }
 
     @Test
+    fun `GIVEN sign-in is cancelled by its caller WHEN signing in THEN propagates cancellation`() = runBlocking {
+        val cancellation = CancellationException("caller cancelled")
+
+        assertFailsWith<CancellationException> { repositoryWithCredentialFailure(cancellation).signIn(context) }
+        verify(exactly = 0) { backendHealthReporter.report(any(), any()) }
+    }
+
+    @Test
     fun `WHEN signing out THEN Firebase Auth's own sign-out is invoked`() = runBlocking {
         repository.signOut()
 
@@ -290,6 +378,14 @@ class FirebaseUserRepositoryTest {
 
         assertEquals(failure, thrown)
         verify(exactly = 1) { backendHealthReporter.report(any(), any()) }
+    }
+
+    @Test
+    fun `GIVEN sign-out is cancelled WHEN signing out THEN propagates cancellation without reporting failure`() = runBlocking {
+        every { firebaseAuth.signOut() } throws CancellationException("caller cancelled")
+
+        assertFailsWith<CancellationException> { repository.signOut() }
+        verify(exactly = 0) { backendHealthReporter.report(any(), any()) }
     }
 
     // --- getAll ---
@@ -354,6 +450,18 @@ class FirebaseUserRepositoryTest {
             credentialManagerFactory = { credentialManager },
         )
     }
+
+    private fun repositoryWithCredentialManager(credentialManager: CredentialManager): FirebaseUserRepository =
+        FirebaseUserRepository(
+            firebaseAuth,
+            context,
+            googleSignInConfig,
+            Lazy { backendHealthReporter },
+            credentialManagerFactory = { credentialManager },
+        )
+
+    private fun googleCustomCredential(): CustomCredential =
+        CustomCredential(GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL, mockk<Bundle>(relaxed = true))
 
     private fun repositoryWithSecurePreferences(securePrefs: SharedPreferences): FirebaseUserRepository =
         FirebaseUserRepository(
