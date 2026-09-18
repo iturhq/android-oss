@@ -77,6 +77,11 @@ val expectedUnitCoverageReports = listOf(
     "feature:map" to "feature/map/build/reports/coverage/test/debug/report.xml",
 )
 
+val expectedDeviceCoverageReports = listOf(
+    "core:datastore" to "core/datastore/build/reports/coverage/androidTest/debug/connected/report.xml",
+    "feature:map" to "feature/map/build/reports/coverage/androidTest/debug/connected/report.xml",
+)
+
 val verifyUnitCoverageReports = tasks.register("verifyUnitCoverageReports") {
     group = "verification"
     description = "Fails if a required unit coverage XML report is missing or empty and writes its aggregate."
@@ -167,4 +172,33 @@ tasks.register("unitTestCoverage") {
         ":feature:map:createDebugUnitTestCoverageReport",
     )
     finalizedBy(verifyUnitCoverageReports)
+}
+
+val verifyDeviceCoverageReports = tasks.register("verifyDeviceCoverageReports") {
+    group = "verification"
+    description = "Fails if a required Android device coverage XML report is missing or empty."
+    notCompatibleWithConfigurationCache("Inspects Android device coverage reports at execution time.")
+
+    val reportFiles = expectedDeviceCoverageReports.map { (_, path) -> rootProject.file(path) }
+    inputs.files(reportFiles)
+
+    doLast {
+        val missingReports = expectedDeviceCoverageReports.filter { (_, path) ->
+            rootProject.file(path).let { !it.isFile || it.length() == 0L }
+        }
+        check(missingReports.isEmpty()) {
+            "Required Android device coverage report(s) missing or empty: " +
+                missingReports.joinToString { (module, path) -> "$module ($path)" }
+        }
+    }
+}
+
+tasks.register("deviceTestCoverage") {
+    group = "verification"
+    description = "Runs Android device coverage reports for every instrumented coverage module."
+    dependsOn(
+        ":core:datastore:createDebugCoverageReport",
+        ":feature:map:createDebugCoverageReport",
+    )
+    finalizedBy(verifyDeviceCoverageReports)
 }

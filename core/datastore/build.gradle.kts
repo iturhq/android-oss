@@ -14,12 +14,14 @@ android {
     compileSdk = 36
 
     defaultConfig {
+        multiDexEnabled = true
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         debug {
             enableUnitTestCoverage = true
+            enableAndroidTestCoverage = true
         }
     }
 }
