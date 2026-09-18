@@ -6,6 +6,7 @@
 package cat.itur.app.core.auth.repository
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
@@ -138,6 +139,39 @@ class FirebaseUserRepositoryTest {
 
         assertFailsWith<CancellationException> { result.await() }
         verify(exactly = 1) { firebaseAuth.removeAuthStateListener(listener.captured) }
+    }
+
+    @Test
+    fun `GIVEN an encrypted anonymous device ID WHEN getting the current user THEN returns that stable anonymous user`() = runBlocking {
+        val securePrefs = mockk<SharedPreferences>()
+        every { firebaseAuth.currentUser } returns null
+        every { securePrefs.getString("device_uuid", null) } returns "secure-device-id"
+
+        val user = repositoryWithSecurePreferences(securePrefs).getCurrentUser()
+
+        assertEquals(User.AnonymousUser(UserId("secure-device-id")), user)
+        verify(exactly = 0) { context.getSharedPreferences(any(), any()) }
+    }
+
+    @Test
+    fun `GIVEN a legacy anonymous device ID WHEN getting the current user THEN migrates it into encrypted storage and clears legacy storage`() = runBlocking {
+        val securePrefs = mockk<SharedPreferences>()
+        val encryptedEditor = mockk<SharedPreferences.Editor>(relaxed = true)
+        val legacyPrefs = mockk<SharedPreferences>()
+        val legacyEditor = mockk<SharedPreferences.Editor>(relaxed = true)
+        every { firebaseAuth.currentUser } returns null
+        every { securePrefs.getString("device_uuid", null) } returns null
+        every { securePrefs.edit() } returns encryptedEditor
+        every { context.getSharedPreferences("itur_prefs", Context.MODE_PRIVATE) } returns legacyPrefs
+        every { legacyPrefs.getString("device_uuid", null) } returns "legacy-device-id"
+        every { legacyPrefs.contains("device_uuid") } returns true
+        every { legacyPrefs.edit() } returns legacyEditor
+
+        val user = repositoryWithSecurePreferences(securePrefs).getCurrentUser()
+
+        assertEquals(User.AnonymousUser(UserId("legacy-device-id")), user)
+        verify(exactly = 1) { encryptedEditor.putString("device_uuid", "legacy-device-id") }
+        verify(exactly = 1) { legacyEditor.remove("device_uuid") }
     }
 
     // --- signOut ---
@@ -320,4 +354,14 @@ class FirebaseUserRepositoryTest {
             credentialManagerFactory = { credentialManager },
         )
     }
+
+    private fun repositoryWithSecurePreferences(securePrefs: SharedPreferences): FirebaseUserRepository =
+        FirebaseUserRepository(
+            firebaseAuth,
+            context,
+            googleSignInConfig,
+            Lazy { backendHealthReporter },
+            credentialManagerFactory = CredentialManager::create,
+            securePreferencesFactory = { securePrefs },
+        )
 }
