@@ -239,6 +239,44 @@ class FirebaseActivityRepositoryTest {
         assertEquals("offline", result.message)
     }
 
+    @Test
+    fun `GIVEN canonical signal loading fails WHEN getting an activity THEN the public error preserves the cause`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { docRef.get() } returns successfulTask(
+            mockk {
+                every { exists() } returns true
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
+            },
+        )
+        val signalLoadingRepository = FirebaseActivityRepository(
+            firestore,
+            mockk(relaxed = true),
+            transactionExecutor,
+            admissionGateway,
+        ) { throw IllegalStateException("canonical signals unavailable") }
+
+        val result = signalLoadingRepository.getActivity(ACTIVITY_ID)
+
+        assertEquals("canonical signals unavailable", assertIs<DataResult.Error>(result).message)
+    }
+
+    @Test
+    fun `GIVEN an activity with an unknown status WHEN getting it THEN conversion failure becomes Error`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { docRef.get() } returns successfulTask(
+            mockk {
+                every { exists() } returns true
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(status = "RETIRED")
+            },
+        )
+
+        val result = repository.getActivity(ACTIVITY_ID)
+
+        assertTrue(assertIs<DataResult.Error>(result).message.contains("RETIRED"))
+    }
+
     // --- getActivities ---
 
     @Test
@@ -319,6 +357,20 @@ class FirebaseActivityRepositoryTest {
 
         assertIs<DataResult.Error>(result)
         Unit
+    }
+
+    @Test
+    fun `GIVEN a listed activity with an unknown status WHEN getting activities THEN conversion failure becomes Error`() = runBlocking {
+        val query = mockk<Query>()
+        every { activitiesCollection.whereEqualTo("organizerId", ORGANIZER_ID.value) } returns query
+        val querySnapshot = mockk<QuerySnapshot> {
+            every { toObjects(IturActivityDTO::class.java) } returns listOf(ACTIVITY_DTO.copy(status = "RETIRED"))
+        }
+        every { query.get() } returns successfulTask(querySnapshot)
+
+        val result = repository.getActivities(ActivityFilter.ByOrganizer(ORGANIZER_ID))
+
+        assertTrue(assertIs<DataResult.Error>(result).message.contains("RETIRED"))
     }
 
     // --- updateActivityStatus ---
@@ -553,6 +605,19 @@ class FirebaseActivityRepositoryTest {
 
         assertIs<DataResult.Error>(result)
         Unit
+    }
+
+    @Test
+    fun `GIVEN a deleted activity with an unknown status WHEN returning it THEN conversion failure becomes Error`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { transaction.get(docRef) } returns mockk {
+            every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(status = "RETIRED")
+        }
+
+        val result = repository.deleteActivity(ACTIVITY_ID)
+
+        assertTrue(assertIs<DataResult.Error>(result).message.contains("RETIRED"))
     }
 
     // --- addParticipant / removeParticipant ---
