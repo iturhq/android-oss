@@ -244,7 +244,7 @@ class FirebaseActivityRepositoryTest {
         val docRef = mockk<DocumentReference>()
         every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
         every { docRef.get() } returns successfulTask(
-            mockk {
+            mockk<DocumentSnapshot> {
                 every { exists() } returns true
                 every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
             },
@@ -266,7 +266,7 @@ class FirebaseActivityRepositoryTest {
         val docRef = mockk<DocumentReference>()
         every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
         every { docRef.get() } returns successfulTask(
-            mockk {
+            mockk<DocumentSnapshot> {
                 every { exists() } returns true
                 every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(status = "RETIRED")
             },
@@ -431,7 +431,7 @@ class FirebaseActivityRepositoryTest {
         val docRef = mockk<DocumentReference>()
         every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
         every { docRef.get() } returns successfulTask(
-            mockk {
+            mockk<DocumentSnapshot> {
                 every { exists() } returns true
                 every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
             },
@@ -740,6 +740,50 @@ class FirebaseActivityRepositoryTest {
             admissionGateway.signalCalls,
         )
         verify(exactly = 0) { transaction.update(any<DocumentReference>(), any<FieldPath>(), any(), *anyVararg()) }
+    }
+
+    @Test
+    fun `WHEN clearing a participant signal THEN the trusted callable receives a null signal`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { docRef.get() } returns successfulTask(
+            mockk {
+                every { exists() } returns true
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
+            },
+        )
+        admissionGateway.signalResult = DataResult.Success(ACTIVITY_ID)
+
+        val result = repository.participantSignalRepository.clearParticipantSignal(ACTIVITY_ID, PARTICIPANT_ID)
+
+        assertIs<DataResult.Success<IturActivity>>(result)
+        assertEquals(listOf<Pair<IturActivityId, ParticipantSignal?>>(ACTIVITY_ID to null), admissionGateway.signalCalls)
+    }
+
+    @Test
+    fun `requesting attention exposes trusted signal failures`() = runBlocking {
+        admissionGateway.signalResult = DataResult.Error("not a participant")
+
+        val failure = assertFailsWith<IllegalStateException> {
+            repository.requestAttention(ACTIVITY_ID, PARTICIPANT_ID)
+        }
+
+        assertEquals("not a participant", failure.message)
+        assertEquals(
+            listOf<Pair<IturActivityId, ParticipantSignal?>>(ACTIVITY_ID to ParticipantSignal.NEEDS_HELP),
+            admissionGateway.signalCalls,
+        )
+    }
+
+    @Test
+    fun `requesting attention exposes a missing activity`() = runBlocking {
+        admissionGateway.signalResult = DataResult.NotFound(ACTIVITY_ID.value)
+
+        val failure = assertFailsWith<IllegalStateException> {
+            repository.requestAttention(ACTIVITY_ID, PARTICIPANT_ID)
+        }
+
+        assertEquals("Activity ${ACTIVITY_ID.value} not found", failure.message)
     }
 
     @Test
