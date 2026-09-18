@@ -120,4 +120,21 @@ class BackendHealthCheckTest {
 
         assertEquals(service, legacy.service)
     }
+
+    @Test
+    fun `reachability success restores an unavailable service and clears stale diagnostics`() {
+        val unavailable = working.withObservation(
+            BackendHealthObservation.ReachabilityFailed(
+                BackendDiagnosticEvidence.sanitized("Connection refused", "network trace"),
+            ),
+        )
+
+        val recovered = unavailable.withObservation(
+            BackendHealthObservation.ReachabilitySucceeded("Connection established"),
+        )
+
+        assertEquals(BackendHealthStatus.WORKING, recovered.status)
+        assertEquals("Connection established", recovered.detail)
+        assertEquals(null, recovered.diagnosticTrace)
+    }
 }

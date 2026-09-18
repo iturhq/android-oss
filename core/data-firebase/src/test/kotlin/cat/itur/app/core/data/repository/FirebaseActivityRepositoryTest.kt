@@ -590,6 +590,17 @@ class FirebaseActivityRepositoryTest {
     }
 
     @Test
+    fun `GIVEN trusted admission reports a missing activity WHEN joining THEN the conflict is forwarded without a Firestore write`() = runBlocking {
+        admissionGateway.joinResult = DataResult.NotFound(ACTIVITY_ID.value)
+
+        val result = repository.addParticipant(ACTIVITY_ID, PARTICIPANT_ID)
+
+        assertEquals(ACTIVITY_ID.value, assertIs<DataResult.NotFound>(result).id)
+        assertEquals(listOf(ACTIVITY_ID), admissionGateway.joinCalls)
+        verify(exactly = 0) { transaction.update(any<DocumentReference>(), any<FieldPath>(), any(), *anyVararg()) }
+    }
+
+    @Test
     fun `WHEN removing a participant THEN trusted departure runs and the stored activity is returned`() = runBlocking {
         val docRef = mockk<DocumentReference>()
         every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
