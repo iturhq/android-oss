@@ -11,6 +11,7 @@ import android.util.Base64
 import android.util.Log
 import java.security.GeneralSecurityException
 import java.security.KeyStore
+import java.security.ProviderException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -40,11 +41,16 @@ private const val GCM_IV_LENGTH_BYTES = 12
  * by app versions that stored the email as plaintext.
  */
 internal class AndroidKeystoreEmailCipher(
-    currentKeyAlias: String = CURRENT_KEY_ALIAS,
-    legacyKeyAlias: String = LEGACY_KEY_ALIAS,
+    private val emailKeyStore: EmailKeyStore,
+    private val logger: EmailCipherLogger,
+    private val encoding: EmailCipherEncoding = AndroidEmailCipherEncoding,
 ) : EmailCipher,
     StoredEmailMigration {
-    private val emailKeyStore = AndroidEmailKeyStore(currentKeyAlias, legacyKeyAlias)
+
+    internal constructor(
+        currentKeyAlias: String = CURRENT_KEY_ALIAS,
+        legacyKeyAlias: String = LEGACY_KEY_ALIAS,
+    ) : this(AndroidEmailKeyStore(currentKeyAlias, legacyKeyAlias), AndroidEmailCipherLogger)
 
     override fun encrypt(plainText: String): String {
         if (plainText.isEmpty()) return ""
@@ -52,7 +58,7 @@ internal class AndroidKeystoreEmailCipher(
             init(Cipher.ENCRYPT_MODE, emailKeyStore.currentKey())
         }
         val ciphertext = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
-        return CURRENT_CIPHERTEXT_PREFIX + Base64.encodeToString(cipher.iv + ciphertext, Base64.NO_WRAP)
+        return CURRENT_CIPHERTEXT_PREFIX + encoding.encode(cipher.iv + ciphertext)
     }
 
     /**
@@ -65,7 +71,7 @@ internal class AndroidKeystoreEmailCipher(
     override fun decrypt(storedValue: String): String = when {
         storedValue.isEmpty() -> ""
         !storedValue.startsWith(CURRENT_CIPHERTEXT_PREFIX) -> {
-            Log.w(TAG, "Stored email has not completed encryption migration; treating as unset.")
+            logger.warning("Stored email has not completed encryption migration; treating as unset.")
             ""
         }
         else -> decryptCurrentCiphertext(storedValue)
@@ -77,10 +83,13 @@ internal class AndroidKeystoreEmailCipher(
             emailKeyStore.currentKey(),
         )
     } catch (exception: GeneralSecurityException) {
-        Log.w(TAG, "Stored email is undecryptable with this device's Keystore key; treating as unset.", exception)
+        logger.warning("Stored email is undecryptable with this device's Keystore key; treating as unset.", exception)
+        ""
+    } catch (exception: ProviderException) {
+        logger.warning("Stored email has an invalid GCM payload; treating as unset.", exception)
         ""
     } catch (exception: IllegalArgumentException) {
-        Log.w(TAG, "Stored email is not valid base64; treating as unset.", exception)
+        logger.warning("Stored email is not valid base64; treating as unset.", exception)
         ""
     }
 
@@ -101,7 +110,7 @@ internal class AndroidKeystoreEmailCipher(
             legacyPlainText != null -> encrypt(legacyPlainText)
             storedValue.isLegacyPlaintextEmail() -> encrypt(storedValue)
             else -> {
-                Log.w(TAG, "Legacy stored email is neither readable ciphertext nor plaintext; removing it.")
+                logger.warning("Legacy stored email is neither readable ciphertext nor plaintext; removing it.")
                 ""
             }
         }
@@ -119,17 +128,20 @@ internal class AndroidKeystoreEmailCipher(
             try {
                 decryptWithKey(storedValue, legacyKey)
             } catch (exception: GeneralSecurityException) {
-                Log.w(TAG, "Legacy ciphertext cannot be decrypted; it will be removed.", exception)
+                logger.warning("Legacy ciphertext cannot be decrypted; it will be removed.", exception)
+                null
+            } catch (exception: ProviderException) {
+                logger.warning("Legacy ciphertext has an invalid GCM payload; it will be removed.", exception)
                 null
             } catch (exception: IllegalArgumentException) {
-                Log.d(TAG, "Legacy stored email is not encoded as ciphertext.", exception)
+                logger.debug("Legacy stored email is not encoded as ciphertext.", exception)
                 null
             }
         }
     }
 
     private fun decryptWithKey(encodedCiphertext: String, key: SecretKey): String {
-        val combined = Base64.decode(encodedCiphertext, Base64.NO_WRAP)
+        val combined = encoding.decode(encodedCiphertext)
         require(combined.size > GCM_IV_LENGTH_BYTES) { "Ciphertext does not contain an authentication tag." }
         val iv = combined.copyOfRange(0, GCM_IV_LENGTH_BYTES)
         val ciphertext = combined.copyOfRange(GCM_IV_LENGTH_BYTES, combined.size)
@@ -145,11 +157,48 @@ internal class AndroidKeystoreEmailCipher(
     }
 }
 
+internal interface EmailKeyStore {
+    fun currentKey(): SecretKey
+    fun hasLegacyKey(): Boolean
+    fun legacyKey(): SecretKey?
+    fun deleteLegacyKey()
+}
+
+internal interface EmailCipherLogger {
+    fun warning(message: String, exception: Exception? = null)
+    fun debug(message: String, exception: Exception)
+}
+
+internal interface EmailCipherEncoding {
+    fun encode(bytes: ByteArray): String
+    fun decode(value: String): ByteArray
+}
+
+private object AndroidEmailCipherEncoding : EmailCipherEncoding {
+    override fun encode(bytes: ByteArray): String = Base64.encodeToString(bytes, Base64.NO_WRAP)
+
+    override fun decode(value: String): ByteArray = Base64.decode(value, Base64.NO_WRAP)
+}
+
+private object AndroidEmailCipherLogger : EmailCipherLogger {
+    override fun warning(message: String, exception: Exception?) {
+        if (exception == null) {
+            Log.w(TAG, message)
+        } else {
+            Log.w(TAG, message, exception)
+        }
+    }
+
+    override fun debug(message: String, exception: Exception) {
+        Log.d(TAG, message, exception)
+    }
+}
+
 private class AndroidEmailKeyStore(
     private val currentKeyAlias: String,
     private val legacyKeyAlias: String,
-) {
-    fun currentKey(): SecretKey {
+) : EmailKeyStore {
+    override fun currentKey(): SecretKey {
         val keyStore = loadKeyStore()
         (keyStore.getKey(currentKeyAlias, null) as? SecretKey)?.let { return it }
 
@@ -167,11 +216,12 @@ private class AndroidEmailKeyStore(
         }.generateKey()
     }
 
-    fun hasLegacyKey(): Boolean = legacyKeyAlias != currentKeyAlias && loadKeyStore().containsAlias(legacyKeyAlias)
+    override fun hasLegacyKey(): Boolean =
+        legacyKeyAlias != currentKeyAlias && loadKeyStore().containsAlias(legacyKeyAlias)
 
-    fun legacyKey(): SecretKey? = loadKeyStore().getKey(legacyKeyAlias, null) as? SecretKey
+    override fun legacyKey(): SecretKey? = loadKeyStore().getKey(legacyKeyAlias, null) as? SecretKey
 
-    fun deleteLegacyKey() {
+    override fun deleteLegacyKey() {
         if (legacyKeyAlias == currentKeyAlias) return
         loadKeyStore().apply {
             if (containsAlias(legacyKeyAlias)) deleteEntry(legacyKeyAlias)
