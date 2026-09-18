@@ -9,6 +9,9 @@ import androidx.datastore.core.CorruptionException
 import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -71,5 +74,33 @@ class IturSettingsSerializerTest {
             serializer.readFrom(ByteArrayInputStream(truncated))
         }
         assertTrue(exception.cause != null, "the underlying decode failure must not be swallowed")
+    }
+
+    @Test
+    fun `GIVEN a failing persistence stream WHEN reading THEN its IO failure is reported as corruption`() = runBlocking {
+        val expected = IOException("storage unavailable")
+        val input = object : InputStream() {
+            override fun read(): Int = throw expected
+        }
+
+        val exception = assertFailsWith<CorruptionException> {
+            serializer().readFrom(input)
+        }
+
+        assertEquals(expected, exception.cause)
+    }
+
+    @Test
+    fun `GIVEN a failing persistence stream WHEN writing THEN the IO failure reaches the caller`() = runBlocking {
+        val expected = IOException("storage full")
+        val output = object : OutputStream() {
+            override fun write(value: Int) = throw expected
+        }
+
+        val exception = assertFailsWith<IOException> {
+            serializer().writeTo(IturPreferences(user_email = "person@example.com"), output)
+        }
+
+        assertEquals(expected, exception)
     }
 }

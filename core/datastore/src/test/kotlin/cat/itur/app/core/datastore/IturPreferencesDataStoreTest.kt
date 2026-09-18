@@ -9,7 +9,9 @@ import androidx.datastore.core.DataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
+import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -35,6 +37,24 @@ private class FakeEmailCipher : EmailCipher {
 
     @Suppress("MaxLineLength")
     override fun decrypt(storedValue: String): String = if (storedValue.isEmpty()) "" else storedValue.removePrefix("enc:").reversed()
+}
+
+private class FailingIturPreferencesStore(
+    private val failure: IOException,
+) : DataStore<IturPreferences> {
+    override val data: Flow<IturPreferences> = flow { throw failure }
+
+    override suspend fun updateData(
+        transform: suspend (t: IturPreferences) -> IturPreferences,
+    ): IturPreferences = throw failure
+}
+
+private class FailingEmailCipher(
+    private val failure: IllegalStateException,
+) : EmailCipher {
+    override fun encrypt(plainText: String): String = throw failure
+
+    override fun decrypt(storedValue: String): String = throw failure
 }
 
 class IturPreferencesDataStoreTest {
@@ -107,5 +127,58 @@ class IturPreferencesDataStoreTest {
         dataStore.setParticipantDisplayName("Renamed participant")
 
         assertEquals("Renamed participant", dataStore.preferences.first().participantDisplayName)
+    }
+
+    @Test
+    fun `GIVEN a persistence write failure WHEN saving an email THEN it is not silently swallowed`() = runBlocking {
+        val expected = IOException("disk unavailable")
+        val dataStore = IturPreferencesDataStore(FailingIturPreferencesStore(expected), FakeEmailCipher())
+
+        val exception = kotlin.test.assertFailsWith<IOException> {
+            dataStore.setUserEmail("person@example.com")
+        }
+
+        assertEquals(expected, exception)
+    }
+
+    @Test
+    fun `GIVEN a persistence read failure WHEN observing preferences THEN it is surfaced`() = runBlocking {
+        val expected = IOException("file is unreadable")
+        val dataStore = IturPreferencesDataStore(FailingIturPreferencesStore(expected), FakeEmailCipher())
+
+        val exception = kotlin.test.assertFailsWith<IOException> {
+            dataStore.preferences.first()
+        }
+
+        assertEquals(expected, exception)
+    }
+
+    @Test
+    fun `GIVEN an encryption failure WHEN saving an email THEN the backing store remains unchanged`() = runBlocking {
+        val expected = IllegalStateException("keystore unavailable")
+        val backingStore = FakeIturPreferencesStore()
+        val dataStore = IturPreferencesDataStore(backingStore, FailingEmailCipher(expected))
+
+        val exception = kotlin.test.assertFailsWith<IllegalStateException> {
+            dataStore.setUserEmail("person@example.com")
+        }
+
+        assertEquals(expected, exception)
+        assertEquals(IturPreferences(), backingStore.data.first())
+    }
+
+    @Test
+    fun `GIVEN a decryption failure WHEN observing preferences THEN it is surfaced`() = runBlocking {
+        val expected = IllegalStateException("keystore unavailable")
+        val dataStore = IturPreferencesDataStore(
+            FakeIturPreferencesStore(IturPreferences(user_email = "ciphertext")),
+            FailingEmailCipher(expected),
+        )
+
+        val exception = kotlin.test.assertFailsWith<IllegalStateException> {
+            dataStore.preferences.first()
+        }
+
+        assertEquals(expected, exception)
     }
 }
