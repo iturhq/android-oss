@@ -173,6 +173,14 @@ class FirebaseUserRepositoryTest {
     }
 
     @Test
+    fun `GIVEN credential retrieval throws unexpectedly WHEN signing in THEN exposes sanitised failure`() = runBlocking {
+        val repository = repositoryWithCredentialFailure(IllegalStateException("provider failed"))
+
+        assertEquals(SignInResult.Failure(SignInFailureReason.UNEXPECTED), repository.signIn(context))
+        verify(exactly = 1) { backendHealthReporter.report(any(), any()) }
+    }
+
+    @Test
     fun `WHEN signing out THEN Firebase Auth's own sign-out is invoked`() = runBlocking {
         repository.signOut()
 
