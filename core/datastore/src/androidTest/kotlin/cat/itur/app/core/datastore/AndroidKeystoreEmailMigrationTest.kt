@@ -82,6 +82,45 @@ class AndroidKeystoreEmailMigrationTest {
         }
     }
 
+    @Test
+    fun corruptedCurrentCiphertextIsRecoveredAsAnUnsetEmail() = runBlocking {
+        val fixture = MigrationFixture()
+        try {
+            val encrypted = fixture.cipher.encrypt(fixture.email)
+            val corrupted = encrypted.dropLast(2) + "xx"
+
+            assertEquals("", fixture.cipher.decrypt(corrupted))
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun malformedCurrentCiphertextIsRecoveredAsAnUnsetEmail() {
+        val fixture = MigrationFixture()
+        try {
+            assertEquals("", fixture.cipher.decrypt("aes256-gcm:v2:not valid base64"))
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun orphanedLegacyKeyTriggersMigrationAndIsRemovedEvenWithNoStoredEmail() = runBlocking {
+        val fixture = MigrationFixture()
+        try {
+            encryptLegacy(fixture.legacyKeyAlias, fixture.email)
+            fixture.writeRaw(IturPreferences())
+
+            val store = fixture.createStore()
+
+            assertEquals("", IturPreferencesDataStore(store, fixture.cipher).preferences.first().email)
+            assertFalse(keyStore().containsAlias(fixture.legacyKeyAlias))
+        } finally {
+            fixture.close()
+        }
+    }
+
     private class MigrationFixture : AutoCloseable {
         private val suffix = UUID.randomUUID().toString()
         val currentKeyAlias = "aoss-1593-current-$suffix"
