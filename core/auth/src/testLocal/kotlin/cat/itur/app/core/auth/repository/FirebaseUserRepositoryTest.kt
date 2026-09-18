@@ -6,8 +6,11 @@
 package cat.itur.app.core.auth.repository
 
 import android.content.Context
+import android.os.Bundle
 import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
+import androidx.credentials.GetCredentialResponse
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialProviderConfigurationException
 import androidx.credentials.exceptions.GetCredentialUnsupportedException
@@ -20,6 +23,7 @@ import cat.itur.app.core.data.repository.SignInResult
 import cat.itur.app.core.domain.id.UserId
 import cat.itur.app.core.domain.model.User
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentSnapshot
@@ -36,6 +40,7 @@ import io.mockk.slot
 import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlin.test.AfterTest
@@ -123,6 +128,18 @@ class FirebaseUserRepositoryTest {
         verify(exactly = 1) { firebaseAuth.removeAuthStateListener(listener.captured) }
     }
 
+    @Test
+    fun `GIVEN current-user lookup is cancelled before Firebase responds THEN unregisters auth listener`() = runBlocking {
+        val listener = slot<FirebaseAuth.AuthStateListener>()
+        every { firebaseAuth.addAuthStateListener(capture(listener)) } returns Unit
+
+        val result = async(start = CoroutineStart.UNDISPATCHED) { repository.getCurrentUser() }
+        result.cancel()
+
+        assertFailsWith<CancellationException> { result.await() }
+        verify(exactly = 1) { firebaseAuth.removeAuthStateListener(listener.captured) }
+    }
+
     // --- signOut ---
 
     @Test
@@ -181,10 +198,53 @@ class FirebaseUserRepositoryTest {
     }
 
     @Test
+    fun `GIVEN a non-Google credential result WHEN signing in THEN exposes sanitised failure`() = runBlocking {
+        val credentialManager = mockk<CredentialManager>()
+        val response = mockk<GetCredentialResponse>()
+        every { response.credential } returns CustomCredential("unsupported", mockk<Bundle>(relaxed = true))
+        coEvery { credentialManager.getCredential(any<Context>(), any<GetCredentialRequest>()) } returns response
+        val repository = FirebaseUserRepository(
+            firebaseAuth,
+            context,
+            googleSignInConfig,
+            Lazy { backendHealthReporter },
+            credentialManagerFactory = { credentialManager },
+        )
+
+        assertEquals(SignInResult.Failure(SignInFailureReason.UNEXPECTED), repository.signIn(context))
+        verify(exactly = 1) { backendHealthReporter.report(any(), any()) }
+    }
+
+    @Test
+    fun `GIVEN Firebase network authentication failure WHEN signing in THEN exposes service unavailable`() = runBlocking {
+        val repository = repositoryWithCredentialFailure(com.google.firebase.FirebaseNetworkException("offline"))
+
+        assertEquals(SignInResult.Failure(SignInFailureReason.SERVICE_UNAVAILABLE), repository.signIn(context))
+        verify(exactly = 1) { backendHealthReporter.report(any(), any()) }
+    }
+
+    @Test
+    fun `GIVEN Firebase reports an invalid credential WHEN signing in THEN exposes configuration failure`() = runBlocking {
+        val repository = repositoryWithCredentialFailure(FirebaseAuthException("ERROR_INVALID_CREDENTIAL", "invalid"))
+
+        assertEquals(SignInResult.Failure(SignInFailureReason.NOT_CONFIGURED), repository.signIn(context))
+        verify(exactly = 1) { backendHealthReporter.report(any(), any()) }
+    }
+
+    @Test
+    fun `GIVEN Firebase reports an unknown auth failure WHEN signing in THEN exposes unexpected failure`() = runBlocking {
+        val repository = repositoryWithCredentialFailure(FirebaseAuthException("ERROR_USER_DISABLED", "disabled"))
+
+        assertEquals(SignInResult.Failure(SignInFailureReason.UNEXPECTED), repository.signIn(context))
+        verify(exactly = 1) { backendHealthReporter.report(any(), any()) }
+    }
+
+    @Test
     fun `WHEN signing out THEN Firebase Auth's own sign-out is invoked`() = runBlocking {
         repository.signOut()
 
         verify(exactly = 1) { firebaseAuth.signOut() }
+        verify(exactly = 1) { backendHealthReporter.report(any(), any()) }
     }
 
     @Test
