@@ -121,6 +121,40 @@ class AndroidKeystoreEmailMigrationTest {
         }
     }
 
+    @Test
+    fun unreadableLegacyCiphertextIsRemovedAndDoesNotBlockPreferencesRecovery() = runBlocking {
+        val fixture = MigrationFixture()
+        try {
+            encryptLegacy(fixture.legacyKeyAlias, fixture.email)
+            fixture.writeRaw(IturPreferences(user_email = "not valid base64"))
+
+            val store = fixture.createStore()
+            val preferences = IturPreferencesDataStore(store, fixture.cipher).preferences.first()
+
+            assertEquals("", preferences.email)
+            assertEquals("", store.data.first().user_email)
+            assertFalse(keyStore().containsAlias(fixture.legacyKeyAlias))
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun invalidLegacyPlaintextIsRemovedAndDoesNotBlockPreferencesRecovery() = runBlocking {
+        val fixture = MigrationFixture()
+        try {
+            fixture.writeRaw(IturPreferences(user_email = "not-an-email"))
+
+            val store = fixture.createStore()
+            val preferences = IturPreferencesDataStore(store, fixture.cipher).preferences.first()
+
+            assertEquals("", preferences.email)
+            assertEquals("", store.data.first().user_email)
+        } finally {
+            fixture.close()
+        }
+    }
+
     private class MigrationFixture : AutoCloseable {
         private val suffix = UUID.randomUUID().toString()
         val currentKeyAlias = "aoss-1593-current-$suffix"
