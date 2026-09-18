@@ -169,6 +169,7 @@ class MapScreenTest {
         assertTrue(topRightZone.center.x > rootWidth / 2f)
         assertTrue(rightZone.center.x > rootWidth / 2f)
         assertTrue(help.bottom <= signIn.top)
+        assertTrue(join.bottom <= signIn.top)
         assertContains(topRightZone, help)
         assertContains(rightZone, signIn)
         assertContains(rightZone, join)

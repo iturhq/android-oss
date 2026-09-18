@@ -75,17 +75,17 @@ fun IdleState(
                 .padding(16.dp)
                 .testTag("map_zone_r"),
         ) {
-            UserFABs(
-                onSignInRequested,
-                onSignOutRequested,
-                isSignedIn,
-                authenticationActionsEnabled,
-            )
             ActivityFABs(
                 onStartRequested = onStartRequested,
                 isSignedIn = isSignedIn,
                 onQRRequested = onQRRequested,
                 activityActionsEnabled = activityActionsEnabled,
+            )
+            UserFABs(
+                onSignInRequested,
+                onSignOutRequested,
+                isSignedIn,
+                authenticationActionsEnabled,
             )
         }
     }
