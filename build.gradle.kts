@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import javax.xml.parsers.DocumentBuilderFactory
 
 plugins {
     alias(libs.plugins.android.application) apply false
@@ -64,6 +65,82 @@ subprojects {
     }
 }
 
+val expectedUnitCoverageReports = listOf(
+    "core:auth (local)" to "core/auth/build/reports/coverage/test/local/debug/report.xml",
+    "core:data-api" to "core/data-api/build/reports/coverage/test/debug/report.xml",
+    "core:data-firebase" to "core/data-firebase/build/reports/coverage/test/debug/report.xml",
+    "core:datastore" to "core/datastore/build/reports/coverage/test/debug/report.xml",
+    "core:domain" to "core/domain/build/reports/coverage/test/debug/report.xml",
+    "core:location" to "core/location/build/reports/coverage/test/debug/report.xml",
+    "core:model" to "core/model/build/reports/coverage/test/debug/report.xml",
+    "core:ui" to "core/ui/build/reports/coverage/test/debug/report.xml",
+    "feature:map" to "feature/map/build/reports/coverage/test/debug/report.xml",
+)
+
+val verifyUnitCoverageReports = tasks.register("verifyUnitCoverageReports") {
+    group = "verification"
+    description = "Fails if a required unit coverage XML report is missing or empty and writes its aggregate."
+
+    val reportFiles = expectedUnitCoverageReports.map { (_, path) -> rootProject.file(path) }
+    val summary = layout.buildDirectory.file("reports/coverage/unit-test-summary.txt")
+    inputs.files(reportFiles)
+    outputs.file(summary)
+
+    doLast {
+        val missingReports = expectedUnitCoverageReports.filter { (_, path) ->
+            rootProject.file(path).let { !it.isFile || it.length() == 0L }
+        }
+        if (missingReports.isNotEmpty()) {
+            throw GradleException(
+                "Required unit coverage report(s) missing or empty: " +
+                    missingReports.joinToString { (module, path) -> "$module ($path)" },
+            )
+        }
+
+        val documentBuilder = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+        val moduleCounters = expectedUnitCoverageReports.map { (module, path) ->
+            val report = documentBuilder.parse(rootProject.file(path)).documentElement
+            fun counter(type: String) = (0 until report.childNodes.length)
+                .map { report.childNodes.item(it) }
+                .filter { node -> node.nodeName == "counter" }
+                .map { node -> node.attributes }
+                .firstOrNull { attributes -> attributes.getNamedItem("type").nodeValue == type }
+                ?.let { attributes ->
+                    attributes.getNamedItem("missed").nodeValue.toLong() to
+                        attributes.getNamedItem("covered").nodeValue.toLong()
+                }
+                ?: throw GradleException("$module coverage report has no $type counter: $path")
+            module to (counter("LINE") to counter("BRANCH"))
+        }
+        fun formatCounter(counter: Pair<Long, Long>): String {
+            val (missed, covered) = counter
+            val total = missed + covered
+            val percent = if (total == 0L) 100.0 else covered * 100.0 / total
+            return "$covered/$total (${String.format(java.util.Locale.ROOT, "%.2f", percent)}%)"
+        }
+        val totalLines = moduleCounters.fold(0L to 0L) { total, entry ->
+            total.first + entry.second.first.first to total.second + entry.second.first.second
+        }
+        val totalBranches = moduleCounters.fold(0L to 0L) { total, entry ->
+            total.first + entry.second.second.first to total.second + entry.second.second.second
+        }
+        summary.get().asFile.apply {
+            parentFile.mkdirs()
+            writeText(
+                buildString {
+                    appendLine("Android OSS unit coverage aggregate")
+                    appendLine("module | lines | branches")
+                    moduleCounters.forEach { (module, counters) ->
+                        appendLine("$module | ${formatCounter(counters.first)} | ${formatCounter(counters.second)}")
+                    }
+                    appendLine("TOTAL | ${formatCounter(totalLines)} | ${formatCounter(totalBranches)}")
+                },
+            )
+        }
+        logger.lifecycle("Unit coverage aggregate written to ${summary.get().asFile}")
+    }
+}
+
 tasks.register("unitTestCoverage") {
     group = "verification"
     description = "Runs unit tests and generates every available production coverage report."
@@ -80,4 +157,5 @@ tasks.register("unitTestCoverage") {
         ":core:ui:createDebugUnitTestCoverageReport",
         ":feature:map:createDebugUnitTestCoverageReport",
     )
+    finalizedBy(verifyUnitCoverageReports)
 }
