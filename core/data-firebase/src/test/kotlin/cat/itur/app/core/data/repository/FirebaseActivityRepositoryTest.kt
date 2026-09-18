@@ -26,9 +26,12 @@ import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.Transaction
+import com.google.firebase.functions.FirebaseFunctions
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
 import io.mockk.slot
+import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import java.util.Date
@@ -119,6 +122,140 @@ class FirebaseActivityRepositoryTest {
         transactionExecutor,
         admissionGateway,
     )
+
+    @Test
+    fun `GIVEN the production Firestore adapters WHEN changing status THEN their transaction result is mapped`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { firestore.runTransaction<IturActivityDTO>(any()) } returns successfulTask(ACTIVITY_DTO)
+        val productionAdapterRepository = FirebaseActivityRepository(firestore, mockk<FirebaseFunctions>(relaxed = true))
+
+        val result = productionAdapterRepository.updateActivityStatus(ACTIVITY_ID, IturActivityStatus.READY)
+
+        assertEquals(ACTIVITY_ID, assertIs<DataResult.Success<IturActivity>>(result).data.id)
+        verify(exactly = 1) { firestore.runTransaction<IturActivityDTO>(any()) }
+    }
+
+    @Test
+    fun `GIVEN canonical signals in Firestore WHEN loading through the production adapter THEN they are applied`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        val signals = mockk<CollectionReference>()
+        val canonicalSignal = mockk<DocumentSnapshot> {
+            every { id } returns PARTICIPANT_ID.value
+            every { getString("signal") } returns ParticipantSignal.DELAYED.name
+        }
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { docRef.get() } returns successfulTask(
+            mockk {
+                every { exists() } returns true
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
+            },
+        )
+        every { docRef.collection("participantSignals") } returns signals
+        every { signals.get() } returns successfulTask(
+            mockk<QuerySnapshot> { every { documents } returns listOf(canonicalSignal) },
+        )
+        val productionAdapterRepository = FirebaseActivityRepository(firestore, mockk<FirebaseFunctions>(relaxed = true))
+
+        val result = productionAdapterRepository.getActivity(ACTIVITY_ID)
+
+        assertEquals(
+            ParticipantSignal.DELAYED,
+            assertIs<DataResult.Success<IturActivity>>(result).data.participantSignals[PARTICIPANT_ID],
+        )
+    }
+
+    @Test
+    fun `GIVEN legacy convenience constructors WHEN changing status THEN they retain the production transaction wiring`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { firestore.runTransaction<IturActivityDTO>(any()) } returns successfulTask(ACTIVITY_DTO)
+        mockkObject(FirebaseFunctions.Companion)
+        try {
+            every { FirebaseFunctions.getInstance() } returns mockk(relaxed = true)
+
+            assertIs<DataResult.Success<IturActivity>>(
+                FirebaseActivityRepository(firestore).updateActivityStatus(ACTIVITY_ID, IturActivityStatus.READY),
+            )
+            assertIs<DataResult.Success<IturActivity>>(
+                FirebaseActivityRepository(firestore, RecordingBackendHealthReporter())
+                    .updateActivityStatus(ACTIVITY_ID, IturActivityStatus.READY),
+            )
+        } finally {
+            unmockkObject(FirebaseFunctions.Companion)
+        }
+        verify(exactly = 2) { firestore.runTransaction<IturActivityDTO>(any()) }
+    }
+
+    @Test
+    fun `GIVEN trusted start reports a missing activity WHEN updating to ongoing THEN the missing result is preserved`() = runBlocking {
+        admissionGateway.startResult = DataResult.NotFound(ACTIVITY_ID.value)
+
+        val result = repository.updateActivityStatus(ACTIVITY_ID, IturActivityStatus.ONGOING)
+
+        assertEquals(ACTIVITY_ID.value, assertIs<DataResult.NotFound>(result).id)
+    }
+
+    @Test
+    fun `GIVEN trusted creation reports a missing activity WHEN creating THEN the missing result is preserved`() = runBlocking {
+        admissionGateway.startResult = DataResult.NotFound(ACTIVITY_ID.value)
+
+        val result = repository.createActivity(ORGANIZER_ID)
+
+        assertEquals(ACTIVITY_ID.value, assertIs<DataResult.NotFound>(result).id)
+    }
+
+    @Test
+    fun `GIVEN trusted departure fails or misses its activity WHEN removing THEN its result is preserved`() = runBlocking {
+        admissionGateway.leaveResult = DataResult.Error("departure rejected")
+
+        assertEquals("departure rejected", assertIs<DataResult.Error>(repository.removeParticipant(ACTIVITY_ID, PARTICIPANT_ID)).message)
+
+        admissionGateway.leaveResult = DataResult.NotFound(ACTIVITY_ID.value)
+
+        assertEquals(ACTIVITY_ID.value, assertIs<DataResult.NotFound>(repository.removeParticipant(ACTIVITY_ID, PARTICIPANT_ID)).id)
+    }
+
+    @Test
+    fun `GIVEN attention admission succeeds WHEN requesting attention THEN it completes`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { docRef.get() } returns successfulTask(
+            mockk {
+                every { exists() } returns true
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
+            },
+        )
+        admissionGateway.signalResult = DataResult.Success(ACTIVITY_ID)
+
+        repository.requestAttention(ACTIVITY_ID, PARTICIPANT_ID)
+
+        assertEquals(
+            listOf<Pair<IturActivityId, ParticipantSignal?>>(ACTIVITY_ID to ParticipantSignal.NEEDS_HELP),
+            admissionGateway.signalCalls,
+        )
+    }
+
+    @Test
+    fun `GIVEN invalid stored legacy signals WHEN hydrating THEN they are ignored`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { docRef.get() } returns successfulTask(
+            mockk {
+                every { exists() } returns true
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(
+                    participantSignals = mapOf(
+                        PARTICIPANT_ID.value to "OUTDATED",
+                        ORGANIZER_ID.value to ParticipantSignal.DELAYED.name,
+                    ),
+                )
+            },
+        )
+
+        val result = repository.getActivity(ACTIVITY_ID)
+
+        assertTrue(assertIs<DataResult.Success<IturActivity>>(result).data.participantSignals.isEmpty())
+    }
 
     // --- getActiveActivityId ---
 
