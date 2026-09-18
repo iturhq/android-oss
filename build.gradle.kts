@@ -80,6 +80,7 @@ val expectedUnitCoverageReports = listOf(
 val verifyUnitCoverageReports = tasks.register("verifyUnitCoverageReports") {
     group = "verification"
     description = "Fails if a required unit coverage XML report is missing or empty and writes its aggregate."
+    notCompatibleWithConfigurationCache("Parses XML coverage reports at execution time.")
 
     val reportFiles = expectedUnitCoverageReports.map { (_, path) -> rootProject.file(path) }
     val summary = layout.buildDirectory.file("reports/coverage/unit-test-summary.txt")
@@ -97,7 +98,11 @@ val verifyUnitCoverageReports = tasks.register("verifyUnitCoverageReports") {
             )
         }
 
-        val documentBuilder = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+        val documentBuilder = DocumentBuilderFactory.newInstance().apply {
+            setFeature("http://xml.org/sax/features/external-general-entities", false)
+            setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+            setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+        }.newDocumentBuilder()
         val moduleCounters = expectedUnitCoverageReports.map { (module, path) ->
             val report = documentBuilder.parse(rootProject.file(path)).documentElement
             fun counter(type: String) = (0 until report.childNodes.length)
