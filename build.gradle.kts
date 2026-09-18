@@ -105,7 +105,7 @@ val verifyUnitCoverageReports = tasks.register("verifyUnitCoverageReports") {
         }.newDocumentBuilder()
         val moduleCounters = expectedUnitCoverageReports.map { (module, path) ->
             val report = documentBuilder.parse(rootProject.file(path)).documentElement
-            fun counter(type: String) = (0 until report.childNodes.length)
+            fun counter(type: String, required: Boolean = true) = (0 until report.childNodes.length)
                 .map { report.childNodes.item(it) }
                 .filter { node -> node.nodeName == "counter" }
                 .map { node -> node.attributes }
@@ -114,8 +114,12 @@ val verifyUnitCoverageReports = tasks.register("verifyUnitCoverageReports") {
                     attributes.getNamedItem("missed").nodeValue.toLong() to
                         attributes.getNamedItem("covered").nodeValue.toLong()
                 }
-                ?: throw GradleException("$module coverage report has no $type counter: $path")
-            module to (counter("LINE") to counter("BRANCH"))
+                ?: if (required) {
+                    throw GradleException("$module coverage report has no $type counter: $path")
+                } else {
+                    0L to 0L
+                }
+            module to (counter("LINE") to counter("BRANCH", required = false))
         }
         fun formatCounter(counter: Pair<Long, Long>): String {
             val (missed, covered) = counter
