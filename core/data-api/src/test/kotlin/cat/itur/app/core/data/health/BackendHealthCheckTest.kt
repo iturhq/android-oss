@@ -111,6 +111,22 @@ class BackendHealthCheckTest {
     }
 
     @Test
+    fun `diagnostic evidence falls back for a blank provider message and sanitizes explicit traces`() {
+        val fallback = BackendDiagnosticEvidence.from(
+            IllegalArgumentException("   "),
+            fallbackMessage = "Backend is unavailable",
+        )
+        val sanitized = BackendDiagnosticEvidence.sanitized(
+            summary = "token=should-not-escape",
+            diagnosticTrace = "Authorization: Bearer should-not-escape",
+        )
+
+        assertEquals("IllegalArgumentException: Backend is unavailable", fallback.summary)
+        assertEquals("token=<redacted>", sanitized.summary)
+        assertEquals("Authorization: <redacted>", sanitized.diagnosticTrace)
+    }
+
+    @Test
     fun `legacy two-state health checks still implement the unchanged probe contract`() {
         val legacy = object : BackendHealthCheck {
             override val service = this@BackendHealthCheckTest.service
@@ -119,6 +135,10 @@ class BackendHealthCheckTest {
         }
 
         assertEquals(service, legacy.service)
+        assertEquals(emptySet(), legacy.prerequisiteServiceIds)
+        assertEquals(Int.MAX_VALUE, legacy.diagnosticOrder)
+        assertEquals("Test service is reachable", legacy.successDetail)
+        assertFalse(legacy.recognizes(IllegalStateException("not recognized")))
     }
 
     @Test
