@@ -23,12 +23,12 @@ import cat.itur.app.core.data.repository.SignInFailureReason
 import cat.itur.app.core.data.repository.SignInResult
 import cat.itur.app.core.domain.id.UserId
 import cat.itur.app.core.domain.model.User
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.firebase.auth.AuthCredential
+import com.google.firebase.auth.AuthResult
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseUser
-import com.google.firebase.auth.AuthCredential
-import com.google.firebase.auth.AuthResult
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentSnapshot
@@ -42,12 +42,12 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.mockkStatic
-import io.mockk.unmockkObject
 import io.mockk.slot
+import io.mockk.unmockkObject
 import io.mockk.unmockkStatic
 import io.mockk.verify
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlin.test.AfterTest
@@ -451,25 +451,22 @@ class FirebaseUserRepositoryTest {
         )
     }
 
-    private fun repositoryWithCredentialManager(credentialManager: CredentialManager): FirebaseUserRepository =
-        FirebaseUserRepository(
-            firebaseAuth,
-            context,
-            googleSignInConfig,
-            Lazy { backendHealthReporter },
-            credentialManagerFactory = { credentialManager },
-        )
+    private fun repositoryWithCredentialManager(credentialManager: CredentialManager): FirebaseUserRepository = FirebaseUserRepository(
+        firebaseAuth,
+        context,
+        googleSignInConfig,
+        Lazy { backendHealthReporter },
+        credentialManagerFactory = { credentialManager },
+    )
 
-    private fun googleCustomCredential(): CustomCredential =
-        CustomCredential(GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL, mockk<Bundle>(relaxed = true))
+    private fun googleCustomCredential(): CustomCredential = CustomCredential(GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL, mockk<Bundle>(relaxed = true))
 
-    private fun repositoryWithSecurePreferences(securePrefs: SharedPreferences): FirebaseUserRepository =
-        FirebaseUserRepository(
-            firebaseAuth,
-            context,
-            googleSignInConfig,
-            Lazy { backendHealthReporter },
-            credentialManagerFactory = CredentialManager::create,
-            securePreferencesFactory = { securePrefs },
-        )
+    private fun repositoryWithSecurePreferences(securePrefs: SharedPreferences): FirebaseUserRepository = FirebaseUserRepository(
+        firebaseAuth,
+        context,
+        googleSignInConfig,
+        Lazy { backendHealthReporter },
+        credentialManagerFactory = CredentialManager::create,
+        securePreferencesFactory = { securePrefs },
+    )
 }

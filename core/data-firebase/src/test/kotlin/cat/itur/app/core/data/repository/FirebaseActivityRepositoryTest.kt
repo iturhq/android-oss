@@ -128,7 +128,8 @@ class FirebaseActivityRepositoryTest {
         val docRef = mockk<DocumentReference>()
         every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
         every { firestore.runTransaction<IturActivityDTO>(any()) } returns successfulTask(ACTIVITY_DTO)
-        val productionAdapterRepository = FirebaseActivityRepository(firestore, mockk<FirebaseFunctions>(relaxed = true))
+        val productionAdapterRepository =
+            FirebaseActivityRepository(firestore, mockk<FirebaseFunctions>(relaxed = true))
 
         val result = productionAdapterRepository.updateActivityStatus(ACTIVITY_ID, IturActivityStatus.READY)
 
@@ -155,7 +156,8 @@ class FirebaseActivityRepositoryTest {
         every { signals.get() } returns successfulTask(
             mockk<QuerySnapshot> { every { documents } returns listOf(canonicalSignal) },
         )
-        val productionAdapterRepository = FirebaseActivityRepository(firestore, mockk<FirebaseFunctions>(relaxed = true))
+        val productionAdapterRepository =
+            FirebaseActivityRepository(firestore, mockk<FirebaseFunctions>(relaxed = true))
 
         val result = productionAdapterRepository.getActivity(ACTIVITY_ID)
 
@@ -209,11 +211,17 @@ class FirebaseActivityRepositoryTest {
     fun `GIVEN trusted departure fails or misses its activity WHEN removing THEN its result is preserved`() = runBlocking {
         admissionGateway.leaveResult = DataResult.Error("departure rejected")
 
-        assertEquals("departure rejected", assertIs<DataResult.Error>(repository.removeParticipant(ACTIVITY_ID, PARTICIPANT_ID)).message)
+        assertEquals(
+            "departure rejected",
+            assertIs<DataResult.Error>(repository.removeParticipant(ACTIVITY_ID, PARTICIPANT_ID)).message,
+        )
 
         admissionGateway.leaveResult = DataResult.NotFound(ACTIVITY_ID.value)
 
-        assertEquals(ACTIVITY_ID.value, assertIs<DataResult.NotFound>(repository.removeParticipant(ACTIVITY_ID, PARTICIPANT_ID)).id)
+        assertEquals(
+            ACTIVITY_ID.value,
+            assertIs<DataResult.NotFound>(repository.removeParticipant(ACTIVITY_ID, PARTICIPANT_ID)).id,
+        )
     }
 
     @Test
@@ -894,7 +902,10 @@ class FirebaseActivityRepositoryTest {
         val result = repository.participantSignalRepository.clearParticipantSignal(ACTIVITY_ID, PARTICIPANT_ID)
 
         assertIs<DataResult.Success<IturActivity>>(result)
-        assertEquals(listOf<Pair<IturActivityId, ParticipantSignal?>>(ACTIVITY_ID to null), admissionGateway.signalCalls)
+        assertEquals(
+            listOf<Pair<IturActivityId, ParticipantSignal?>>(ACTIVITY_ID to null),
+            admissionGateway.signalCalls,
+        )
     }
 
     @Test

@@ -120,7 +120,7 @@ class ActivityAdmissionGatewayTest {
     }
 
     @Test
-    fun `GIVEN a callable response without an activity id WHEN joining THEN the invalid response is rejected`() = runBlocking {
+    fun `GIVEN a malformed join response WHEN joining THEN it is rejected`() = runBlocking {
         every { functions.getHttpsCallable("joinActivity") } returns callable
         every { callable.call(mapOf("activityId" to "Activity000000000001")) } returns
             Tasks.forResult(
@@ -138,7 +138,7 @@ class ActivityAdmissionGatewayTest {
     }
 
     @Test
-    fun `GIVEN an unclassified callable failure without a message WHEN leaving THEN a stable fallback is returned`() = runBlocking {
+    fun `GIVEN an unclassified silent failure WHEN leaving THEN a stable fallback is returned`() = runBlocking {
         every { functions.getHttpsCallable("leaveActivity") } returns callable
         every { callable.call(mapOf("activityId" to "Activity000000000001")) } returns
             Tasks.forException(IllegalStateException())

@@ -24,7 +24,6 @@ android {
             // execution data available to AGP's native coverage-report tasks.
             enableAndroidTestCoverage = true
             enableUnitTestCoverage = true
-            enableAndroidTestCoverage = true
         }
     }
 }

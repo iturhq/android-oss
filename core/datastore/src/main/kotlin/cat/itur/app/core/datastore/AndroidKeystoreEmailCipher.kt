@@ -216,8 +216,8 @@ private class AndroidEmailKeyStore(
         }.generateKey()
     }
 
-    override fun hasLegacyKey(): Boolean =
-        legacyKeyAlias != currentKeyAlias && loadKeyStore().containsAlias(legacyKeyAlias)
+    override fun hasLegacyKey(): Boolean = legacyKeyAlias != currentKeyAlias &&
+        loadKeyStore().containsAlias(legacyKeyAlias)
 
     override fun legacyKey(): SecretKey? = loadKeyStore().getKey(legacyKeyAlias, null) as? SecretKey
 
