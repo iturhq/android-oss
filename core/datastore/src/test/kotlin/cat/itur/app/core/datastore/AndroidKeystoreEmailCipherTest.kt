@@ -5,6 +5,7 @@
 
 package cat.itur.app.core.datastore
 
+import java.security.ProviderException
 import java.util.Base64
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -45,6 +46,24 @@ class AndroidKeystoreEmailCipherTest {
     }
 
     @Test
+    fun `GIVEN no stored email WHEN decrypting THEN it remains unset without a warning`() {
+        val logger = RecordingLogger()
+
+        assertEquals("", cipher(logger = logger).decrypt(""))
+        assertEquals(emptyList(), logger.warnings)
+    }
+
+    @Test
+    fun `GIVEN a shortened current ciphertext WHEN decrypting THEN email is recovered as unset`() {
+        val logger = RecordingLogger()
+        val cipher = cipher(logger = logger)
+        val encodedIvOnly = Base64.getEncoder().encodeToString(ByteArray(12))
+
+        assertEquals("", cipher.decrypt("${CURRENT_PREFIX}$encodedIvOnly"))
+        assertEquals(1, logger.warnings.size)
+    }
+
+    @Test
     fun `GIVEN plaintext legacy email WHEN migrated THEN it is reencrypted`() {
         val cipher = cipher()
 
@@ -64,6 +83,17 @@ class AndroidKeystoreEmailCipherTest {
 
         assertEquals("person@example.com", cipher.decrypt(migrated))
         assertTrue(cipher.shouldMigrate(legacyCiphertext))
+    }
+
+    @Test
+    fun `GIVEN legacy ciphertext from another key WHEN migrated THEN it is removed`() {
+        val logger = RecordingLogger()
+        val keys = FakeEmailKeyStore(legacy = aesKey())
+        val cipher = cipher(keys, logger)
+        val foreignCiphertext = encryptWith(aesKey(), "person@example.com")
+
+        assertEquals("", cipher.migrate(foreignCiphertext))
+        assertEquals(2, logger.warnings.size)
     }
 
     @Test
@@ -91,10 +121,47 @@ class AndroidKeystoreEmailCipherTest {
         assertEquals(current, cipher.migrate(current))
     }
 
+    @Test
+    fun `GIVEN the current keystore reports a provider failure WHEN decrypting THEN email is recovered as unset`() {
+        val logger = RecordingLogger()
+        val cipher = cipher(
+            keys = FakeEmailKeyStore(currentKeyFailure = ProviderException("keystore unavailable")),
+            logger = logger,
+        )
+
+        assertEquals("", cipher.decrypt("${CURRENT_PREFIX}payload"))
+        assertEquals(1, logger.warnings.size)
+    }
+
+    @Test
+    fun `GIVEN a legacy alias without an accessible key WHEN migrating plaintext THEN it is reencrypted`() {
+        val keys = FakeEmailKeyStore(legacyPresentWithoutKey = true)
+        val cipher = cipher(keys)
+
+        val migrated = cipher.migrate("person@example.com")
+
+        assertTrue(cipher.shouldMigrate(cipher.encrypt("current@example.com")))
+        assertEquals("person@example.com", cipher.decrypt(migrated))
+    }
+
+    @Test
+    fun `GIVEN a legacy provider failure WHEN migrating unreadable data THEN it is removed`() {
+        val logger = RecordingLogger()
+        val cipher = cipher(
+            keys = FakeEmailKeyStore(legacy = aesKey()),
+            logger = logger,
+            encoding = ProviderFailingDecodingEncoding,
+        )
+
+        assertEquals("", cipher.migrate("not-a-legacy-email"))
+        assertEquals(2, logger.warnings.size)
+    }
+
     private fun cipher(
         keys: FakeEmailKeyStore = FakeEmailKeyStore(),
         logger: RecordingLogger = RecordingLogger(),
-    ) = AndroidKeystoreEmailCipher(keys, logger, JvmEmailCipherEncoding)
+        encoding: EmailCipherEncoding = JvmEmailCipherEncoding,
+    ) = AndroidKeystoreEmailCipher(keys, logger, encoding)
 
     private fun aesKey(): SecretKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
 
@@ -107,11 +174,13 @@ class AndroidKeystoreEmailCipherTest {
 private class FakeEmailKeyStore(
     private val current: SecretKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey(),
     private var legacy: SecretKey? = null,
+    private val currentKeyFailure: RuntimeException? = null,
+    private val legacyPresentWithoutKey: Boolean = false,
 ) : EmailKeyStore {
     var deletedLegacyKey = false
 
-    override fun currentKey(): SecretKey = current
-    override fun hasLegacyKey(): Boolean = legacy != null
+    override fun currentKey(): SecretKey = currentKeyFailure?.let { throw it } ?: current
+    override fun hasLegacyKey(): Boolean = legacy != null || legacyPresentWithoutKey
     override fun legacyKey(): SecretKey? = legacy
     override fun deleteLegacyKey() {
         deletedLegacyKey = true
@@ -136,4 +205,10 @@ private object JvmEmailCipherEncoding : EmailCipherEncoding {
     override fun encode(bytes: ByteArray): String = Base64.getEncoder().encodeToString(bytes)
 
     override fun decode(value: String): ByteArray = Base64.getDecoder().decode(value)
+}
+
+private object ProviderFailingDecodingEncoding : EmailCipherEncoding {
+    override fun encode(bytes: ByteArray): String = Base64.getEncoder().encodeToString(bytes)
+
+    override fun decode(value: String): ByteArray = throw ProviderException("invalid provider payload")
 }
