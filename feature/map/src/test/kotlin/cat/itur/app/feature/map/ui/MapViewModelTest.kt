@@ -60,6 +60,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import java.util.Date
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.abs
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -618,6 +620,93 @@ class MapViewModelTest {
             withTimeout(5_000L) { measurement.completed.await() }
         }
         assertEquals(LocationReportOutcome.CANCELLED, measurement.outcome)
+    }
+
+    @Test
+    fun `GIVEN an in-flight location report WHEN newer fixes arrive THEN only the latest pending fix is written`() = runTest {
+        val allMeasurements = List(3) { RecordingLocationReportMeasurement() }
+        val measurements = ArrayDeque(allMeasurements)
+        val firstWriteEntered = CompletableDeferred<Unit>()
+        val releaseFirstWrite = CompletableDeferred<Unit>()
+        val activeWrites = AtomicInteger()
+        val maximumActiveWrites = AtomicInteger()
+        val writtenLongitudes = ConcurrentLinkedQueue<Double>()
+        val locationRepo = ControlledLocationRepository(measurements) {
+            val active = activeWrites.incrementAndGet()
+            maximumActiveWrites.updateAndGet { maxOf(it, active) }
+            try {
+                writtenLongitudes += it.longitude
+                if (writtenLongitudes.size == 1) {
+                    firstWriteEntered.complete(Unit)
+                    releaseFirstWrite.await()
+                }
+            } finally {
+                activeWrites.decrementAndGet()
+            }
+        }
+        val callback = slot<(android.location.Location) -> Unit>()
+        every { locationClient.requestUpdates(any(), capture(callback)) } just Runs
+        val userRepo = userRepo().also { it.signIn(context) }
+        val vm = viewModel(
+            activityRepo = activityRepo(TestFixtures.ongoingActivity),
+            userRepo = userRepo,
+            locationRepo = locationRepo,
+        )
+        vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+        vm.onLocationPermissionChanged(granted = true)
+
+        callback.captured(locationFix(2.16))
+        withContext(Dispatchers.Default) { withTimeout(5_000L) { firstWriteEntered.await() } }
+        callback.captured(locationFix(2.17))
+        callback.captured(locationFix(2.18))
+        releaseFirstWrite.complete(Unit)
+        withContext(Dispatchers.Default) { withTimeout(5_000L) { allMeasurements[2].completed.await() } }
+
+        assertEquals(listOf(2.16, 2.18), writtenLongitudes.toList())
+        assertEquals(1, maximumActiveWrites.get())
+        assertEquals(LocationReportOutcome.SUCCESS, allMeasurements[0].outcome)
+        assertEquals(LocationReportOutcome.SUPERSEDED, allMeasurements[1].outcome)
+        assertEquals(LocationReportOutcome.SUCCESS, allMeasurements[2].outcome)
+    }
+
+    @Test
+    fun `GIVEN active and pending location reports WHEN the activity is cleared THEN both are cancelled`() = runTest {
+        val allMeasurements = List(2) { RecordingLocationReportMeasurement() }
+        val measurements = ArrayDeque(allMeasurements)
+        val firstWriteEntered = CompletableDeferred<Unit>()
+        val locationRepo = ControlledLocationRepository(measurements) {
+            firstWriteEntered.complete(Unit)
+            CompletableDeferred<Unit>().await()
+        }
+        val callback = slot<(android.location.Location) -> Unit>()
+        every { locationClient.requestUpdates(any(), capture(callback)) } just Runs
+        val userRepo = userRepo().also { it.signIn(context) }
+        val vm = viewModel(
+            activityRepo = activityRepo(TestFixtures.ongoingActivity),
+            userRepo = userRepo,
+            locationRepo = locationRepo,
+        )
+        vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+        vm.onLocationPermissionChanged(granted = true)
+
+        callback.captured(locationFix(2.16))
+        withContext(Dispatchers.Default) { withTimeout(5_000L) { firstWriteEntered.await() } }
+        callback.captured(locationFix(2.17))
+        vm.triggerIdleState()
+        withContext(Dispatchers.Default) {
+            withTimeout(5_000L) {
+                allMeasurements.forEach { it.completed.await() }
+            }
+        }
+
+        assertEquals(LocationReportOutcome.CANCELLED, allMeasurements[0].outcome)
+        assertEquals(LocationReportOutcome.CANCELLED, allMeasurements[1].outcome)
+        assertEquals(1, locationRepo.updateCount.get())
+    }
+
+    private fun locationFix(longitude: Double) = mockk<android.location.Location>(relaxed = true).also {
+        every { it.latitude } returns 41.3874
+        every { it.longitude } returns longitude
     }
 
     @Test
@@ -1254,6 +1343,21 @@ private class RecordingLocationReportMeasurement : LocationReportMeasurement {
         }
         completed.complete(Unit)
     }
+}
+
+private class ControlledLocationRepository(
+    private val measurements: ArrayDeque<RecordingLocationReportMeasurement>,
+    private val onUpdate: suspend (Location) -> Unit,
+) : LocationRepository {
+    val updateCount = AtomicInteger()
+    override fun newReportMeasurement(): LocationReportMeasurement = measurements.removeFirst()
+    override suspend fun getForActivity(activityId: IturActivityId) = emptyList<cat.itur.app.core.model.ParticipantLocation>()
+    override suspend fun updateForParticipant(userId: UserId, activityId: IturActivityId, location: Location, measurement: LocationReportMeasurement) {
+        updateCount.incrementAndGet()
+        onUpdate(location)
+    }
+    override suspend fun removeForActivity(activityId: IturActivityId) = Unit
+    override suspend fun removeForParticipant(userId: UserId, activityId: IturActivityId) = Unit
 }
 
 private class ScriptedSignInUserRepository(
