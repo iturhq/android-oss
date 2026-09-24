@@ -653,7 +653,7 @@ constructor(
             onRetry = {
                 enqueueLocationReport(
                     report.copy(measurement = locationsRepository.newReportMeasurement()),
-                    locationReportGeneration,
+                    report.generation,
                 )
             },
             onCancel = { _uiState.value = previousState },
@@ -730,7 +730,13 @@ constructor(
                     measurement.stageFinished(LocationReportStage.NORMALIZATION)
                 }
                 enqueueLocationReport(
-                    QueuedLocationReport(participant.id, activityId, normalized, measurement),
+                    QueuedLocationReport(
+                        participant.id,
+                        activityId,
+                        normalized,
+                        measurement,
+                        locationReportGeneration,
+                    ),
                     locationReportGeneration,
                 )
             }
@@ -854,6 +860,7 @@ private data class QueuedLocationReport(
     val activityId: IturActivityId,
     val location: cat.itur.app.core.model.Location,
     val measurement: LocationReportMeasurement,
+    val generation: Long,
 )
 
 sealed interface MapUiState {
