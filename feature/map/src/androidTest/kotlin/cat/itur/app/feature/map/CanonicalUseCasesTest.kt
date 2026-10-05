@@ -777,14 +777,17 @@ class CanonicalUseCasesTest {
         launch(
             initialTag = "hail_organiser_fab",
             recencyThresholds = LocationRecencyThresholds(
-                agingAfterMillis = 3_000L,
-                staleAfterMillis = 5_000L,
+                // API 29 may take several seconds to initialise MapLibre before the
+                // first semantics assertion. Keep the fixture current long enough
+                // to observe that state, then exercise the real clock transition.
+                agingAfterMillis = 15_000L,
+                staleAfterMillis = 20_000L,
             ),
         )
 
         composeRule.onNodeWithContentDescription("location is current", substring = true)
             .assertExists()
-        composeRule.waitUntil(timeoutMillis = 8_000L) {
+        composeRule.waitUntil(timeoutMillis = 25_000L) {
             composeRule.onAllNodesWithContentDescription(
                 "location is stale",
                 substring = true,
