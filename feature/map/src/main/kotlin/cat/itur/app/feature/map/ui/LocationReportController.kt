@@ -127,7 +127,6 @@ internal class LocationReportController(
             }
         }
     }
-
 }
 
 internal data class LocationReportDependencies(

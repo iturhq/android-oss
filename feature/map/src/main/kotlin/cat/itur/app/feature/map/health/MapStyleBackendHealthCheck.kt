@@ -24,7 +24,7 @@ class MapStyleBackendHealthCheck internal constructor(
     constructor(config: MapStyleConfig) : this(config, ::downloadMapStyleMetadata)
 
     override val service = BackendService(BackendServiceIds.MAP_STYLE, "Map style")
-    override val diagnosticOrder = 60
+    override val diagnosticOrder = MAP_STYLE_DIAGNOSTIC_ORDER
     override val successDetail = "Style metadata downloaded"
 
     override suspend fun probe() {
@@ -42,7 +42,7 @@ private suspend fun downloadMapStyleMetadata(styleUrl: String) = withContext(Dis
         requestMethod = "GET"
     }
     try {
-        require(connection.responseCode in 200..299) {
+        require(connection.responseCode in HTTP_SUCCESS_MIN_CODE..HTTP_SUCCESS_MAX_CODE) {
             "Map style endpoint did not return success"
         }
     } finally {
@@ -51,3 +51,6 @@ private suspend fun downloadMapStyleMetadata(styleUrl: String) = withContext(Dis
 }
 
 private const val HTTP_TIMEOUT_MILLIS = 4_000
+private const val MAP_STYLE_DIAGNOSTIC_ORDER = 60
+private const val HTTP_SUCCESS_MIN_CODE = 200
+private const val HTTP_SUCCESS_MAX_CODE = 299
