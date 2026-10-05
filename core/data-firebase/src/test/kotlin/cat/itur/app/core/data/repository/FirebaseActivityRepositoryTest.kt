@@ -964,6 +964,32 @@ class FirebaseActivityRepositoryTest {
         assertTrue(otherParticipant !in result.data.participantSignals)
     }
 
+    @Test
+    fun `GIVEN canonical signal state for a non-member WHEN hydrating THEN it is not exposed`() = runBlocking {
+        val departedParticipant = UserId("departedParticipant")
+        val docRef = mockk<DocumentReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { docRef.get() } returns successfulTask(
+            mockk {
+                every { exists() } returns true
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
+            },
+        )
+        val hydratedRepository = FirebaseActivityRepository(
+            firestore,
+            mockk<BackendHealthReporter>(relaxed = true),
+            transactionExecutor,
+            admissionGateway,
+        ) {
+            mapOf(departedParticipant.value to ParticipantSignal.NEEDS_HELP.name)
+        }
+
+        val result = hydratedRepository.getActivity(ACTIVITY_ID)
+
+        assertIs<DataResult.Success<IturActivity>>(result)
+        assertTrue(departedParticipant !in result.data.participantSignals)
+    }
+
     // --- getBroadcastsSince ---
 
     @Test

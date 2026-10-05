@@ -507,7 +507,7 @@ private fun IturActivityDTO.toDomain(canonicalSignals: Map<String, String?> = em
         .associateWith { ParticipantSignal.NEEDS_HELP }
         .toMutableMap()
     signals.applyLegacySignals(participantSignals, signalEligibleIds)
-    signals.applyCanonicalSignals(canonicalSignals, organizerUserId)
+    signals.applyCanonicalSignals(canonicalSignals, signalEligibleIds)
     return IturActivity(
         id = IturActivityId(id),
         status = IturActivityStatus.valueOf(status),
@@ -533,10 +533,10 @@ private fun MutableMap<UserId, ParticipantSignal>.applyLegacySignals(
 
 private fun MutableMap<UserId, ParticipantSignal>.applyCanonicalSignals(
     storedSignals: Map<String, String?>,
-    organizerId: UserId,
+    eligibleIds: Set<UserId>,
 ) = storedSignals.forEach { (userId, storedSignal) ->
     val participantId = UserId(userId)
-    if (participantId == organizerId) return@forEach
+    if (participantId !in eligibleIds) return@forEach
 
     if (storedSignal == null) {
         remove(participantId)
