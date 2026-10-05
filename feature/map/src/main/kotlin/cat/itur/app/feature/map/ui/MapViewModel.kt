@@ -21,9 +21,7 @@ import cat.itur.app.core.data.health.BackendService
 import cat.itur.app.core.data.repository.ActivityFilter
 import cat.itur.app.core.data.repository.ActivityRepository
 import cat.itur.app.core.data.repository.DataResult
-import cat.itur.app.core.data.repository.LocationReportMeasurement
 import cat.itur.app.core.data.repository.LocationReportOutcome
-import cat.itur.app.core.data.repository.LocationReportStage
 import cat.itur.app.core.data.repository.LocationRepository
 import cat.itur.app.core.data.repository.ParticipantSignalRepository
 import cat.itur.app.core.data.repository.SignInFailureReason
@@ -47,9 +45,7 @@ import cat.itur.app.feature.map.notifications.BroadcastNotifier
 import cat.itur.app.feature.map.ui.MapUiState.Ongoing
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -109,11 +105,20 @@ constructor(
     private var participantLocationMonitoringJob: Job? = null
     private var initialRestorePending = true
     private var initialRestoreRunning = false
-    private var locationUpdatesActive = false
-    private val locationReportLock = Any()
-    private var locationReportGeneration = 0L
-    private var locationReportWriter: Job? = null
-    private var pendingLocationReport: QueuedLocationReport? = null
+    private val locationReports = LocationReportController(
+        LocationReportDependencies(
+            locationsRepository = locationsRepository,
+            locationClient = locationClient,
+            locationUpdateConfig = locationUpdateConfig,
+            scope = viewModelScope,
+        ),
+        LocationReportCallbacks(
+            ongoingActivityId = { _ongoingActivityId.value },
+            currentUser = { _currentUser.value },
+            onLocationReceived = _lastLocation::postValue,
+            writeReport = ::writeLocationReport,
+        ),
+    )
 
     fun reportMapStyleLoadFailed() = mapStyleRendererHealthReporter.styleLoadFailed()
 
@@ -383,7 +388,7 @@ constructor(
     fun signOut() {
         viewModelScope.launch {
             try {
-                invalidateLocationReportsAndJoin()
+                locationReports.invalidateAndJoin()
                 userRepository.signOut()
                 _currentUser.value = userRepository.getCurrentUser()
                 triggerIdleState()
@@ -455,7 +460,7 @@ constructor(
             _ongoingActivityId.value?.let { activityId ->
                 val previousState = _uiState.value
                 try {
-                    invalidateLocationReportsAndJoin()
+                    locationReports.invalidateAndJoin()
                     currentUser.value?.let {
                         if (_organizerId.value == it.id) {
                             // If it's the organiser, finish the activity for everyone and clean
@@ -498,7 +503,7 @@ constructor(
     }
 
     fun triggerIdleState(message: String? = null) {
-        invalidateLocationReports()
+        locationReports.invalidate()
         _ongoingActivityId.value = null
         _participantLocations.value = emptyList()
         _uiState.value = MapUiState.Idle(message)
@@ -547,7 +552,7 @@ constructor(
     }
 
     private suspend fun triggerOngoingState(activity: IturActivity) {
-        if (_ongoingActivityId.value != activity.id) invalidateLocationReports()
+        if (_ongoingActivityId.value != activity.id) locationReports.invalidate()
         val locations = locationsRepository.getForActivity(activity.id)
         // Keep a record of activity's organiser ID.
         _organizerId.value = activity.organizerId
@@ -617,31 +622,6 @@ constructor(
         }
     }
 
-    /**
-     * Posts the location of the current user along with the activity.
-     */
-    private suspend fun writeLocationReport(report: QueuedLocationReport) {
-        val previousState = _uiState.value
-        try {
-            locationsRepository.updateForParticipant(
-                report.userId,
-                report.activityId,
-                report.location,
-                report.measurement,
-            )
-            // The reporting boundary is the completed repository write/PUBACK. The subsequent
-            // activity read refresh is deliberately excluded from GPS-to-broker latency.
-            report.measurement.complete(LocationReportOutcome.SUCCESS)
-            refreshParticipantLocations()
-        } catch (e: CancellationException) {
-            report.measurement.complete(LocationReportOutcome.CANCELLED)
-            throw e
-        } catch (e: Exception) {
-            report.measurement.complete(LocationReportOutcome.FAILED)
-            handleLocationUpdateFailure(e, report, previousState)
-        }
-    }
-
     private fun handleLocationUpdateFailure(
         cause: Exception,
         report: QueuedLocationReport,
@@ -658,13 +638,46 @@ constructor(
         _uiState.value = MapUiState.RecoverableError(
             message = "Location sharing is temporarily unavailable.",
             onRetry = {
-                enqueueLocationReport(
+                locationReports.enqueue(
                     report.copy(measurement = locationsRepository.newReportMeasurement()),
-                    report.generation,
                 )
             },
             onCancel = { _uiState.value = previousState },
         )
+    }
+
+    private suspend fun writeLocationReport(report: QueuedLocationReport) {
+        val previousState = _uiState.value
+        try {
+            locationsRepository.updateForParticipant(
+                report.userId,
+                report.activityId,
+                report.location,
+                report.measurement,
+            )
+            report.measurement.complete(LocationReportOutcome.SUCCESS)
+            refreshParticipantLocations()
+        } catch (e: CancellationException) {
+            report.measurement.complete(LocationReportOutcome.CANCELLED)
+            throw e
+        } catch (e: Exception) {
+            report.measurement.complete(LocationReportOutcome.FAILED)
+            handleLocationUpdateFailure(e, report, previousState)
+        }
+    }
+
+    private fun startLocationReports() {
+        val previousState = _uiState.value
+        try {
+            locationReports.start()
+        } catch (e: Exception) {
+            Log.e("MapScreen", "Location provider is unavailable", e)
+            _uiState.value = MapUiState.RecoverableError(
+                message = "Location provider is unavailable.",
+                onRetry = ::startLocationReports,
+                onCancel = { _uiState.value = previousState },
+            )
+        }
     }
 
     /**
@@ -717,75 +730,21 @@ constructor(
         )
     }
 
-    // The callback to use when the device's location is received.
-    private val locationCallback: (Location) -> Unit = { location ->
-        _lastLocation.postValue(location)
-        // If there's an activity ID and a user,
-        // update the user's location for that activity.
-        ongoingActivityId.value?.let { activityId ->
-            currentUser.value?.let { participant ->
-                val measurement = locationsRepository.newReportMeasurement()
-                measurement.stageStarted(LocationReportStage.CALLBACK_QUEUE)
-                measurement.stageFinished(LocationReportStage.CALLBACK_QUEUE)
-                val normalized = try {
-                    measurement.stageStarted(LocationReportStage.NORMALIZATION)
-                    location.toIturLocation()
-                } catch (_: Exception) {
-                    measurement.complete(LocationReportOutcome.FAILED)
-                    return@let
-                } finally {
-                    measurement.stageFinished(LocationReportStage.NORMALIZATION)
-                }
-                enqueueLocationReport(
-                    QueuedLocationReport(
-                        participant.id,
-                        activityId,
-                        normalized,
-                        measurement,
-                        locationReportGeneration,
-                    ),
-                    locationReportGeneration,
-                )
-            }
-        }
-    }
-
     /**
      * Starts collecting the device's location.
      */
     fun startLocationUpdates(context: Context) {
-        if (locationUpdatesActive) return
+        if (locationReports.isActive) return
         Log.d("MapScreen", "Checking location permissions")
         if (ActivityCompat.checkSelfPermission(
                 context,
                 Manifest.permission.ACCESS_FINE_LOCATION,
             ) == PackageManager.PERMISSION_GRANTED &&
-            !locationUpdatesActive
+            !locationReports.isActive
         ) {
-            beginLocationUpdates()
+            startLocationReports()
         } else {
             Log.d("MapScreen", "No location permission...")
-        }
-    }
-
-    private fun beginLocationUpdates() {
-        if (locationUpdatesActive) return
-        Log.d("MapScreen", "Requesting location updates")
-        val previousState = _uiState.value
-        try {
-            locationClient.requestUpdates(
-                locationUpdateConfig.updateIntervalMillis,
-                locationCallback,
-            )
-            locationUpdatesActive = true
-            Log.d("MapScreen", "Location updates requested successfully")
-        } catch (e: Exception) {
-            Log.e("MapScreen", "Location provider is unavailable", e)
-            _uiState.value = MapUiState.RecoverableError(
-                message = "Location provider is unavailable.",
-                onRetry = ::beginLocationUpdates,
-                onCancel = { _uiState.value = previousState },
-            )
         }
     }
 
@@ -793,82 +752,23 @@ constructor(
      * Stops collecting the device's location.
      */
     fun stopLocationUpdates() {
-        if (!locationUpdatesActive) return
-        invalidateLocationReports()
-        locationClient.removeUpdates(locationCallback)
-        locationUpdatesActive = false
-    }
-
-    private fun enqueueLocationReport(report: QueuedLocationReport, generation: Long) {
-        synchronized(locationReportLock) {
-            if (!locationUpdatesActive || generation != locationReportGeneration) {
-                report.measurement.complete(LocationReportOutcome.CANCELLED)
-            } else if (locationReportWriter == null) {
-                locationReportWriter = viewModelScope.launch(Dispatchers.IO) { drainLocationReports(report, generation) }
-            } else {
-                pendingLocationReport?.measurement?.complete(LocationReportOutcome.SUPERSEDED)
-                pendingLocationReport = report
-            }
-        }
-    }
-
-    private suspend fun drainLocationReports(first: QueuedLocationReport, generation: Long) {
-        var report = first
-        try {
-            while (true) {
-                writeLocationReport(report)
-                report = synchronized(locationReportLock) {
-                    if (generation != locationReportGeneration) return
-                    pendingLocationReport?.also { pendingLocationReport = null } ?: return
-                }
-            }
-        } finally {
-            synchronized(locationReportLock) {
-                if (generation == locationReportGeneration) locationReportWriter = null
-            }
-        }
-    }
-
-    private fun invalidateLocationReports() = synchronized(locationReportLock) {
-        locationReportGeneration++
-        pendingLocationReport?.measurement?.complete(LocationReportOutcome.CANCELLED)
-        pendingLocationReport = null
-        locationReportWriter?.cancel()
-        locationReportWriter = null
-    }
-
-    private suspend fun invalidateLocationReportsAndJoin() {
-        val writer = synchronized(locationReportLock) {
-            locationReportGeneration++
-            pendingLocationReport?.measurement?.complete(LocationReportOutcome.CANCELLED)
-            pendingLocationReport = null
-            locationReportWriter.also { locationReportWriter = null }
-        }
-        writer?.cancelAndJoin()
+        locationReports.stop()
     }
 
     override fun onCleared() {
-        invalidateLocationReports()
+        locationReports.invalidate()
         super.onCleared()
     }
 
     /** Applies a runtime permission change without recreating the map or activity shell. */
     fun onLocationPermissionChanged(granted: Boolean) {
         if (granted && _ongoingActivityId.value != null) {
-            beginLocationUpdates()
+            startLocationReports()
         } else if (!granted) {
             stopLocationUpdates()
         }
     }
 }
-
-private data class QueuedLocationReport(
-    val userId: UserId,
-    val activityId: IturActivityId,
-    val location: cat.itur.app.core.model.Location,
-    val measurement: LocationReportMeasurement,
-    val generation: Long,
-)
 
 sealed interface MapUiState {
     data object Loading : MapUiState
