@@ -208,6 +208,18 @@ private fun ParticipantSafetyFABs(
     enabled: Boolean,
     onSignalRequested: (ParticipantSignal?) -> Unit,
 ) {
+    if (signal != null) {
+        SafetySignalFAB(
+            presentation = SafetySignalFabPresentation(
+                tag = "safety_ok_fab",
+                contentDescription = "I'm okay",
+                icon = IturIcons.Okay,
+                color = Color(SafetySignalColors.OK),
+            ),
+            enabled = enabled,
+            onClick = { onSignalRequested(null) },
+        )
+    }
     SafetySignalFAB(
         presentation = SafetySignalFabPresentation(
             tag = "safety_delayed_fab",
@@ -228,18 +240,6 @@ private fun ParticipantSafetyFABs(
         enabled = enabled && signal != ParticipantSignal.NEEDS_HELP,
         onClick = { onSignalRequested(ParticipantSignal.NEEDS_HELP) },
     )
-    if (signal != null) {
-        SafetySignalFAB(
-            presentation = SafetySignalFabPresentation(
-                tag = "safety_ok_fab",
-                contentDescription = "I'm okay",
-                icon = IturIcons.Okay,
-                color = Color(SafetySignalColors.OK),
-            ),
-            enabled = enabled,
-            onClick = { onSignalRequested(null) },
-        )
-    }
 }
 
 @Composable

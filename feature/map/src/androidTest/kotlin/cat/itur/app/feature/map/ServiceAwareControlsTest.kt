@@ -5,6 +5,8 @@
 
 package cat.itur.app.feature.map
 
+import androidx.compose.ui.test.assertContentDescriptionEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotSelected
@@ -12,6 +14,7 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import cat.itur.app.core.model.ParticipantSignal
 import cat.itur.app.core.ui.theme.IturTheme
 import cat.itur.app.feature.map.ui.components.map.IdleState
@@ -222,9 +225,32 @@ class ServiceAwareControlsTest {
             OngoingState(isOrganizer = false, selfSignal = ParticipantSignal.DELAYED),
         )
 
-        composeRule.onNodeWithTag("safety_delayed_fab").assertIsNotEnabled()
-        composeRule.onNodeWithTag("hail_organiser_fab").assertIsEnabled()
-        composeRule.onNodeWithTag("safety_ok_fab").assertIsEnabled()
+        val okay = composeRule.onNodeWithTag("safety_ok_fab")
+            .assertIsDisplayed()
+            .assertIsEnabled()
+            .assertContentDescriptionEquals("I'm okay")
+            .fetchSemanticsNode().boundsInRoot
+        val delayed = composeRule.onNodeWithTag("safety_delayed_fab")
+            .assertIsDisplayed()
+            .assertIsNotEnabled()
+            .assertContentDescriptionEquals("I'm stopping; go ahead")
+            .fetchSemanticsNode().boundsInRoot
+        val needsHelp = composeRule.onNodeWithTag("hail_organiser_fab")
+            .assertIsDisplayed()
+            .assertIsEnabled()
+            .assertContentDescriptionEquals("I need help; converge on me")
+            .fetchSemanticsNode().boundsInRoot
+        val stop = composeRule.onNodeWithTag("stop_activity_fab")
+            .fetchSemanticsNode().boundsInRoot
+        val rightLane = composeRule.onNodeWithTag("map_zone_r")
+            .fetchSemanticsNode().boundsInRoot
+        val minimumTouchTarget = with(composeRule.density) { 48.dp.toPx() }
+
+        assertTrue(okay.top < delayed.top && delayed.top < needsHelp.top && needsHelp.top < stop.top)
+        listOf(okay, delayed, needsHelp).forEach { bounds ->
+            assertTrue(bounds.width >= minimumTouchTarget && bounds.height >= minimumTouchTarget)
+            assertTrue(bounds.left >= rightLane.left && bounds.right <= rightLane.right)
+        }
     }
 
     @Test

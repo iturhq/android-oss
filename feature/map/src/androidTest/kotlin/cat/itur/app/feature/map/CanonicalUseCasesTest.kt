@@ -16,6 +16,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -547,7 +548,7 @@ class CanonicalUseCasesTest {
         activities.signalFailure = IllegalStateException("offline")
 
         composeRule.onNodeWithTag("safety_delayed_fab").performClick()
-        waitForText("Safety status could not be updated.")
+        waitForText("Your safety status could not be updated. Please try again. offline")
         assertEquals(
             null,
             activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)
@@ -555,7 +556,7 @@ class CanonicalUseCasesTest {
                 ?.get(users.anonymous.id),
         )
         activities.signalFailure = null
-        composeRule.onNodeWithText("Try again").performClick()
+        composeRule.onNodeWithTag("safety_delayed_fab").assertIsEnabled().performClick()
         composeRule.waitUntil {
             activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)
                 ?.participantSignals

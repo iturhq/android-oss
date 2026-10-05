@@ -990,6 +990,50 @@ class MapViewModelTest {
     }
 
     @Test
+    fun `thrown signal write failure restores controls and permits retry`() = runTest {
+        val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
+        val signalRepo = mockk<ParticipantSignalRepository>()
+        var attempt = 0
+        coEvery {
+            signalRepo.setParticipantSignal(
+                PARTICIPANT_ACTIVITY.id,
+                UserId("1"),
+                ParticipantSignal.DELAYED,
+            )
+        } coAnswers {
+            attempt += 1
+            if (attempt == 1) {
+                throw IllegalStateException("offline")
+            }
+            DataResult.Success(
+                PARTICIPANT_ACTIVITY.copy(
+                    participantIds = listOf(UserId("1")),
+                    participantSignals = mapOf(UserId("1") to ParticipantSignal.DELAYED),
+                ),
+            )
+        }
+        val vm = viewModel(activityRepo = activityRepo, participantSignalRepo = signalRepo)
+        vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+        assertEquals(ParticipantSignalUiState(), vm.participantSignalState.value)
+        assertTrue(vm.participantSignalMessage.value!!.contains("try again", ignoreCase = true))
+        assertIs<MapUiState.Ongoing>(vm.uiState.value)
+
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+        assertEquals(ParticipantSignal.DELAYED, vm.participantSignalState.value.confirmed)
+        coVerify(exactly = 2) {
+            signalRepo.setParticipantSignal(
+                PARTICIPANT_ACTIVITY.id,
+                UserId("1"),
+                ParticipantSignal.DELAYED,
+            )
+        }
+    }
+
+    @Test
     fun `organizer cannot issue participant signal writes`() = runTest {
         val activityRepo = activityRepo()
         val signalRepo = RecordingParticipantSignalRepository()
