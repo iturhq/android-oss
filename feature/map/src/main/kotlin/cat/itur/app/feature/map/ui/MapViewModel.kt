@@ -613,7 +613,10 @@ constructor(
     private suspend fun refreshParticipantLocations() {
         val activityId = _ongoingActivityId.value ?: return
         try {
-            _participantLocations.value = locationsRepository.getForActivity(activityId)
+            val locations = locationsRepository.getForActivity(activityId)
+            if (_ongoingActivityId.value == activityId) {
+                _participantLocations.value = locations
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

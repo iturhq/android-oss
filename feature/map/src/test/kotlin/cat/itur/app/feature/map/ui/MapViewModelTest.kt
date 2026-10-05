@@ -530,6 +530,104 @@ class MapViewModelTest {
     }
 
     @Test
+    fun `GIVEN participant monitoring is already active WHEN started again THEN only one refresh loop runs`() = runTest {
+        val initialLocations = TestFixtures.ongoingActivityLocations
+        val locationRepo = mockk<LocationRepository>()
+        coEvery { locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns initialLocations
+        val vm = viewModel(
+            activityRepo = activityRepo(TestFixtures.ongoingActivity),
+            locationRepo = locationRepo,
+        )
+        vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        try {
+            advanceTimeBy(1_001L)
+            runCurrent()
+
+            coVerify(exactly = 2) {
+                locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID)
+            }
+        } finally {
+            vm.stopParticipantLocationMonitoring()
+        }
+    }
+
+    @Test
+    fun `GIVEN participant monitoring is stopped WHEN refresh deadlines pass THEN no more locations are read`() = runTest {
+        val locationRepo = mockk<LocationRepository>()
+        coEvery { locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns
+            TestFixtures.ongoingActivityLocations
+        val vm = viewModel(
+            activityRepo = activityRepo(TestFixtures.ongoingActivity),
+            locationRepo = locationRepo,
+        )
+        vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        vm.stopParticipantLocationMonitoring()
+
+        advanceTimeBy(2_001L)
+        runCurrent()
+
+        coVerify(exactly = 1) {
+            locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID)
+        }
+    }
+
+    @Test
+    fun `GIVEN there is no ongoing activity WHEN refresh deadlines pass THEN no locations are read`() = runTest {
+        val locationRepo = ControlledParticipantLocationRepository { _, _ -> emptyList() }
+        val vm = viewModel(locationRepo = locationRepo)
+
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        try {
+            advanceTimeBy(2_001L)
+            runCurrent()
+
+            assertEquals(0, locationRepo.readCount.get())
+        } finally {
+            vm.stopParticipantLocationMonitoring()
+        }
+    }
+
+    @Test
+    fun `GIVEN a participant refresh is in flight WHEN activity becomes idle THEN stale locations are not restored`() = runTest {
+        val initialLocations = TestFixtures.ongoingActivityLocations
+        val staleLocations = initialLocations.dropLast(1)
+        val refreshStarted = CompletableDeferred<Unit>()
+        val releaseRefresh = CompletableDeferred<Unit>()
+        val locationRepo = ControlledParticipantLocationRepository { _, readIndex ->
+            if (readIndex == 0) {
+                initialLocations
+            } else {
+                refreshStarted.complete(Unit)
+                releaseRefresh.await()
+                staleLocations
+            }
+        }
+        val vm = viewModel(
+            activityRepo = activityRepo(TestFixtures.ongoingActivity),
+            locationRepo = locationRepo,
+        )
+        vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        try {
+            advanceTimeBy(1_001L)
+            runCurrent()
+            refreshStarted.await()
+
+            vm.triggerIdleState()
+            releaseRefresh.complete(Unit)
+            runCurrent()
+
+            assertTrue(vm.participantLocations.value.isEmpty())
+        } finally {
+            vm.stopParticipantLocationMonitoring()
+        }
+    }
+
+    @Test
     fun `GIVEN an accepted GPS callback WHEN reporting succeeds THEN timing spans queue normalization and repository`() = runTest {
         val measurement = RecordingLocationReportMeasurement()
         val updateCompleted = CompletableDeferred<Unit>()
@@ -1364,6 +1462,25 @@ private class ControlledLocationRepository(
         updateCount.incrementAndGet()
         onUpdate(location)
     }
+    override suspend fun removeForActivity(activityId: IturActivityId) = Unit
+    override suspend fun removeForParticipant(userId: UserId, activityId: IturActivityId) = Unit
+}
+
+private class ControlledParticipantLocationRepository(
+    private val onRead: suspend (IturActivityId, Int) -> List<cat.itur.app.core.model.ParticipantLocation>,
+) : LocationRepository {
+    val readCount = AtomicInteger()
+
+    override suspend fun getForActivity(activityId: IturActivityId) =
+        onRead(activityId, readCount.getAndIncrement())
+
+    override suspend fun updateForParticipant(
+        userId: UserId,
+        activityId: IturActivityId,
+        location: Location,
+        measurement: LocationReportMeasurement,
+    ) = Unit
+
     override suspend fun removeForActivity(activityId: IturActivityId) = Unit
     override suspend fun removeForParticipant(userId: UserId, activityId: IturActivityId) = Unit
 }
