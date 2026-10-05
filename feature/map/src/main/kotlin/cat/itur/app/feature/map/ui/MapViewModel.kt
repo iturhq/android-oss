@@ -58,6 +58,7 @@ import javax.inject.Inject
 class MapViewModel @Inject
 constructor(
     private val activityRepository: ActivityRepository,
+    private val participantSignalRepository: ParticipantSignalRepository,
     private val userRepository: UserRepository,
     private val locationsRepository: LocationRepository,
     private val locationClient: LocationClient,
@@ -100,6 +101,10 @@ constructor(
 
     private val _backendAvailability = MutableStateFlow(BackendAvailabilityUiState())
     val backendAvailability = _backendAvailability.asStateFlow()
+    private val _participantSignalState = MutableStateFlow(ParticipantSignalUiState())
+    val participantSignalState = _participantSignalState.asStateFlow()
+    private val _participantSignalMessage = MutableStateFlow<String?>(null)
+    val participantSignalMessage = _participantSignalMessage.asStateFlow()
     val backendHealthServices = backendHealthCoordinator.services
     val backendHealthRetryCountdown = backendHealthCoordinator.retryCountdown
     private var participantLocationMonitoringJob: Job? = null
@@ -506,6 +511,8 @@ constructor(
         locationReports.invalidate()
         _ongoingActivityId.value = null
         _participantLocations.value = emptyList()
+        _participantSignalState.value = ParticipantSignalUiState()
+        _participantSignalMessage.value = null
         _uiState.value = MapUiState.Idle(message)
         lastBroadcastSeen = null
         _latestBroadcast.value = null
@@ -558,6 +565,10 @@ constructor(
         _organizerId.value = activity.organizerId
         // Select the joined activity as the current one.
         _ongoingActivityId.value = activity.id
+        val userId = currentUser.value?.id
+        _participantSignalState.value = ParticipantSignalUiState(
+            confirmed = userId?.let(activity.participantSignals::get),
+        )
         // Show the ongoing activity state.
         _participantLocations.value = locations
         val organizer = runCatching {
@@ -686,35 +697,62 @@ constructor(
      */
     fun setParticipantSignal(signal: ParticipantSignal?) {
         val activityId = _ongoingActivityId.value ?: return
-        val userId = currentUser.value?.id
-        if (userId == null || _organizerId.value == userId) return
-        val previousState = _uiState.value
+        val userId = currentUser.value?.id ?: return
+        val ongoing = _uiState.value as? Ongoing ?: return
+        if (ongoing.activity.id != activityId || ongoing.organizer.id == userId) return
+        val current = _participantSignalState.value
+        if (current.inFlight != null || signal == current.confirmed) return
+        if (current.confirmed == ParticipantSignal.NEEDS_HELP && signal != null) return
+        if (signal == null && current.confirmed == null) return
+        _participantSignalState.value = current.copy(inFlight = signal.asAction())
         viewModelScope.launch {
             try {
-                val signals = activityRepository as? ParticipantSignalRepository
-                    ?: error("Activity repository does not support safety signals")
                 val result = if (signal == null) {
-                    signals.clearParticipantSignal(activityId, userId)
+                    participantSignalRepository.clearParticipantSignal(activityId, userId)
                 } else {
-                    signals.setParticipantSignal(activityId, userId, signal)
+                    participantSignalRepository.setParticipantSignal(activityId, userId, signal)
                 }
-                requireSuccessfulBackendWrite(result)
-                val updated = (result as DataResult.Success).data
-                // A leave/end may win the race while the write is in flight. Do not restore a
-                // stale ongoing UI from its response.
-                if (_ongoingActivityId.value == activityId) updateOngoingActivity(updated)
+                if (!isCurrentParticipantSignalRequest(activityId, userId)) return@launch
+                when (result) {
+                    is DataResult.Success -> {
+                        updateOngoingActivity(result.data)
+                        _participantSignalState.value = ParticipantSignalUiState(
+                            confirmed = result.data.participantSignals[userId],
+                        )
+                    }
+                    is DataResult.Error -> participantSignalFailed(result.message)
+                    is DataResult.NotFound -> participantSignalFailed(
+                        "Activity ${result.id} was not found",
+                    )
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
             } catch (e: Exception) {
                 Log.e("MapViewModel", "Failed to update safety signal for activity $activityId", e)
-                reportBackendFailure(e)
-                _uiState.value = MapUiState.RecoverableError(
-                    message = "Safety status could not be updated.",
-                    onRetry = {
-                        _uiState.value = previousState
-                        setParticipantSignal(signal)
-                    },
-                    onCancel = { _uiState.value = previousState },
-                )
+                if (isCurrentParticipantSignalRequest(activityId, userId)) {
+                    participantSignalFailed(e.message)
+                    reportBackendFailure(e)
+                }
             }
+        }
+    }
+
+    fun acknowledgeParticipantSignalMessage() {
+        _participantSignalMessage.value = null
+    }
+
+    private fun isCurrentParticipantSignalRequest(
+        activityId: IturActivityId,
+        userId: UserId,
+    ): Boolean = _ongoingActivityId.value == activityId &&
+        currentUser.value?.id == userId &&
+        (_uiState.value as? Ongoing)?.activity?.id == activityId
+
+    private fun participantSignalFailed(detail: String?) {
+        _participantSignalState.value = _participantSignalState.value.copy(inFlight = null)
+        _participantSignalMessage.value = buildString {
+            append("Your safety status could not be updated. Please try again.")
+            if (!detail.isNullOrBlank()) append(" ").append(detail)
         }
     }
 

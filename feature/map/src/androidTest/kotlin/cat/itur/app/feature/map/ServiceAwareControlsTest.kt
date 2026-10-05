@@ -12,6 +12,7 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import cat.itur.app.core.model.ParticipantSignal
 import cat.itur.app.core.ui.theme.IturTheme
 import cat.itur.app.feature.map.ui.components.map.IdleState
 import cat.itur.app.feature.map.ui.components.map.OngoingState
@@ -204,5 +205,79 @@ class ServiceAwareControlsTest {
 
         composeRule.onNodeWithTag("recenter_fab").assertIsNotSelected()
         composeRule.onNodeWithTag("zoom_group_fab").assertIsSelected()
+    }
+
+    @Test
+    fun participantWithoutSignalCanReportDelayedOrNeedsHelp() {
+        setOngoingParticipantContent(OngoingState(isOrganizer = false))
+
+        composeRule.onNodeWithTag("safety_delayed_fab").assertIsEnabled()
+        composeRule.onNodeWithTag("hail_organiser_fab").assertIsEnabled()
+        composeRule.onNodeWithTag("safety_ok_fab").assertDoesNotExist()
+    }
+
+    @Test
+    fun delayedParticipantCanEscalateOrClearButCannotRepeatDelayed() {
+        setOngoingParticipantContent(
+            OngoingState(isOrganizer = false, selfSignal = ParticipantSignal.DELAYED),
+        )
+
+        composeRule.onNodeWithTag("safety_delayed_fab").assertIsNotEnabled()
+        composeRule.onNodeWithTag("hail_organiser_fab").assertIsEnabled()
+        composeRule.onNodeWithTag("safety_ok_fab").assertIsEnabled()
+    }
+
+    @Test
+    fun redParticipantCanOnlyClearSignal() {
+        setOngoingParticipantContent(
+            OngoingState(isOrganizer = false, selfSignal = ParticipantSignal.NEEDS_HELP),
+        )
+
+        composeRule.onNodeWithTag("safety_delayed_fab").assertIsNotEnabled()
+        composeRule.onNodeWithTag("hail_organiser_fab").assertIsNotEnabled()
+        composeRule.onNodeWithTag("safety_ok_fab").assertIsEnabled()
+    }
+
+    @Test
+    fun inFlightSignalUpdateDisablesEverySignalAction() {
+        setOngoingParticipantContent(
+            OngoingState(
+                isOrganizer = false,
+                selfSignal = ParticipantSignal.DELAYED,
+                participantSignalUpdateInFlight = true,
+            ),
+        )
+
+        composeRule.onNodeWithTag("safety_delayed_fab").assertIsNotEnabled()
+        composeRule.onNodeWithTag("hail_organiser_fab").assertIsNotEnabled()
+        composeRule.onNodeWithTag("safety_ok_fab").assertIsNotEnabled()
+    }
+
+    @Test
+    fun organizerDoesNotSeeParticipantSignalActions() {
+        setOngoingParticipantContent(OngoingState(isOrganizer = true))
+
+        composeRule.onNodeWithTag("safety_delayed_fab").assertDoesNotExist()
+        composeRule.onNodeWithTag("hail_organiser_fab").assertDoesNotExist()
+        composeRule.onNodeWithTag("safety_ok_fab").assertDoesNotExist()
+    }
+
+    private fun setOngoingParticipantContent(presentation: OngoingState) {
+        composeRule.setContent {
+            IturTheme {
+                OngoingState(
+                    actions = OngoingStateActions(
+                        onStopRequested = {},
+                        onQrRequested = {},
+                        onTrackUserRequested = {},
+                        onTrackGroupRequested = {},
+                        onOrientationToggleRequested = {},
+                        onParticipantSignalRequested = {},
+                        onHelpRequested = {},
+                    ),
+                    presentation = presentation,
+                )
+            }
+        }
     }
 }

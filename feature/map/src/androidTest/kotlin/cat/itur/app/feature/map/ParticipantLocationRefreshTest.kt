@@ -76,6 +76,7 @@ class ParticipantLocationRefreshTest {
         locationClient: FakeLocationClient,
     ) = MapViewModel(
         activityRepository = activities,
+        participantSignalRepository = activities,
         userRepository = users,
         locationsRepository = locations,
         locationClient = locationClient,

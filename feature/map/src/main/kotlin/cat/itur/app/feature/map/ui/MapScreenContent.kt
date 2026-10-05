@@ -238,7 +238,8 @@ private fun OngoingControls(
         ),
         presentation = OngoingState(
             isOrganizer = ongoingUiState.organizer.id == presentation.currentUser?.id,
-            selfSignal = presentation.currentUser?.id?.let(ongoingUiState.activity.participantSignals::get),
+            selfSignal = presentation.participantSignalState.confirmed,
+            participantSignalUpdateInFlight = presentation.participantSignalState.inFlight != null,
             selfLocationAvailable = interaction.locationPermissionGranted,
             activityActionsEnabled = presentation.activityActionsEnabled,
             isDirectionOfTravel = interaction.isDirectionOfTravel,

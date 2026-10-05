@@ -38,7 +38,7 @@ internal fun MapScreenEffects(
 ) {
     BackendMonitoringEffect(viewModel)
     ParticipantLocationMonitoringEffect(viewModel)
-    MessageEffects(presentation, interaction, snackbarHostState)
+    MessageEffects(viewModel, presentation, interaction, snackbarHostState)
     LocationUpdatesEffect(viewModel, environment.context, interaction.locationPermissionGranted)
     LocationPermissionEffect(viewModel, environment, interaction)
     RecentLocationHistoryEffect(presentation, interaction)
@@ -110,6 +110,7 @@ private fun BackendMonitoringEffect(viewModel: MapViewModel) {
 
 @Composable
 private fun MessageEffects(
+    viewModel: MapViewModel,
     presentation: MapPresentation,
     interaction: MapInteractionState,
     snackbarHostState: SnackbarHostState,
@@ -129,6 +130,12 @@ private fun MessageEffects(
     LaunchedEffect(presentation.latestBroadcastMessage) {
         presentation.latestBroadcastMessage?.let {
             snackbarHostState.showSnackbar("Alert: $it")
+        }
+    }
+    LaunchedEffect(presentation.participantSignalMessage) {
+        presentation.participantSignalMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.acknowledgeParticipantSignalMessage()
         }
     }
 }
