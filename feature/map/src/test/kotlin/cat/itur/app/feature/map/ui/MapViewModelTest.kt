@@ -1351,8 +1351,16 @@ private class ControlledLocationRepository(
 ) : LocationRepository {
     val updateCount = AtomicInteger()
     override fun newReportMeasurement(): LocationReportMeasurement = measurements.removeFirst()
-    override suspend fun getForActivity(activityId: IturActivityId) = emptyList<cat.itur.app.core.model.ParticipantLocation>()
-    override suspend fun updateForParticipant(userId: UserId, activityId: IturActivityId, location: Location, measurement: LocationReportMeasurement) {
+    override suspend fun getForActivity(
+        activityId: IturActivityId,
+    ) = emptyList<cat.itur.app.core.model.ParticipantLocation>()
+
+    override suspend fun updateForParticipant(
+        userId: UserId,
+        activityId: IturActivityId,
+        location: Location,
+        measurement: LocationReportMeasurement,
+    ) {
         updateCount.incrementAndGet()
         onUpdate(location)
     }
