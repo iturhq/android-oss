@@ -578,7 +578,10 @@ class CanonicalUseCasesTest {
         )
 
         composeRule.onNodeWithTag("safety_delayed_fab").performClick()
-        waitForText("Safety status could not be updated.")
+        waitForText(
+            "Your safety status could not be updated. Please try again. " +
+                "Only a current participant can change their safety signal",
+        )
         assertEquals(
             null,
             activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)
