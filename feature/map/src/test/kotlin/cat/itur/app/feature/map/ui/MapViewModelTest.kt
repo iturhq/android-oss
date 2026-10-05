@@ -1471,8 +1471,7 @@ private class ControlledParticipantLocationRepository(
 ) : LocationRepository {
     val readCount = AtomicInteger()
 
-    override suspend fun getForActivity(activityId: IturActivityId) =
-        onRead(activityId, readCount.getAndIncrement())
+    override suspend fun getForActivity(activityId: IturActivityId) = onRead(activityId, readCount.getAndIncrement())
 
     override suspend fun updateForParticipant(
         userId: UserId,
