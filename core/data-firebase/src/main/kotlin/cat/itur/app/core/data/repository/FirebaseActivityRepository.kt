@@ -34,6 +34,7 @@ import javax.inject.Inject
 
 private const val TAG = "FBActivityRepo"
 private const val ACTIVE_ACTIVITY_ID = "activeActivityId"
+private const val PARTICIPANTS = "participants"
 private const val PARTICIPANT_SIGNALS = "participantSignals"
 private const val SIGNAL = "signal"
 
@@ -43,7 +44,7 @@ private constructor(
     private val backendHealthReporter: Lazy<BackendHealthReporter>,
     private val transactionExecutor: FirestoreTransactionExecutor,
     private val admissionGateway: ActivityAdmissionGateway,
-    private val canonicalSignalsLoader: suspend (DocumentReference) -> Map<String, String?>,
+    private val canonicalParticipantStateLoader: suspend (DocumentReference) -> CanonicalParticipantState,
 ) : ActivityRepository {
     @Inject
     constructor(
@@ -55,7 +56,7 @@ private constructor(
         backendHealthReporter,
         FirebaseFirestoreTransactionExecutor(firestore),
         FirebaseFunctionsActivityAdmissionGateway(functions),
-        ::loadCanonicalSignals,
+        ::loadCanonicalParticipantState,
     )
 
     constructor(firestore: FirebaseFirestore) : this(
@@ -63,7 +64,7 @@ private constructor(
         Lazy { NoOpBackendHealthReporter },
         FirebaseFirestoreTransactionExecutor(firestore),
         FirebaseFunctionsActivityAdmissionGateway(FirebaseFunctions.getInstance()),
-        ::loadCanonicalSignals,
+        ::loadCanonicalParticipantState,
     )
 
     constructor(
@@ -74,7 +75,7 @@ private constructor(
         Lazy { NoOpBackendHealthReporter },
         FirebaseFirestoreTransactionExecutor(firestore),
         FirebaseFunctionsActivityAdmissionGateway(functions),
-        ::loadCanonicalSignals,
+        ::loadCanonicalParticipantState,
     )
 
     constructor(
@@ -85,7 +86,7 @@ private constructor(
         Lazy { backendHealthReporter },
         FirebaseFirestoreTransactionExecutor(firestore),
         FirebaseFunctionsActivityAdmissionGateway(FirebaseFunctions.getInstance()),
-        ::loadCanonicalSignals,
+        ::loadCanonicalParticipantState,
     )
 
     internal constructor(
@@ -93,13 +94,15 @@ private constructor(
         backendHealthReporter: BackendHealthReporter,
         transactionExecutor: FirestoreTransactionExecutor,
         admissionGateway: ActivityAdmissionGateway,
-        canonicalSignalsLoader: suspend (DocumentReference) -> Map<String, String?> = { emptyMap() },
+        canonicalParticipantStateLoader: suspend (DocumentReference) -> CanonicalParticipantState = {
+            CanonicalParticipantState()
+        },
     ) : this(
         firestore,
         Lazy { backendHealthReporter },
         transactionExecutor,
         admissionGateway,
-        canonicalSignalsLoader,
+        canonicalParticipantStateLoader,
     )
 
     private val activitiesCollection = firestore.collection(FirestoreCollections.ACTIVITIES)
@@ -133,8 +136,8 @@ private constructor(
                 }
 
                 // Convert to domain object.
-                val signals = canonicalSignalsLoader(reference)
-                val activity = snapshot.toObject(IturActivityDTO::class.java)?.toDomain(signals)
+                val canonicalState = canonicalParticipantStateLoader(reference)
+                val activity = snapshot.toObject(IturActivityDTO::class.java)?.toDomain(canonicalState)
 
                 // Convert to result.
                 activity?.let { DataResult.Success(it) }
@@ -476,12 +479,26 @@ private fun DataResult<IturActivity>.requireSuccess() {
     }
 }
 
-private suspend fun loadCanonicalSignals(reference: DocumentReference): Map<String, String?> = reference
-    .collection(PARTICIPANT_SIGNALS)
-    .get()
-    .await()
-    .documents
-    .associate { signal -> signal.id to signal.getString(SIGNAL) }
+internal data class CanonicalParticipantState(
+    val signals: Map<String, String?> = emptyMap(),
+    val memberIds: Set<String> = emptySet(),
+)
+
+private suspend fun loadCanonicalParticipantState(reference: DocumentReference): CanonicalParticipantState {
+    val signals = reference
+        .collection(PARTICIPANT_SIGNALS)
+        .get()
+        .await()
+        .documents
+        .associate { signal -> signal.id to signal.getString(SIGNAL) }
+    val memberIds = reference
+        .collection(PARTICIPANTS)
+        .get()
+        .await()
+        .documents
+        .mapTo(mutableSetOf()) { participant -> participant.id }
+    return CanonicalParticipantState(signals, memberIds)
+}
 
 data class IturActivityDTO(
     var id: String = "",
@@ -497,17 +514,21 @@ data class IturActivityDTO(
     var attentionRequests: List<String> = emptyList(),
 )
 
-private fun IturActivityDTO.toDomain(canonicalSignals: Map<String, String?> = emptyMap()): IturActivity {
+private fun IturActivityDTO.toDomain(
+    canonicalState: CanonicalParticipantState = CanonicalParticipantState(),
+): IturActivity {
     val organizerUserId = UserId(organizerId)
     val participantUserIds = participantIds.map { UserId(it) }
-    val signalEligibleIds = participantUserIds.toSet() - organizerUserId
+    val signalEligibleIds = (
+        participantUserIds + canonicalState.memberIds.map(::UserId)
+        ).toSet() - organizerUserId
     val signals = attentionRequests
         .map { UserId(it) }
         .filter { it in signalEligibleIds }
         .associateWith { ParticipantSignal.NEEDS_HELP }
         .toMutableMap()
     signals.applyLegacySignals(participantSignals, signalEligibleIds)
-    signals.applyCanonicalSignals(canonicalSignals, signalEligibleIds)
+    signals.applyCanonicalSignals(canonicalState.signals, signalEligibleIds)
     return IturActivity(
         id = IturActivityId(id),
         status = IturActivityStatus.valueOf(status),

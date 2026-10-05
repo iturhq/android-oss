@@ -138,23 +138,33 @@ class FirebaseActivityRepositoryTest {
     }
 
     @Test
-    fun `GIVEN canonical signals in Firestore WHEN loading through the production adapter THEN they are applied`() = runBlocking {
+    fun `GIVEN callable-joined member signal WHEN loading backend-shaped state THEN it is applied`() = runBlocking {
         val docRef = mockk<DocumentReference>()
         val signals = mockk<CollectionReference>()
+        val participants = mockk<CollectionReference>()
         val canonicalSignal = mockk<DocumentSnapshot> {
             every { id } returns PARTICIPANT_ID.value
             every { getString("signal") } returns ParticipantSignal.DELAYED.name
+        }
+        val callableJoinedMember = mockk<DocumentSnapshot> {
+            every { id } returns PARTICIPANT_ID.value
         }
         every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
         every { docRef.get() } returns successfulTask(
             mockk {
                 every { exists() } returns true
-                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(
+                    participantIds = listOf(ORGANIZER_ID.value),
+                )
             },
         )
         every { docRef.collection("participantSignals") } returns signals
+        every { docRef.collection("participants") } returns participants
         every { signals.get() } returns successfulTask(
             mockk<QuerySnapshot> { every { documents } returns listOf(canonicalSignal) },
+        )
+        every { participants.get() } returns successfulTask(
+            mockk<QuerySnapshot> { every { documents } returns listOf(callableJoinedMember) },
         )
         val productionAdapterRepository =
             FirebaseActivityRepository(firestore, mockk<FirebaseFunctions>(relaxed = true))
@@ -954,7 +964,12 @@ class FirebaseActivityRepositoryTest {
             transactionExecutor,
             admissionGateway,
         ) {
-            mapOf(PARTICIPANT_ID.value to ParticipantSignal.DELAYED.name, otherParticipant.value to null)
+            CanonicalParticipantState(
+                signals = mapOf(
+                    PARTICIPANT_ID.value to ParticipantSignal.DELAYED.name,
+                    otherParticipant.value to null,
+                ),
+            )
         }
 
         val result = hydratedRepository.getActivity(ACTIVITY_ID)
@@ -981,7 +996,9 @@ class FirebaseActivityRepositoryTest {
             transactionExecutor,
             admissionGateway,
         ) {
-            mapOf(departedParticipant.value to ParticipantSignal.NEEDS_HELP.name)
+            CanonicalParticipantState(
+                signals = mapOf(departedParticipant.value to ParticipantSignal.NEEDS_HELP.name),
+            )
         }
 
         val result = hydratedRepository.getActivity(ACTIVITY_ID)
