@@ -104,6 +104,8 @@ constructor(
 
     private val _backendAvailability = MutableStateFlow(BackendAvailabilityUiState())
     val backendAvailability = _backendAvailability.asStateFlow()
+    val backendHealthServices = backendHealthCoordinator.services
+    val backendHealthRetryCountdown = backendHealthCoordinator.retryCountdown
     private var participantLocationMonitoringJob: Job? = null
     private var initialRestorePending = true
     private var initialRestoreRunning = false
@@ -249,6 +251,11 @@ constructor(
      */
     fun retryNow() {
         backendHealthCoordinator.retryNow(viewModelScope)
+    }
+
+    /** Refreshes the shared registry used by both the map controls and host diagnostics. */
+    suspend fun refreshBackendHealth() {
+        backendHealthCoordinator.refresh()
     }
 
     private fun reportBackendFailure(
