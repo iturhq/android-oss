@@ -32,6 +32,7 @@ import cat.itur.app.core.model.Broadcast
 import cat.itur.app.core.model.IturActivity
 import cat.itur.app.core.model.IturActivityStatus
 import cat.itur.app.core.model.Location
+import cat.itur.app.core.model.ParticipantLocation
 import cat.itur.app.core.model.ParticipantSignal
 import cat.itur.app.feature.map.config.LocationUpdateConfig
 import cat.itur.app.feature.map.config.MapStyleConfig
@@ -524,6 +525,60 @@ class MapViewModelTest {
                     any(),
                 )
             }
+        } finally {
+            vm.stopParticipantLocationMonitoring()
+        }
+    }
+
+    @Test
+    fun `GIVEN raw locations WHEN refreshing THEN only organizer and current participants remain`() = runTest {
+        val organizerId = TestFixtures.ORGANIZER_ID
+        val retainedParticipantId = TestFixtures.PARTICIPANT_1_ID
+        val departingParticipantId = TestFixtures.PARTICIPANT_2_ID
+        val unrelatedId = UserId("unrelated-user")
+        val activity = TestFixtures.ongoingActivity.copy(
+            participantIds = listOf(retainedParticipantId, departingParticipantId),
+        )
+        val activityRepo = activityRepo(activity)
+        val rawLocations = listOf(
+            participantLocation(organizerId),
+            participantLocation(retainedParticipantId),
+            participantLocation(departingParticipantId),
+            participantLocation(unrelatedId),
+        )
+        val locationRepo = ControlledParticipantLocationRepository { _, _ -> rawLocations }
+        val vm = viewModel(activityRepo = activityRepo, locationRepo = locationRepo)
+
+        vm.triggerOngoingState(activity.id, context)
+        assertEquals(
+            setOf(organizerId, retainedParticipantId, departingParticipantId),
+            vm.participantLocations.value.mapTo(mutableSetOf()) { it.userId },
+        )
+        assertEquals(
+            vm.participantLocations.value,
+            assertIs<MapUiState.Ongoing>(vm.uiState.value).locations,
+        )
+
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        try {
+            advanceTimeBy(1_001L)
+            runCurrent()
+            assertEquals(
+                setOf(organizerId, retainedParticipantId, departingParticipantId),
+                vm.participantLocations.value.mapTo(mutableSetOf()) { it.userId },
+            )
+
+            activityRepo.removeParticipant(activity.id, departingParticipantId)
+            advanceTimeBy(1_001L)
+            runCurrent()
+
+            assertEquals(
+                setOf(organizerId, retainedParticipantId),
+                vm.participantLocations.value.mapTo(mutableSetOf()) { it.userId },
+            )
+            val ongoing = assertIs<MapUiState.Ongoing>(vm.uiState.value)
+            assertEquals(vm.participantLocations.value, ongoing.locations)
+            assertEquals(listOf(retainedParticipantId), ongoing.participantIds)
         } finally {
             vm.stopParticipantLocationMonitoring()
         }
@@ -1483,6 +1538,13 @@ private class ControlledParticipantLocationRepository(
     override suspend fun removeForActivity(activityId: IturActivityId) = Unit
     override suspend fun removeForParticipant(userId: UserId, activityId: IturActivityId) = Unit
 }
+
+private fun participantLocation(userId: UserId) = ParticipantLocation(
+    activityId = TestFixtures.ONGOING_ACTIVITY_ID,
+    userId = userId,
+    userName = "User ${userId.value}",
+    location = Location(latitude = 51.0, longitude = 0.0),
+)
 
 private class ScriptedSignInUserRepository(
     vararg results: SignInResult,
