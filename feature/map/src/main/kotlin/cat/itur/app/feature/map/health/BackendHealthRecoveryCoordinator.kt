@@ -56,6 +56,8 @@ class BackendHealthRecoveryCoordinator @Inject constructor(
     )
     private val mutableRetryCountdown = MutableStateFlow<Int?>(null)
     private val mutableCheckGeneration = MutableStateFlow(0L)
+    private val observationLock = Any()
+    private val operationFailures = mutableMapOf<String, BackendHealthObservation.OperationFailed>()
 
     val services: StateFlow<List<BackendServiceHealth>> = mutableServices.asStateFlow()
     val retryCountdown: StateFlow<Int?> = mutableRetryCountdown.asStateFlow()
@@ -138,11 +140,7 @@ class BackendHealthRecoveryCoordinator @Inject constructor(
         observation: BackendHealthObservation,
     ) {
         if (serviceId !in checksById) return
-        mutableServices.update { current ->
-            current.map { service ->
-                if (service.id == serviceId) service.withObservation(observation) else service
-            }
-        }
+        applyObservation(serviceId, observation)
         scheduleForCurrentState()
     }
 
@@ -196,15 +194,36 @@ class BackendHealthRecoveryCoordinator @Inject constructor(
                 }.awaitAll()
             }
             observations.forEach { (serviceId, observation) ->
-                mutableServices.update { current ->
-                    current.map { service ->
-                        if (service.id == serviceId) service.withObservation(observation) else service
-                    }
-                }
+                applyObservation(serviceId, observation)
             }
         }
         mutableCheckGeneration.value += 1
         scheduleForCurrentState()
+    }
+
+    private fun applyObservation(
+        serviceId: String,
+        observation: BackendHealthObservation,
+    ) = synchronized(observationLock) {
+        when (observation) {
+            is BackendHealthObservation.OperationFailed -> operationFailures[serviceId] = observation
+            is BackendHealthObservation.OperationSucceeded -> operationFailures.remove(serviceId)
+            else -> Unit
+        }
+        mutableServices.update { current ->
+            current.map { service ->
+                if (service.id != serviceId) {
+                    service
+                } else {
+                    val observed = service.withObservation(observation)
+                    if (observation is BackendHealthObservation.ReachabilitySucceeded) {
+                        operationFailures[serviceId]?.let(observed::withObservation) ?: observed
+                    } else {
+                        observed
+                    }
+                }
+            }
+        }
     }
 
     private suspend fun BackendHealthCheck.prerequisiteAwareObservation(): BackendHealthObservation {
