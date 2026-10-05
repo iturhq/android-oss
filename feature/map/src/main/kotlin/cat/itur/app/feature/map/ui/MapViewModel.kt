@@ -182,7 +182,11 @@ constructor(
             _ongoingActivityId.value = findOngoingActivity()?.id
 
             initialRestorePending = false
-            _uiState.value = MapUiState.Idle()
+            // Location startup can fail while this asynchronous initial restore is still
+            // resolving backend state. Do not hide its actor-facing recovery action.
+            if (_uiState.value !is MapUiState.RecoverableError) {
+                _uiState.value = MapUiState.Idle()
+            }
         } catch (e: Exception) {
             Log.e("MapViewModel", "Backend unavailable: ${e.message}", e)
             reportBackendFailure(e, assumeAllServices = true)
@@ -613,7 +617,10 @@ constructor(
     private suspend fun refreshParticipantLocations() {
         val activityId = _ongoingActivityId.value ?: return
         try {
-            _participantLocations.value = locationsRepository.getForActivity(activityId)
+            val locations = locationsRepository.getForActivity(activityId)
+            if (_ongoingActivityId.value == activityId) {
+                _participantLocations.value = locations
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
