@@ -1003,7 +1003,7 @@ class MapViewModelTest {
         } coAnswers {
             attempt += 1
             if (attempt == 1) {
-                throw IllegalStateException("offline")
+                error("offline")
             }
             DataResult.Success(
                 PARTICIPANT_ACTIVITY.copy(
