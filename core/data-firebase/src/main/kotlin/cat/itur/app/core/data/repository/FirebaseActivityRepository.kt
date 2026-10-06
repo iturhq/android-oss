@@ -123,7 +123,13 @@ private constructor(
         DataResult.Error(e.message ?: "Failed to read active-activity record")
     }
 
-    override suspend fun getActivity(activityId: IturActivityId): DataResult<IturActivity> {
+    @Suppress("MaxLineLength")
+    override suspend fun getActivity(activityId: IturActivityId): DataResult<IturActivity> = getActivity(activityId, loadCanonicalParticipantState = true)
+
+    private suspend fun getActivity(
+        activityId: IturActivityId,
+        loadCanonicalParticipantState: Boolean,
+    ): DataResult<IturActivity> {
         val reference = activitiesCollection.document(activityId.value)
 
         return try {
@@ -136,7 +142,11 @@ private constructor(
                 }
 
                 // Convert to domain object.
-                val canonicalState = canonicalParticipantStateLoader(reference)
+                val canonicalState = if (loadCanonicalParticipantState) {
+                    canonicalParticipantStateLoader(reference)
+                } else {
+                    CanonicalParticipantState()
+                }
                 val activity = snapshot.toObject(IturActivityDTO::class.java)?.toDomain(canonicalState)
 
                 // Convert to result.
@@ -297,10 +307,22 @@ private constructor(
     override suspend fun removeParticipant(
         activityId: IturActivityId,
         userId: UserId,
-    ): DataResult<IturActivity> = when (val departed = admissionGateway.leave(activityId)) {
-        is DataResult.Success -> getActivity(departed.data)
-        is DataResult.Error -> departed
-        is DataResult.NotFound -> departed
+    ): DataResult<IturActivity> = when (
+        val loaded = getActivity(activityId, loadCanonicalParticipantState = false)
+    ) {
+        is DataResult.Success -> when (val departed = admissionGateway.leave(activityId)) {
+            is DataResult.Success -> DataResult.Success(
+                loaded.data.copy(
+                    participantIds = loaded.data.participantIds - userId,
+                    participantSignals = loaded.data.participantSignals - userId,
+                ),
+            )
+            is DataResult.Error -> departed
+            is DataResult.NotFound -> departed
+        }
+
+        is DataResult.Error -> loaded
+        is DataResult.NotFound -> loaded
     }
 
     override suspend fun getBroadcastsSince(activityId: IturActivityId, since: Date?): List<Broadcast> {

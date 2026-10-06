@@ -27,6 +27,8 @@ import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.Transaction
 import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.functions.HttpsCallableReference
+import com.google.firebase.functions.HttpsCallableResult
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
@@ -219,6 +221,14 @@ class FirebaseActivityRepositoryTest {
 
     @Test
     fun `GIVEN trusted departure fails or misses its activity WHEN removing THEN its result is preserved`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { docRef.get() } returns successfulTask(
+            mockk {
+                every { exists() } returns true
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
+            },
+        )
         admissionGateway.leaveResult = DataResult.Error("departure rejected")
 
         assertEquals(
@@ -840,6 +850,53 @@ class FirebaseActivityRepositoryTest {
     }
 
     @Test
+    fun `GIVEN production departure revokes member reads WHEN removing THEN the successful leave stays successful`() = runBlocking {
+        var departed = false
+        val docRef = mockk<DocumentReference>()
+        val signals = mockk<CollectionReference>()
+        val participants = mockk<CollectionReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { docRef.get() } returns successfulTask(
+            mockk {
+                every { exists() } returns true
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(
+                    participantIds = listOf(ORGANIZER_ID.value),
+                )
+            },
+        )
+        every { docRef.collection("participantSignals") } returns signals
+        every { docRef.collection("participants") } returns participants
+        every { signals.get() } answers {
+            if (departed) failedTask(postLeavePermissionDenied()) else successfulTask(emptyQuerySnapshot())
+        }
+        every { participants.get() } answers {
+            if (departed) failedTask(postLeavePermissionDenied()) else successfulTask(emptyQuerySnapshot())
+        }
+        val leaveCallable = mockk<HttpsCallableReference> {
+            every { call(mapOf("activityId" to ACTIVITY_ID.value)) } answers {
+                departed = true
+                successfulTask(
+                    HttpsCallableResult::class.java
+                        .getConstructor(Any::class.java)
+                        .newInstance(mapOf("activityId" to ACTIVITY_ID.value)),
+                )
+            }
+        }
+        val functions = mockk<FirebaseFunctions> {
+            every { getHttpsCallable("leaveActivity") } returns leaveCallable
+        }
+        val productionAdapterRepository = FirebaseActivityRepository(firestore, functions)
+
+        val result = productionAdapterRepository.removeParticipant(ACTIVITY_ID, PARTICIPANT_ID)
+
+        assertIs<DataResult.Success<IturActivity>>(result)
+        assertTrue(departed)
+        verify(exactly = 0) { signals.get() }
+        verify(exactly = 0) { participants.get() }
+        verify(exactly = 1) { leaveCallable.call(mapOf("activityId" to ACTIVITY_ID.value)) }
+    }
+
+    @Test
     fun `GIVEN refresh fails after trusted join THEN adding a participant returns Error`() = runBlocking {
         val docRef = mockk<DocumentReference>()
         every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
@@ -1079,3 +1136,12 @@ class FirebaseActivityRepositoryTest {
         assertEquals("offline", exception.message)
     }
 }
+
+private fun emptyQuerySnapshot(): QuerySnapshot = mockk {
+    every { documents } returns emptyList()
+}
+
+private fun postLeavePermissionDenied() = FirebaseFirestoreException(
+    "PERMISSION_DENIED: Missing or insufficient permissions.",
+    FirebaseFirestoreException.Code.PERMISSION_DENIED,
+)
