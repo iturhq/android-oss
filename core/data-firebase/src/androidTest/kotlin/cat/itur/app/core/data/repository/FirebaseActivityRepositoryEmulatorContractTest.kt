@@ -9,6 +9,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import cat.itur.app.core.domain.id.UserId
+import cat.itur.app.core.model.IturActivity
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.auth.FirebaseAuth
@@ -23,8 +24,8 @@ import org.junit.runner.RunWith
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.fail
 
 @RunWith(AndroidJUnit4::class)
 class FirebaseActivityRepositoryEmulatorContractTest {
@@ -46,9 +47,7 @@ class FirebaseActivityRepositoryEmulatorContractTest {
         val organizer = adapter("organizer", host, authPort, firestorePort, functionsPort)
         val participant = adapter("participant", host, authPort, firestorePort, functionsPort)
 
-        val created = assertIs<DataResult.Success<cat.itur.app.core.model.IturActivity>>(
-            organizer.repository.createActivity(organizer.userId),
-        ).data
+        val created = organizer.repository.createActivity(organizer.userId).requireSuccess()
         val rawDocument = organizer.firestore.collection(FirestoreCollections.ACTIVITIES)
             .document(created.id.value)
             .get()
@@ -56,21 +55,15 @@ class FirebaseActivityRepositoryEmulatorContractTest {
         assertEquals(created.id.value, rawDocument.id)
         assertFalse(rawDocument.data.orEmpty().containsKey("id"))
 
-        val joined = assertIs<DataResult.Success<cat.itur.app.core.model.IturActivity>>(
-            participant.repository.addParticipant(created.id, participant.userId),
-        ).data
+        val joined = participant.repository.addParticipant(created.id, participant.userId).requireSuccess()
         assertEquals(created.id, joined.id)
         assertEquals(
             created.id,
-            assertIs<DataResult.Success<cat.itur.app.core.model.IturActivity>>(
-                participant.repository.getActivity(created.id),
-            ).data.id,
+            participant.repository.getActivity(created.id).requireSuccess().id,
         )
         assertEquals(
             created.id,
-            assertIs<DataResult.Success<cat.itur.app.core.model.IturActivity>>(
-                participant.repository.removeParticipant(created.id, participant.userId),
-            ).data.id,
+            participant.repository.removeParticipant(created.id, participant.userId).requireSuccess().id,
         )
     }
 
@@ -86,7 +79,7 @@ class FirebaseActivityRepositoryEmulatorContractTest {
             FirebaseOptions.Builder()
                 .setProjectId(PROJECT_ID)
                 .setApplicationId("1:1234567890:android:$label")
-                .setApiKey("fake-api-key")
+                .setApiKey("AIzaSy000000000000000000000000000000000")
                 .build(),
             "tier-62fa-$label-${UUID.randomUUID()}",
         )
@@ -108,6 +101,12 @@ class FirebaseActivityRepositoryEmulatorContractTest {
     }
 
     private fun android.os.Bundle.intArgument(name: String, default: Int): Int = getString(name)?.toIntOrNull() ?: default
+
+    private fun DataResult<IturActivity>.requireSuccess(): IturActivity = when (this) {
+        is DataResult.Success -> data
+        is DataResult.Error -> fail("Expected Success, got Error(code=$code, message=$message)")
+        is DataResult.NotFound -> fail("Expected Success, got NotFound(id=$id)")
+    }
 
     private data class AdapterFixture(
         val userId: UserId,

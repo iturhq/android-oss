@@ -11,6 +11,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
+        multiDexEnabled = true
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -50,6 +51,7 @@ dependencies {
     testImplementation(libs.mockk)
 
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.kotlin.test)
     androidTestImplementation(platform(libs.firebase.bom))
     androidTestImplementation(libs.firebase.auth)
