@@ -10,6 +10,10 @@ android {
     namespace = "cat.itur.app.core.data.firebase"
     compileSdk = 36
 
+    defaultConfig {
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
     buildTypes {
         debug {
             enableUnitTestCoverage = true
@@ -44,4 +48,9 @@ dependencies {
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.junit.junit)
     testImplementation(libs.mockk)
+
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.kotlin.test)
+    androidTestImplementation(platform(libs.firebase.bom))
+    androidTestImplementation(libs.firebase.auth)
 }

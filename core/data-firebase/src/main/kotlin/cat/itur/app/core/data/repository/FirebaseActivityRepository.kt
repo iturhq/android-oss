@@ -290,8 +290,8 @@ private constructor(
                     ?.withDocumentId(activityId.value)
                     ?.toDomain()
                     ?.let {
-                    DataResult.Success(it)
-                } ?: DataResult.NotFound(activityId.value)
+                        DataResult.Success(it)
+                    } ?: DataResult.NotFound(activityId.value)
             }
         } catch (e: Exception) {
             DataResult.Error(e.message ?: "Failed to $operationName activity ${activityId.value}")
