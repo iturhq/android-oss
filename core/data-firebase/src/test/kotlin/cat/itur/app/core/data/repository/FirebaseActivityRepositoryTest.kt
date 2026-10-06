@@ -55,6 +55,18 @@ private val ACTIVITY_DTO = IturActivityDTO(
     status = "ONGOING",
 )
 
+private fun activityDocument(
+    documentId: String = ACTIVITY_ID.value,
+    dto: IturActivityDTO = ACTIVITY_DTO,
+): DocumentSnapshot = mockk {
+    every { id } returns documentId
+    every { toObject(IturActivityDTO::class.java) } returns dto
+}
+
+private fun activityQuery(vararg snapshots: DocumentSnapshot): QuerySnapshot = mockk {
+    every { documents } returns snapshots.toList()
+}
+
 private class RecordingBackendHealthReporter : BackendHealthReporter {
     val reports = mutableListOf<Pair<String, BackendHealthObservation>>()
 
@@ -347,13 +359,11 @@ class FirebaseActivityRepositoryTest {
     // --- getActivity ---
 
     @Test
-    fun `GIVEN an existing document WHEN getting it by ID THEN returns Success with the mapped activity`() = runBlocking {
+    fun `GIVEN a legacy payload ID WHEN getting its document THEN it remains readable`() = runBlocking {
         val docRef = mockk<DocumentReference>()
         every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
-        val snapshot = mockk<DocumentSnapshot> {
-            every { exists() } returns true
-            every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
-        }
+        val snapshot = activityDocument()
+        every { snapshot.exists() } returns true
         every { docRef.get() } returns successfulTask(snapshot)
 
         val result = repository.getActivity(ACTIVITY_ID)
@@ -361,6 +371,19 @@ class FirebaseActivityRepositoryTest {
         assertIs<DataResult.Success<IturActivity>>(result)
         assertEquals(ACTIVITY_ID, result.data.id)
         assertEquals(ORGANIZER_ID, result.data.organizerId)
+    }
+
+    @Test
+    fun `GIVEN no payload ID WHEN getting its document THEN the document ID is restored`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        val snapshot = activityDocument(dto = ACTIVITY_DTO.copy(id = ""))
+        every { snapshot.exists() } returns true
+        every { docRef.get() } returns successfulTask(snapshot)
+
+        val result = repository.getActivity(ACTIVITY_ID)
+
+        assertEquals(ACTIVITY_ID, assertIs<DataResult.Success<IturActivity>>(result).data.id)
     }
 
     @Test
@@ -448,7 +471,7 @@ class FirebaseActivityRepositoryTest {
     fun `GIVEN ByOrganizer filter WHEN getting activities THEN queries only by organizerId`() = runBlocking {
         val query = mockk<Query>()
         every { activitiesCollection.whereEqualTo("organizerId", ORGANIZER_ID.value) } returns query
-        val querySnapshot = mockk<QuerySnapshot> { every { toObjects(IturActivityDTO::class.java) } returns listOf(ACTIVITY_DTO) }
+        val querySnapshot = activityQuery(activityDocument())
         every { query.get() } returns successfulTask(querySnapshot)
 
         val result = repository.getActivities(ActivityFilter.ByOrganizer(ORGANIZER_ID))
@@ -463,7 +486,7 @@ class FirebaseActivityRepositoryTest {
         val ongoingQuery = mockk<Query>()
         every { activitiesCollection.whereEqualTo("organizerId", ORGANIZER_ID.value) } returns byOrganizer
         every { byOrganizer.whereEqualTo("status", "ONGOING") } returns ongoingQuery
-        val querySnapshot = mockk<QuerySnapshot> { every { toObjects(IturActivityDTO::class.java) } returns listOf(ACTIVITY_DTO) }
+        val querySnapshot = activityQuery(activityDocument())
         every { ongoingQuery.get() } returns successfulTask(querySnapshot)
 
         val result = repository.getActivities(ActivityFilter.OngoingByOrganizer(ORGANIZER_ID))
@@ -483,9 +506,7 @@ class FirebaseActivityRepositoryTest {
             )
         } returns byParticipant
         every { byParticipant.whereEqualTo("status", "ONGOING") } returns ongoingQuery
-        val querySnapshot = mockk<QuerySnapshot> {
-            every { toObjects(IturActivityDTO::class.java) } returns listOf(ACTIVITY_DTO)
-        }
+        val querySnapshot = activityQuery(activityDocument())
         every { ongoingQuery.get() } returns successfulTask(querySnapshot)
 
         val result = repository.getActivities(
@@ -497,19 +518,15 @@ class FirebaseActivityRepositoryTest {
     }
 
     @Test
-    fun `GIVEN documents with a blank ID WHEN getting activities THEN they are filtered out`() = runBlocking {
+    fun `GIVEN a malformed document ID WHEN getting activities THEN mapping is rejected`() = runBlocking {
         val query = mockk<Query>()
         every { activitiesCollection.whereEqualTo("organizerId", ORGANIZER_ID.value) } returns query
-        val blankIdDto = ACTIVITY_DTO.copy(id = "")
-        val querySnapshot = mockk<QuerySnapshot> {
-            every { toObjects(IturActivityDTO::class.java) } returns listOf(ACTIVITY_DTO, blankIdDto)
-        }
+        val querySnapshot = activityQuery(activityDocument(documentId = "malformed-id"))
         every { query.get() } returns successfulTask(querySnapshot)
 
         val result = repository.getActivities(ActivityFilter.ByOrganizer(ORGANIZER_ID))
 
-        assertIs<DataResult.Success<List<IturActivity>>>(result)
-        assertEquals(1, result.data.size)
+        assertTrue(assertIs<DataResult.Error>(result).message.contains("Invalid activity identifier"))
     }
 
     @Test
@@ -528,9 +545,7 @@ class FirebaseActivityRepositoryTest {
     fun `GIVEN a listed activity with an unknown status WHEN getting activities THEN conversion failure becomes Error`() = runBlocking {
         val query = mockk<Query>()
         every { activitiesCollection.whereEqualTo("organizerId", ORGANIZER_ID.value) } returns query
-        val querySnapshot = mockk<QuerySnapshot> {
-            every { toObjects(IturActivityDTO::class.java) } returns listOf(ACTIVITY_DTO.copy(status = "RETIRED"))
-        }
+        val querySnapshot = activityQuery(activityDocument(dto = ACTIVITY_DTO.copy(status = "RETIRED")))
         every { query.get() } returns successfulTask(querySnapshot)
 
         val result = repository.getActivities(ActivityFilter.ByOrganizer(ORGANIZER_ID))
@@ -598,7 +613,7 @@ class FirebaseActivityRepositoryTest {
         every { docRef.get() } returns successfulTask(
             mockk<DocumentSnapshot> {
                 every { exists() } returns true
-                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(id = "")
             },
         )
         admissionGateway.startResult = DataResult.Success(ACTIVITY_ID)
@@ -645,7 +660,7 @@ class FirebaseActivityRepositoryTest {
         every { docRef.get() } returns successfulTask(
             mockk {
                 every { exists() } returns true
-                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(id = "")
             },
         )
         admissionGateway.startResult = DataResult.Success(ACTIVITY_ID)

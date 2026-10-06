@@ -147,7 +147,9 @@ private constructor(
                 } else {
                     CanonicalParticipantState()
                 }
-                val activity = snapshot.toObject(IturActivityDTO::class.java)?.toDomain(canonicalState)
+                val activity = snapshot.toObject(IturActivityDTO::class.java)
+                    ?.withDocumentId(activityId.value)
+                    ?.toDomain(canonicalState)
 
                 // Convert to result.
                 activity?.let { DataResult.Success(it) }
@@ -183,8 +185,10 @@ private constructor(
             withContext(Dispatchers.IO) {
                 val activities = query.get()
                     .await()
-                    .toObjects(IturActivityDTO::class.java)
-                    .filter { !it.id.isEmpty() }
+                    .documents
+                    .mapNotNull { snapshot ->
+                        snapshot.toObject(IturActivityDTO::class.java)?.withDocumentId(snapshot.id)
+                    }
                     .map { dto ->
                         Log.d(TAG, "Found activity ${dto.id}")
                         dto.toDomain()
@@ -238,7 +242,9 @@ private constructor(
             withContext(Dispatchers.IO) {
                 val deleted = backendHealthReporter.get().observeFirestoreMutation {
                     transactionExecutor.run { transaction ->
-                        val before = transaction.get(reference).toObject(IturActivityDTO::class.java)
+                        val before = transaction.get(reference)
+                            .toObject(IturActivityDTO::class.java)
+                            ?.withDocumentId(activityId.value)
                             ?: return@run null
                         val memberIds = if (before.status == IturActivityStatus.ONGOING.name) {
                             (listOf(before.organizerId) + before.participantIds).distinct().map(::UserId)
@@ -280,7 +286,10 @@ private constructor(
                     }
                 }
 
-                snapshot.toObject(IturActivityDTO::class.java)?.toDomain()?.let {
+                snapshot.toObject(IturActivityDTO::class.java)
+                    ?.withDocumentId(activityId.value)
+                    ?.toDomain()
+                    ?.let {
                     DataResult.Success(it)
                 } ?: DataResult.NotFound(activityId.value)
             }
@@ -359,6 +368,7 @@ private constructor(
         if (existingActivityId == null || existingActivityId == targetActivityId.value) return
         val existing = get(activitiesCollection.document(existingActivityId))
             .toObject(IturActivityDTO::class.java)
+            ?.withDocumentId(existingActivityId)
         val stillActive = existing?.status == IturActivityStatus.ONGOING.name &&
             (existing.organizerId == userId.value || userId.value in existing.participantIds)
         check(!stillActive) { "User is already active in another activity" }
@@ -370,6 +380,7 @@ private constructor(
         newStatus: IturActivityStatus,
     ): IturActivityDTO {
         val before = get(reference).toObject(IturActivityDTO::class.java)
+            ?.withDocumentId(activityId.value)
             ?: error("Activity ${activityId.value} not found")
         val transition = membershipTransition(before, newStatus)
         val reservations = if (transition.entersOngoing) {
@@ -535,6 +546,8 @@ data class IturActivityDTO(
     // Legacy binary requests are read as NEEDS_HELP until that participant is rewritten/cleared.
     var attentionRequests: List<String> = emptyList(),
 )
+
+private fun IturActivityDTO.withDocumentId(documentId: String): IturActivityDTO = copy(id = documentId)
 
 private fun IturActivityDTO.toDomain(
     canonicalState: CanonicalParticipantState = CanonicalParticipantState(),
