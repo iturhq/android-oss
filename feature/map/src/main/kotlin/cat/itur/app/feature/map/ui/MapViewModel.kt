@@ -557,7 +557,9 @@ constructor(
 
     private suspend fun triggerOngoingState(activity: IturActivity) {
         if (_ongoingActivityId.value != activity.id) locationReports.invalidate()
-        val locations = locationsRepository.getForActivity(activity.id)
+        val locations = activity.activeLocations(
+            locationsRepository.getForActivity(activity.id),
+        )
         // Keep a record of activity's organiser ID.
         _organizerId.value = activity.organizerId
         // Select the joined activity as the current one.
@@ -617,9 +619,21 @@ constructor(
     private suspend fun refreshParticipantLocations() {
         val activityId = _ongoingActivityId.value ?: return
         try {
-            val locations = locationsRepository.getForActivity(activityId)
+            val activity = activityRepository.getActivity(activityId).dataOrNullOrThrow() ?: return
+            val locations = activity.activeLocations(
+                locationsRepository.getForActivity(activityId),
+            )
             if (_ongoingActivityId.value == activityId) {
                 _participantLocations.value = locations
+                val current = _uiState.value as? Ongoing
+                if (current?.activity?.id == activityId) {
+                    _organizerId.value = activity.organizerId
+                    _uiState.value = current.copy(
+                        activity = activity,
+                        participantIds = activity.participantIds,
+                        locations = locations,
+                    )
+                }
             }
         } catch (e: CancellationException) {
             throw e
@@ -627,6 +641,13 @@ constructor(
             Log.e("MapViewModel", "Failed to refresh participant locations for $activityId", e)
             reportBackendFailure(e)
         }
+    }
+
+    private fun IturActivity.activeLocations(
+        locations: List<ParticipantLocation>,
+    ): List<ParticipantLocation> {
+        val activeUserIds = participantIds.toSet() + organizerId
+        return locations.filter { it.userId in activeUserIds }
     }
 
     private fun handleLocationUpdateFailure(

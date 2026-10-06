@@ -276,7 +276,7 @@ class ScenarioActivityRepository :
 }
 
 class ScenarioLocationRepository(
-    private val activities: ScenarioActivityRepository,
+    @Suppress("UNUSED_PARAMETER") activities: ScenarioActivityRepository,
 ) : LocationRepository {
     private val locations = mutableMapOf(
         TestFixtures.ONGOING_ACTIVITY_ID to TestFixtures.ongoingActivityLocations
@@ -287,6 +287,7 @@ class ScenarioLocationRepository(
     var removeFailure: Throwable? = null
     var updateFailure: Throwable? = null
     var recordedAt: Date? = Date()
+    val readCount = AtomicInteger()
     val updateCount = AtomicInteger()
     val lastUpdateThreadName = AtomicReference<String?>()
     val removeCount = AtomicInteger()
@@ -294,18 +295,20 @@ class ScenarioLocationRepository(
     override suspend fun getForActivity(
         activityId: IturActivityId,
     ): List<ParticipantLocation> {
-        val activity = activities.activity(activityId) ?: return emptyList()
-        return activity.participantIds.mapNotNull { userId ->
-            locations[activityId]?.get(userId)?.let { location ->
-                ParticipantLocation(
-                    activityId = activityId,
-                    userId = userId,
-                    userName = "User ${userId.value}",
-                    location = location,
-                    recordedAt = recordedAt,
-                )
-            }
+        readCount.incrementAndGet()
+        return locations[activityId].orEmpty().map { (userId, location) ->
+            ParticipantLocation(
+                activityId = activityId,
+                userId = userId,
+                userName = "User ${userId.value}",
+                location = location,
+                recordedAt = recordedAt,
+            )
         }
+    }
+
+    fun seedLocation(activityId: IturActivityId, userId: UserId, location: Location) {
+        locations.getOrPut(activityId) { mutableMapOf() }[userId] = location
     }
 
     override suspend fun updateForParticipant(
