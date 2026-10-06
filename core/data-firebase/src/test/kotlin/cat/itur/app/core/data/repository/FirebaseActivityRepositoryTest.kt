@@ -40,6 +40,7 @@ import java.util.Date
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -860,6 +861,30 @@ class FirebaseActivityRepositoryTest {
         val result = repository.removeParticipant(ACTIVITY_ID, PARTICIPANT_ID)
 
         assertIs<DataResult.Success<IturActivity>>(result)
+        assertEquals(listOf(ACTIVITY_ID), admissionGateway.leaveCalls)
+        verify(exactly = 0) { transaction.update(any<DocumentReference>(), any<FieldPath>(), any(), *anyVararg()) }
+    }
+
+    @Test
+    fun `GIVEN a finished activity WHEN organizer cleans up THEN trusted departure preserves terminal state`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { docRef.get() } returns successfulTask(
+            mockk {
+                every { exists() } returns true
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(
+                    status = IturActivityStatus.FINISHED.name,
+                    participantIds = listOf(ORGANIZER_ID.value),
+                )
+            },
+        )
+        admissionGateway.leaveResult = DataResult.Success(ACTIVITY_ID)
+
+        val result = repository.removeParticipant(ACTIVITY_ID, ORGANIZER_ID)
+
+        val cleaned = assertIs<DataResult.Success<IturActivity>>(result).data
+        assertEquals(IturActivityStatus.FINISHED, cleaned.status)
+        assertFalse(ORGANIZER_ID in cleaned.participantIds)
         assertEquals(listOf(ACTIVITY_ID), admissionGateway.leaveCalls)
         verify(exactly = 0) { transaction.update(any<DocumentReference>(), any<FieldPath>(), any(), *anyVararg()) }
     }

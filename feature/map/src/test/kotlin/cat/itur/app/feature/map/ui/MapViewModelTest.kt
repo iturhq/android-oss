@@ -885,6 +885,11 @@ class MapViewModelTest {
             val result = activityRepo.getActivity(activityId)
             assertIs<DataResult.Success<IturActivity>>(result)
             assertEquals(IturActivityStatus.FINISHED, result.data.status)
+            assertFalse(vm.currentUser.value!!.id in result.data.participantIds)
+            assertIs<MapUiState.Idle>(vm.uiState.value)
+
+            // A repeated UI cleanup is a no-op after the local session has been cleared.
+            vm.leaveActivity()
             assertIs<MapUiState.Idle>(vm.uiState.value)
         }
     }
