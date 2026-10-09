@@ -18,6 +18,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso.pressBack
@@ -174,6 +176,25 @@ class MapScreenTest {
         assertContains(rightZone, signIn)
         assertContains(rightZone, join)
         assertNoOverlaps(help, signIn, join)
+    }
+
+    @Test
+    fun idleControlsStayInsideTheSystemBarSafeArea() {
+        composeRule.waitForIdle()
+        val root = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        val safeInsets = requireNotNull(
+            ViewCompat.getRootWindowInsets(composeRule.activity.window.decorView),
+        ).getInsets(
+            WindowInsetsCompat.Type.systemBars() or
+                WindowInsetsCompat.Type.displayCutout(),
+        )
+        val topRightZone = boundsOf("map_zone_tr")
+        val rightZone = boundsOf("map_zone_r")
+
+        assertTrue(topRightZone.top >= root.top + safeInsets.top)
+        assertTrue(topRightZone.right <= root.right - safeInsets.right)
+        assertTrue(rightZone.right <= root.right - safeInsets.right)
+        assertTrue(rightZone.bottom <= root.bottom - safeInsets.bottom)
     }
 
     @Test

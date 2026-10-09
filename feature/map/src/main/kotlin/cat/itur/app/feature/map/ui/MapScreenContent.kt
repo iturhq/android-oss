@@ -9,10 +9,13 @@ import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
@@ -47,11 +50,19 @@ internal fun MapScaffold(
     snackbarHostState: SnackbarHostState,
 ) {
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = {
-            SnackbarHost(snackbarHostState) { data -> Snackbar(snackbarData = data) }
+            SnackbarHost(
+                snackbarHostState,
+                modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing),
+            ) { data -> Snackbar(snackbarData = data) }
         },
     ) { paddingValues ->
-        Box(modifier = androidx.compose.ui.Modifier.padding(paddingValues)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+        ) {
             MapContent(viewModel, environment, presentation, interaction)
         }
     }
@@ -65,12 +76,19 @@ private fun MapContent(
     interaction: MapInteractionState,
 ) {
     when {
-        !environment.openGlEsSupport.isSupported && !environment.isInspection -> ErrorState(
-            guidance = "This device does not provide the graphics support required by the map.",
-            message = "OpenGL ES 3.0 or newer is required; this device reports " +
-                "${environment.openGlEsSupport.reportedVersion}.",
-            modifier = environment.modifier,
-        )
+        !environment.openGlEsSupport.isSupported && !environment.isInspection ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing),
+            ) {
+                ErrorState(
+                    guidance = "This device does not provide the graphics support required by the map.",
+                    message = "OpenGL ES 3.0 or newer is required; this device reports " +
+                        "${environment.openGlEsSupport.reportedVersion}.",
+                    modifier = environment.modifier,
+                )
+            }
         else -> MapReadyContent(viewModel, environment, presentation, interaction)
     }
 }
@@ -114,10 +132,16 @@ private fun MapReadyContent(
             ),
         )
     }
-    MapStateControls(viewModel, environment, presentation, interaction)
-    if (!interaction.locationPermissionGranted) {
-        LocationPermissionNotice {
-            interaction.locationPermissionRequests++
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing),
+    ) {
+        MapStateControls(viewModel, environment, presentation, interaction)
+        if (!interaction.locationPermissionGranted) {
+            LocationPermissionNotice {
+                interaction.locationPermissionRequests++
+            }
         }
     }
 }
