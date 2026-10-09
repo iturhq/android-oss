@@ -198,6 +198,22 @@ class MapScreenTest {
     }
 
     @Test
+    fun mapSurfaceStartsBelowTheStatusBar() {
+        composeRule.waitForIdle()
+        val root = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        val safeInsets = requireNotNull(
+            ViewCompat.getRootWindowInsets(composeRule.activity.window.decorView),
+        ).getInsets(
+            WindowInsetsCompat.Type.statusBars() or
+                WindowInsetsCompat.Type.displayCutout(),
+        )
+        val map = boundsOf("map_surface")
+
+        assertTrue(map.top >= root.top + safeInsets.top)
+        assertTrue(map.bottom >= root.bottom - 1f)
+    }
+
+    @Test
     fun ongoingControlsOccupyTopRightAndSeparateBottomLanes() {
         startAsOrganizer()
 
@@ -229,7 +245,7 @@ class MapScreenTest {
     fun ongoingGroupFitInsetsClearTheRenderedBottomLanes() {
         startAsOrganizer()
 
-        val map = boundsOf("persistent_map_surface")
+        val map = boundsOf("map_surface")
         val leftLane = union(boundsOf("recenter_fab"), boundsOf("zoom_group_fab"))
         val rightLane = union(boundsOf("show_qr_fab"), boundsOf("stop_activity_fab"))
         val insets = cameraFitInsets(

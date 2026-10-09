@@ -147,7 +147,7 @@ class CanonicalUseCasesTest {
             activities.initialLookupComplete.get()
         }
         waitForTag(readyTag ?: initialTag)
-        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
     }
 
     private fun waitForTag(tag: String) {
@@ -306,7 +306,7 @@ class CanonicalUseCasesTest {
         composeRule.onNodeWithTag("start_activity_fab").performClick()
 
         composeRule.onNodeWithText("Activity creation failed").assertIsDisplayed()
-        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
         composeRule.onNodeWithTag("start_activity_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("show_qr_fab").assertDoesNotExist()
     }
@@ -726,7 +726,7 @@ class CanonicalUseCasesTest {
 
         waitForText("The ongoing activity could not be resumed.")
         composeRule.onNodeWithText("The ongoing activity could not be resumed.").assertIsDisplayed()
-        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
         composeRule.onNodeWithText("Try again").performClick()
 
         waitForTag("show_qr_fab")
@@ -759,15 +759,15 @@ class CanonicalUseCasesTest {
         activities.createGate = createGate
         composeRule.onNodeWithTag("start_activity_fab").performClick()
         waitForText("Preparing activity...")
-        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
 
         createGate.complete(Unit)
         waitForTag("show_qr_fab")
-        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
 
         composeRule.onNodeWithTag("stop_activity_fab").performClick()
         waitForTag("join_activity_fab")
-        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
     }
 
     @Test
