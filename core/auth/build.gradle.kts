@@ -37,6 +37,11 @@ android {
             dimension = "environment"
         }
     }
+
+    sourceSets {
+        getByName("prod").kotlin.directories.add("src/nonDemo/kotlin")
+        getByName("local").kotlin.directories.add("src/nonDemo/kotlin")
+    }
 }
 
 dependencies {
