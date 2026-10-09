@@ -242,12 +242,17 @@ private fun OngoingControls(
     stateTag: String,
 ) {
     val ongoingUiState = presentation.uiState as MapUiState.Ongoing
+    val isOrganizer = ongoingUiState.organizer.id == presentation.currentUser?.id
     OngoingState(
         actions = OngoingStateActions(
             onStopRequested = {
-                interaction.isDirectionOfTravel = false
-                interaction.stopCameraTracking()
-                viewModel.leaveActivity()
+                if (isOrganizer) {
+                    interaction.requestStopActivityConfirmation()
+                } else {
+                    interaction.isDirectionOfTravel = false
+                    interaction.stopCameraTracking()
+                    viewModel.leaveActivity()
+                }
             },
             onQrRequested = { interaction.showQrDisplaySheet = true },
             onTrackUserRequested = { toggleUserTracking(interaction) },
@@ -261,7 +266,7 @@ private fun OngoingControls(
             onHelpRequested = { interaction.showHelp = true },
         ),
         presentation = OngoingState(
-            isOrganizer = ongoingUiState.organizer.id == presentation.currentUser?.id,
+            isOrganizer = isOrganizer,
             selfSignal = presentation.currentUser?.id?.let(ongoingUiState.activity.participantSignals::get),
             selfLocationAvailable = interaction.locationPermissionGranted,
             activityActionsEnabled = presentation.activityActionsEnabled,

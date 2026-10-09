@@ -302,11 +302,36 @@ class MapScreenTest {
         startAsOrganizer()
 
         composeRule.onNodeWithTag("stop_activity_fab").performClick()
+        composeRule.onNodeWithText("Stop activity?").assertIsDisplayed()
+        composeRule.onNodeWithTag("confirm_stop_activity").performClick()
 
         composeRule.onNodeWithTag("join_activity_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("map_orientation_fab").assertDoesNotExist()
         composeRule.onNodeWithText("You are no longer participating in an activity")
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun cancellingStopConfirmationKeepsOrganizerInActivity() {
+        startAsOrganizer()
+
+        composeRule.onNodeWithTag("stop_activity_fab").performClick()
+        composeRule.onNodeWithTag("cancel_stop_activity").performClick()
+
+        composeRule.onNodeWithText("Stop activity?").assertDoesNotExist()
+        composeRule.onNodeWithTag("stop_activity_fab").assertIsDisplayed()
+    }
+
+    @Test
+    fun backDismissesStopConfirmationAndKeepsOrganizerInActivity() {
+        startAsOrganizer()
+
+        composeRule.onNodeWithTag("stop_activity_fab").performClick()
+        composeRule.onNodeWithText("Stop activity?").assertIsDisplayed()
+        pressBack()
+
+        composeRule.onNodeWithText("Stop activity?").assertDoesNotExist()
+        composeRule.onNodeWithTag("stop_activity_fab").assertIsDisplayed()
     }
 
     @Test
