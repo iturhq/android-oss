@@ -380,12 +380,52 @@ class CanonicalUseCasesTest {
         launch()
         startAsOrganizer()
         val activityId = activities.activity(IturActivityId("createdActivity00001"))?.id
+        val statusBeforeConfirmation = activityId?.let(activities::activity)?.status
 
         composeRule.onNodeWithTag("stop_activity_fab").performClick()
+        composeRule.onNodeWithText("Stop activity?").assertIsDisplayed()
+        assertEquals(statusBeforeConfirmation, activityId?.let(activities::activity)?.status)
+        assertEquals(0, locations.removeCount.get())
+        composeRule.onNodeWithTag("confirm_stop_activity").performClick()
 
         waitForTag("join_activity_fab")
         composeRule.onNodeWithText("You are no longer participating in an activity")
             .assertIsDisplayed()
+        assertEquals(IturActivityStatus.FINISHED, activityId?.let(activities::activity)?.status)
+        assertEquals(1, locations.removeCount.get())
+    }
+
+    @Test
+    fun uc14_organizerCanCancelStopWithoutCleanup() {
+        launch()
+        startAsOrganizer()
+        val activityId = activities.activity(IturActivityId("createdActivity00001"))?.id
+        val statusBeforeConfirmation = activityId?.let(activities::activity)?.status
+
+        composeRule.onNodeWithTag("stop_activity_fab").performClick()
+        composeRule.onNodeWithTag("cancel_stop_activity").performClick()
+
+        composeRule.onNodeWithTag("stop_activity_fab").assertIsDisplayed()
+        assertEquals(statusBeforeConfirmation, activityId?.let(activities::activity)?.status)
+        assertEquals(0, locations.removeCount.get())
+    }
+
+    @Test
+    fun uc14_organizerCanRetryFailedStop() {
+        launch()
+        startAsOrganizer()
+        val activityId = activities.activity(IturActivityId("createdActivity00001"))?.id
+        locations.removeFailure = IllegalStateException("test removal failure")
+
+        composeRule.onNodeWithTag("stop_activity_fab").performClick()
+        composeRule.onNodeWithTag("confirm_stop_activity").performClick()
+
+        composeRule.onNodeWithText("Failed to leave activity $activityId").assertIsDisplayed()
+        composeRule.onNodeWithText("Try again").assertIsDisplayed()
+        locations.removeFailure = null
+        composeRule.onNodeWithText("Try again").performClick()
+
+        waitForTag("join_activity_fab")
         assertEquals(IturActivityStatus.FINISHED, activityId?.let(activities::activity)?.status)
         assertEquals(1, locations.removeCount.get())
     }
@@ -398,6 +438,7 @@ class CanonicalUseCasesTest {
         activities.updateFailure = IllegalStateException("test finish failure")
 
         composeRule.onNodeWithTag("stop_activity_fab").performClick()
+        composeRule.onNodeWithTag("confirm_stop_activity").performClick()
 
         composeRule.onNodeWithText("Failed to leave activity $activityId").assertIsDisplayed()
         composeRule.onNodeWithText("Try again").assertIsDisplayed()
