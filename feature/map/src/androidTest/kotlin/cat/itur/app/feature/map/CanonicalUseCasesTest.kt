@@ -807,6 +807,7 @@ class CanonicalUseCasesTest {
         composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
 
         composeRule.onNodeWithTag("stop_activity_fab").performClick()
+        composeRule.onNodeWithTag("confirm_stop_activity").performClick()
         waitForTag("join_activity_fab")
         composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
     }
