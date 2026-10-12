@@ -18,6 +18,10 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.GeoPoint
 import dagger.Lazy
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -49,6 +53,26 @@ constructor(
 
         val dtoList = querySnapshot.toObjects(ParticipantLocationDTO::class.java)
 
+        return@withContext toParticipantLocations(dtoList)
+    }
+
+    override fun observeForActivity(activityId: IturActivityId): Flow<List<ParticipantLocation>> = callbackFlow {
+        val registration = locationsCollection
+            .whereEqualTo("activityId", activityId.value)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val dtoList = snapshot?.toObjects(ParticipantLocationDTO::class.java).orEmpty()
+                launch { trySend(toParticipantLocations(dtoList)) }
+            }
+        awaitClose { registration.remove() }
+    }
+
+    private suspend fun toParticipantLocations(
+        dtoList: List<ParticipantLocationDTO>,
+    ): List<ParticipantLocation> {
         val userIds = dtoList.map { UserId(it.userId) }.distinct()
         val namesById = if (userIds.isEmpty()) {
             emptyMap()
@@ -56,7 +80,7 @@ constructor(
             userRepository.getAll(userIds).associateBy { it.id }
         }
 
-        return@withContext dtoList.map {
+        return dtoList.map {
             val userId = UserId(it.userId)
             ParticipantLocation(
                 activityId = IturActivityId(it.activityId),
