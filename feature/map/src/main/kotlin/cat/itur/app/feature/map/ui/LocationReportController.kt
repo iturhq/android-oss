@@ -70,6 +70,7 @@ internal class LocationReportController(
         )
     }
 
+    @Suppress("TooGenericExceptionCaught")
     fun start() {
         synchronized(lock) {
             if (isActive) return
