@@ -16,9 +16,12 @@ import cat.itur.app.core.domain.model.User
 import cat.itur.app.core.location.LocationClient
 import cat.itur.app.feature.map.config.LocationUpdateConfig
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 
 internal class LocationReportController(
@@ -27,9 +30,12 @@ internal class LocationReportController(
 ) {
     private val lock = Any()
     private var generation = 0L
+    private var nextReportSequence = 0L
+    private var latestReportSequence = -1L
     private var writer: Job? = null
     private var pendingReport: QueuedLocationReport? = null
 
+    @Volatile
     var isActive = false
         private set
 
@@ -37,6 +43,9 @@ internal class LocationReportController(
         callbacks.onLocationReceived(location)
         val activityId = callbacks.ongoingActivityId() ?: return@locationCallback
         val participant = callbacks.currentUser() ?: return@locationCallback
+        val (reportGeneration, reportSequence) = synchronized(lock) {
+            generation to nextReportSequence++
+        }
         val measurement = dependencies.locationsRepository.newReportMeasurement()
         measurement.stageStarted(LocationReportStage.CALLBACK_QUEUE)
         measurement.stageFinished(LocationReportStage.CALLBACK_QUEUE)
@@ -55,38 +64,58 @@ internal class LocationReportController(
                 activityId,
                 normalized,
                 measurement,
-                generation,
+                reportGeneration,
+                reportSequence,
             ),
         )
     }
 
     fun start() {
-        if (isActive) return
+        synchronized(lock) {
+            if (isActive) return
+            isActive = true
+        }
         Log.d("MapScreen", "Requesting location updates")
-        dependencies.locationClient.requestUpdates(
-            dependencies.locationUpdateConfig.updateIntervalMillis,
-            locationCallback,
-        )
-        isActive = true
+        try {
+            dependencies.locationClient.requestUpdates(
+                dependencies.locationUpdateConfig.updateIntervalMillis,
+                locationCallback,
+            )
+        } catch (failure: Exception) {
+            synchronized(lock) { isActive = false }
+            invalidate()
+            throw failure
+        }
         Log.d("MapScreen", "Location updates requested successfully")
     }
 
     fun stop() {
-        if (!isActive) return
+        synchronized(lock) {
+            if (!isActive) return
+            isActive = false
+        }
         invalidate()
         dependencies.locationClient.removeUpdates(locationCallback)
-        isActive = false
     }
 
     fun enqueue(report: QueuedLocationReport) {
         synchronized(lock) {
             if (!isActive || report.generation != generation) {
                 report.measurement.complete(LocationReportOutcome.CANCELLED)
+            } else if (report.sequence < latestReportSequence) {
+                report.measurement.complete(LocationReportOutcome.SUPERSEDED)
             } else if (writer == null) {
-                writer = dependencies.scope.launch(Dispatchers.IO) {
-                    drain(report, generation)
+                latestReportSequence = report.sequence
+                val newWriter = dependencies.scope.launch(
+                    Dispatchers.IO,
+                    start = CoroutineStart.LAZY,
+                ) {
+                    drain(report, report.generation)
                 }
+                writer = newWriter
+                newWriter.start()
             } else {
+                latestReportSequence = report.sequence
                 pendingReport?.measurement?.complete(LocationReportOutcome.SUPERSEDED)
                 pendingReport = report
             }
@@ -112,18 +141,26 @@ internal class LocationReportController(
     }
 
     private suspend fun drain(first: QueuedLocationReport, writerGeneration: Long) {
+        val activeWriter = currentCoroutineContext().job
         var report = first
         try {
             while (true) {
                 callbacks.writeReport(report)
-                report = synchronized(lock) {
-                    if (writerGeneration != generation) return
-                    pendingReport?.also { pendingReport = null } ?: return
+                val nextReport = synchronized(lock) {
+                    if (writerGeneration != generation) return@synchronized null
+                    pendingReport?.also { pendingReport = null } ?: run {
+                        if (writer === activeWriter) {
+                            writer = null
+                            callbacks.onWriterReleased()
+                        }
+                        null
+                    }
                 }
+                report = nextReport ?: return
             }
         } finally {
             synchronized(lock) {
-                if (writerGeneration == generation) writer = null
+                if (writerGeneration == generation && writer === activeWriter) writer = null
             }
         }
     }
@@ -141,6 +178,7 @@ internal data class LocationReportCallbacks(
     val currentUser: () -> User?,
     val onLocationReceived: (Location) -> Unit,
     val writeReport: suspend (QueuedLocationReport) -> Unit,
+    val onWriterReleased: () -> Unit = {},
 )
 
 internal data class QueuedLocationReport(
@@ -149,4 +187,5 @@ internal data class QueuedLocationReport(
     val location: cat.itur.app.core.model.Location,
     val measurement: LocationReportMeasurement,
     val generation: Long,
+    val sequence: Long,
 )

@@ -900,6 +900,42 @@ class MapViewModelTest {
     }
 
     @Test
+    fun `GIVEN a failed location report WHEN a newer fix succeeds THEN the old retry is superseded`() = runTest {
+        val allMeasurements = List(3) { RecordingLocationReportMeasurement() }
+        val measurements = ArrayDeque(allMeasurements)
+        val attemptedLongitudes = ConcurrentLinkedQueue<Double>()
+        val locationRepo = ControlledLocationRepository(measurements) {
+            attemptedLongitudes += it.longitude
+            if (attemptedLongitudes.size == 1) error("first report failed")
+        }
+        val callback = slot<(android.location.Location) -> Unit>()
+        every { locationClient.requestUpdates(any(), capture(callback)) } just Runs
+        val userRepo = userRepo().also { it.signIn(context) }
+        val vm = viewModel(
+            activityRepo = activityRepo(TestFixtures.ongoingActivity),
+            userRepo = userRepo,
+            locationRepo = locationRepo,
+        )
+        vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+        vm.onLocationPermissionChanged(granted = true)
+
+        callback.captured(locationFix(2.16))
+        withContext(Dispatchers.Default) { withTimeout(5_000L) { allMeasurements[0].completed.await() } }
+        val failedState = assertIs<MapUiState.RecoverableError>(vm.uiState.value)
+        callback.captured(locationFix(2.18))
+        withContext(Dispatchers.Default) { withTimeout(5_000L) { allMeasurements[1].completed.await() } }
+
+        failedState.onRetry()
+        withContext(Dispatchers.Default) { withTimeout(5_000L) { allMeasurements[2].completed.await() } }
+
+        assertEquals(listOf(2.16, 2.18), attemptedLongitudes.toList())
+        assertEquals(2, locationRepo.updateCount.get())
+        assertEquals(LocationReportOutcome.FAILED, allMeasurements[0].outcome)
+        assertEquals(LocationReportOutcome.SUCCESS, allMeasurements[1].outcome)
+        assertEquals(LocationReportOutcome.SUPERSEDED, allMeasurements[2].outcome)
+    }
+
+    @Test
     fun `GIVEN active and pending location reports WHEN the activity is cleared THEN both are cancelled`() = runTest {
         val allMeasurements = List(2) { RecordingLocationReportMeasurement() }
         val measurements = ArrayDeque(allMeasurements)

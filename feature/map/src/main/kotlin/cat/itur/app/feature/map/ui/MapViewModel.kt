@@ -689,8 +689,8 @@ constructor(
             report.measurement.complete(LocationReportOutcome.CANCELLED)
             throw e
         } catch (e: Exception) {
-            report.measurement.complete(LocationReportOutcome.FAILED)
             handleLocationUpdateFailure(e, report, previousState)
+            report.measurement.complete(LocationReportOutcome.FAILED)
         }
     }
 
