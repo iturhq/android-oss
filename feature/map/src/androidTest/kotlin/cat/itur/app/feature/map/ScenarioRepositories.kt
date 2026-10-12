@@ -304,21 +304,19 @@ class ScenarioLocationRepository(
         return snapshot(activityId)
     }
 
-    override fun observeForActivity(activityId: IturActivityId): Flow<List<ParticipantLocation>> =
-        snapshots.getOrPut(activityId) { MutableStateFlow(snapshot(activityId)) }
+    override fun observeForActivity(activityId: IturActivityId): Flow<List<ParticipantLocation>> = snapshots.getOrPut(activityId) { MutableStateFlow(snapshot(activityId)) }
 
     override suspend fun reconcileObservation(scope: LocationObservationScope) = Unit
 
-    private fun snapshot(activityId: IturActivityId): List<ParticipantLocation> =
-        locations[activityId].orEmpty().map { (userId, location) ->
-            ParticipantLocation(
-                activityId = activityId,
-                userId = userId,
-                userName = "User ${userId.value}",
-                location = location,
-                recordedAt = recordedAt,
-            )
-        }
+    private fun snapshot(activityId: IturActivityId): List<ParticipantLocation> = locations[activityId].orEmpty().map { (userId, location) ->
+        ParticipantLocation(
+            activityId = activityId,
+            userId = userId,
+            userName = "User ${userId.value}",
+            location = location,
+            recordedAt = recordedAt,
+        )
+    }
 
     private fun publish(activityId: IturActivityId) {
         snapshots[activityId]?.value = snapshot(activityId)
