@@ -46,9 +46,11 @@ import cat.itur.app.feature.map.notifications.BroadcastNotifier
 import cat.itur.app.feature.map.ui.MapUiState.Ongoing
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -109,8 +111,7 @@ constructor(
     val backendAvailability = _backendAvailability.asStateFlow()
     val backendHealthServices = backendHealthCoordinator.services
     val backendHealthRetryCountdown = backendHealthCoordinator.retryCountdown
-    private var participantLocationMonitoringJob: Job? = null
-    private var participantLocationObservationJob: Job? = null
+    private var participantLocationMonitoring: ParticipantLocationMonitoring? = null
     private var latestLocationSnapshot: List<ParticipantLocation> = emptyList()
     private var initialRestorePending = true
     private var initialRestoreRunning = false
@@ -243,54 +244,35 @@ constructor(
     }
 
     /** Keeps participant membership and transport observation current while the map is visible. */
-    @OptIn(ExperimentalCoroutinesApi::class)
     fun startParticipantLocationMonitoring(
         refreshIntervalMillis: Long = PARTICIPANT_LOCATION_REFRESH_INTERVAL_MILLIS,
     ) {
-        if (
-            participantLocationMonitoringJob?.isActive == true &&
-            participantLocationObservationJob?.isActive == true
-        ) {
-            return
-        }
-        participantLocationObservationJob?.cancel()
-        participantLocationObservationJob = viewModelScope.launch {
-            _ongoingActivityId.flatMapLatest { activityId ->
-                if (activityId == null) {
-                    emptyFlow()
-                } else {
-                    locationsRepository.observeForActivity(activityId)
-                        .map { activityId to it }
-                        .retryWhen { cause, _ ->
-                            if (cause is CancellationException) throw cause
-                            Log.e("MapViewModel", "Participant location listener failed", cause)
-                            reportBackendFailure(cause)
-                            delay(refreshIntervalMillis)
-                            true
-                        }
-                }
-            }.collect { (activityId, locations) ->
-                if (_ongoingActivityId.value == activityId) {
-                    latestLocationSnapshot = locations
-                    publishParticipantLocations(activityId)
-                }
-            }
-        }
-        participantLocationMonitoringJob?.cancel()
-        participantLocationMonitoringJob = viewModelScope.launch {
-            while (true) {
-                delay(refreshIntervalMillis)
-                refreshParticipantMembership()
-            }
-        }
+        if (participantLocationMonitoring?.isActive == true) return
+        participantLocationMonitoring?.cancel()
+        participantLocationMonitoring = viewModelScope.launchParticipantLocationMonitoring(
+            _ongoingActivityId,
+            locationsRepository,
+            refreshIntervalMillis,
+            ParticipantLocationMonitoringCallbacks(
+                onFailure = { cause ->
+                    Log.e("MapViewModel", "Participant location listener failed", cause)
+                    reportBackendFailure(cause)
+                },
+                onSnapshot = { activityId, locations ->
+                    if (_ongoingActivityId.value == activityId) {
+                        latestLocationSnapshot = locations
+                        publishParticipantLocations(activityId)
+                    }
+                },
+                refreshMembership = ::refreshParticipantMembership,
+            ),
+        )
     }
 
     /** Stops participant observation and membership reconciliation while the map is not visible. */
     fun stopParticipantLocationMonitoring() {
-        participantLocationMonitoringJob?.cancel()
-        participantLocationMonitoringJob = null
-        participantLocationObservationJob?.cancel()
-        participantLocationObservationJob = null
+        participantLocationMonitoring?.cancel()
+        participantLocationMonitoring = null
     }
 
     /**
@@ -902,5 +884,56 @@ data class BackendAvailabilityUiState(
 
 private class BackendInitializationException(message: String) : Exception(message)
 private class BackendOperationException(message: String) : Exception(message)
+
+private data class ParticipantLocationMonitoringCallbacks(
+    val onFailure: (Throwable) -> Unit,
+    val onSnapshot: (IturActivityId, List<ParticipantLocation>) -> Unit,
+    val refreshMembership: suspend () -> Unit,
+)
+
+private data class ParticipantLocationMonitoring(
+    val cadence: Job,
+    val observation: Job,
+) {
+    val isActive: Boolean
+        get() = cadence.isActive && observation.isActive
+
+    fun cancel() {
+        cadence.cancel()
+        observation.cancel()
+    }
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+private fun CoroutineScope.launchParticipantLocationMonitoring(
+    activityIds: Flow<IturActivityId?>,
+    locationsRepository: LocationRepository,
+    refreshIntervalMillis: Long,
+    callbacks: ParticipantLocationMonitoringCallbacks,
+): ParticipantLocationMonitoring {
+    val observation = launch {
+        activityIds.flatMapLatest { activityId ->
+            if (activityId == null) {
+                emptyFlow()
+            } else {
+                locationsRepository.observeForActivity(activityId)
+                    .map { activityId to it }
+                    .retryWhen { cause, _ ->
+                        if (cause is CancellationException) throw cause
+                        callbacks.onFailure(cause)
+                        delay(refreshIntervalMillis)
+                        true
+                    }
+            }
+        }.collect { (activityId, locations) -> callbacks.onSnapshot(activityId, locations) }
+    }
+    val cadence = launch {
+        while (true) {
+            delay(refreshIntervalMillis)
+            callbacks.refreshMembership()
+        }
+    }
+    return ParticipantLocationMonitoring(cadence, observation)
+}
 
 private const val PARTICIPANT_LOCATION_REFRESH_INTERVAL_MILLIS = 15_000L
