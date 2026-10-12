@@ -869,6 +869,37 @@ class MapViewModelTest {
     }
 
     @Test
+    fun `GIVEN a failed location report WHEN its old session retry runs THEN it is cancelled`() = runTest {
+        val allMeasurements = List(2) { RecordingLocationReportMeasurement() }
+        val measurements = ArrayDeque(allMeasurements)
+        val locationRepo = ControlledLocationRepository(measurements) {
+            error("report failed")
+        }
+        val callback = slot<(android.location.Location) -> Unit>()
+        every { locationClient.requestUpdates(any(), capture(callback)) } just Runs
+        val userRepo = userRepo().also { it.signIn(context) }
+        val vm = viewModel(
+            activityRepo = activityRepo(TestFixtures.ongoingActivity),
+            userRepo = userRepo,
+            locationRepo = locationRepo,
+        )
+        vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+        vm.onLocationPermissionChanged(granted = true)
+
+        callback.captured(locationFix(2.16))
+        withContext(Dispatchers.Default) { withTimeout(5_000L) { allMeasurements[0].completed.await() } }
+        val failedState = assertIs<MapUiState.RecoverableError>(vm.uiState.value)
+        vm.triggerIdleState()
+
+        failedState.onRetry()
+        withContext(Dispatchers.Default) { withTimeout(5_000L) { allMeasurements[1].completed.await() } }
+
+        assertEquals(1, locationRepo.updateCount.get())
+        assertEquals(LocationReportOutcome.FAILED, allMeasurements[0].outcome)
+        assertEquals(LocationReportOutcome.CANCELLED, allMeasurements[1].outcome)
+    }
+
+    @Test
     fun `GIVEN active and pending location reports WHEN the activity is cleared THEN both are cancelled`() = runTest {
         val allMeasurements = List(2) { RecordingLocationReportMeasurement() }
         val measurements = ArrayDeque(allMeasurements)
