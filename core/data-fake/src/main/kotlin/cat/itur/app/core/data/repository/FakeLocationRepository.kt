@@ -65,8 +65,7 @@ class FakeLocationRepository constructor(
         }
     }
 
-    override fun observeForActivity(activityId: IturActivityId): Flow<List<ParticipantLocation>> =
-        snapshotsByActivity.getOrPut(activityId) { MutableStateFlow(emptyList()) }.asStateFlow()
+    override fun observeForActivity(activityId: IturActivityId): Flow<List<ParticipantLocation>> = snapshotsByActivity.getOrPut(activityId) { MutableStateFlow(emptyList()) }.asStateFlow()
 
     override suspend fun removeForActivity(activityId: IturActivityId) {
         locationsByActivity.remove(activityId)

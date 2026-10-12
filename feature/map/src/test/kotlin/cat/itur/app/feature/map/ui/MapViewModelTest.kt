@@ -16,10 +16,10 @@ import cat.itur.app.core.data.repository.DataResult
 import cat.itur.app.core.data.repository.FakeActivityRepository
 import cat.itur.app.core.data.repository.FakeLocationRepository
 import cat.itur.app.core.data.repository.FakeUserRepository
+import cat.itur.app.core.data.repository.LocationObservationScope
 import cat.itur.app.core.data.repository.LocationReportMeasurement
 import cat.itur.app.core.data.repository.LocationReportOutcome
 import cat.itur.app.core.data.repository.LocationReportStage
-import cat.itur.app.core.data.repository.LocationObservationScope
 import cat.itur.app.core.data.repository.LocationRepository
 import cat.itur.app.core.data.repository.ParticipantSignalRepository
 import cat.itur.app.core.data.repository.SignInFailureReason

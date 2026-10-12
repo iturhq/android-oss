@@ -162,36 +162,35 @@ class FirebaseLocationRepositoryTest {
     }
 
     @Test
-    fun `GIVEN an activity listener WHEN Firestore pushes a change THEN the snapshot is emitted and listener removed`() =
-        runBlocking {
-            val query = mockk<Query>()
-            every { locationsCollection.whereEqualTo("activityId", ACTIVITY_ID.value) } returns query
-            val listener = slot<EventListener<QuerySnapshot>>()
-            val registration = mockk<ListenerRegistration>(relaxed = true)
-            every { query.addSnapshotListener(capture(listener)) } returns registration
-            val dto = ParticipantLocationDTO(
-                activityId = ACTIVITY_ID.value,
-                userId = USER_ID.value,
-                location = GeoPoint(51.4, -0.2),
-            )
-            val snapshot = mockk<QuerySnapshot> {
-                every { toObjects(ParticipantLocationDTO::class.java) } returns listOf(dto)
-            }
-            coEvery { userRepository.getAll(listOf(USER_ID)) } returns listOf(
-                User.RegisteredUser(id = USER_ID, name = "Ada Lovelace", email = "ada@example.com"),
-            )
-
-            val emitted = async(start = CoroutineStart.UNDISPATCHED) {
-                repository.observeForActivity(ACTIVITY_ID).first()
-            }
-            withTimeout(1_000L) {
-                while (!listener.isCaptured) yield()
-            }
-            listener.captured.onEvent(snapshot, null)
-
-            assertEquals("Ada Lovelace", emitted.await().single().userName)
-            verify(exactly = 1) { registration.remove() }
+    fun `GIVEN an activity listener WHEN Firestore pushes a change THEN the snapshot is emitted and listener removed`() = runBlocking {
+        val query = mockk<Query>()
+        every { locationsCollection.whereEqualTo("activityId", ACTIVITY_ID.value) } returns query
+        val listener = slot<EventListener<QuerySnapshot>>()
+        val registration = mockk<ListenerRegistration>(relaxed = true)
+        every { query.addSnapshotListener(capture(listener)) } returns registration
+        val dto = ParticipantLocationDTO(
+            activityId = ACTIVITY_ID.value,
+            userId = USER_ID.value,
+            location = GeoPoint(51.4, -0.2),
+        )
+        val snapshot = mockk<QuerySnapshot> {
+            every { toObjects(ParticipantLocationDTO::class.java) } returns listOf(dto)
         }
+        coEvery { userRepository.getAll(listOf(USER_ID)) } returns listOf(
+            User.RegisteredUser(id = USER_ID, name = "Ada Lovelace", email = "ada@example.com"),
+        )
+
+        val emitted = async(start = CoroutineStart.UNDISPATCHED) {
+            repository.observeForActivity(ACTIVITY_ID).first()
+        }
+        withTimeout(1_000L) {
+            while (!listener.isCaptured) yield()
+        }
+        listener.captured.onEvent(snapshot, null)
+
+        assertEquals("Ada Lovelace", emitted.await().single().userName)
+        verify(exactly = 1) { registration.remove() }
+    }
 
     // --- removeForActivity ---
 
