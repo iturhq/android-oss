@@ -52,6 +52,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -963,7 +965,11 @@ class MapViewModelTest {
 
         callback.captured(locationFix(2.16))
         withContext(Dispatchers.Default) { withTimeout(5_000L) { allMeasurements[0].completed.await() } }
-        val failedState = assertIs<MapUiState.RecoverableError>(vm.uiState.value)
+        val failedState = withContext(Dispatchers.Default) {
+            withTimeout(5_000L) {
+                vm.uiState.filterIsInstance<MapUiState.RecoverableError>().first()
+            }
+        }
         vm.triggerIdleState()
 
         failedState.onRetry()
