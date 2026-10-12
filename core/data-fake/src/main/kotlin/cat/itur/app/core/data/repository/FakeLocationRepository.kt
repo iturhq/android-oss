@@ -9,6 +9,9 @@ import cat.itur.app.core.domain.id.IturActivityId
 import cat.itur.app.core.domain.id.UserId
 import cat.itur.app.core.model.Location
 import cat.itur.app.core.model.ParticipantLocation
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlin.random.Random
 
 // Greenwich Park
@@ -28,6 +31,7 @@ class FakeLocationRepository constructor(
                 put(activityId, userLocations.toMutableMap())
             }
         }
+    private val snapshotsByActivity = mutableMapOf<IturActivityId, MutableStateFlow<List<ParticipantLocation>>>()
 
     override suspend fun getForActivity(activityId: IturActivityId): List<ParticipantLocation> {
         val result = activityRepository.getActivity(activityId)
@@ -38,7 +42,7 @@ class FakeLocationRepository constructor(
                 val activity = result.data
                 val activityLocations = locationsByActivity.getOrPut(activityId) { mutableMapOf() }
 
-                activity.participantIds.map { participantId ->
+                (activity.participantIds + activity.organizerId).distinct().map { participantId ->
                     val currentLocation = activityLocations.getOrPut(participantId) {
                         // First-time location: start with a location up to 50m from the organiser's
                         // location, or the default location if the organiser is not found.
@@ -56,17 +60,22 @@ class FakeLocationRepository constructor(
                         location = newLocation,
                         userName = "User ".plus(participantId.value),
                     )
-                }
+                }.also { publishSnapshot(activityId, it) }
             }
         }
     }
 
+    override fun observeForActivity(activityId: IturActivityId): Flow<List<ParticipantLocation>> =
+        snapshotsByActivity.getOrPut(activityId) { MutableStateFlow(emptyList()) }.asStateFlow()
+
     override suspend fun removeForActivity(activityId: IturActivityId) {
         locationsByActivity.remove(activityId)
+        publishSnapshot(activityId, emptyList())
     }
 
     override suspend fun removeForParticipant(userId: UserId, activityId: IturActivityId) {
         locationsByActivity[activityId]?.remove(userId)
+        publishStoredSnapshot(activityId)
     }
 
     override suspend fun updateForParticipant(
@@ -79,6 +88,23 @@ class FakeLocationRepository constructor(
             .apply {
                 this[userId] = location
             }
+        publishStoredSnapshot(activityId)
+    }
+
+    private fun publishStoredSnapshot(activityId: IturActivityId) {
+        val snapshot = locationsByActivity[activityId].orEmpty().map { (userId, location) ->
+            ParticipantLocation(
+                activityId = activityId,
+                userId = userId,
+                userName = "User ${userId.value}",
+                location = location,
+            )
+        }
+        publishSnapshot(activityId, snapshot)
+    }
+
+    private fun publishSnapshot(activityId: IturActivityId, snapshot: List<ParticipantLocation>) {
+        snapshotsByActivity.getOrPut(activityId) { MutableStateFlow(emptyList()) }.value = snapshot
     }
 
     /**
