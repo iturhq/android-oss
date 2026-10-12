@@ -15,7 +15,9 @@ import cat.itur.app.core.model.Location
 import cat.itur.app.feature.map.config.LocationUpdateConfig
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.Test
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -55,7 +57,9 @@ class LocationReportControllerTest {
         controller.start()
 
         controller.enqueue(report(longitude = 2.16, sequence = 0L, measurement = firstMeasurement))
-        withTimeout(5_000L) { latestMeasurement.completed.await() }
+        withContext(Dispatchers.Default) {
+            withTimeout(5_000L) { latestMeasurement.completed.await() }
+        }
 
         assertEquals(listOf(2.16, 2.18), writtenLongitudes.toList())
         assertEquals(LocationReportOutcome.SUCCESS, firstMeasurement.outcome)
