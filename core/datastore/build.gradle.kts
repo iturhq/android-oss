@@ -20,8 +20,10 @@ android {
 
     buildTypes {
         debug {
-            enableUnitTestCoverage = true
+            // The keystore adapter can only execute on Android. Keep its connected-test
+            // execution data available to AGP's native coverage-report tasks.
             enableAndroidTestCoverage = true
+            enableUnitTestCoverage = true
         }
     }
 }

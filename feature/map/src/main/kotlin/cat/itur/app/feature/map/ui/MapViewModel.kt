@@ -21,6 +21,8 @@ import cat.itur.app.core.data.health.BackendService
 import cat.itur.app.core.data.repository.ActivityFilter
 import cat.itur.app.core.data.repository.ActivityRepository
 import cat.itur.app.core.data.repository.DataResult
+import cat.itur.app.core.data.repository.LocationObservationScope
+import cat.itur.app.core.data.repository.LocationReportOutcome
 import cat.itur.app.core.data.repository.LocationRepository
 import cat.itur.app.core.data.repository.ParticipantSignalRepository
 import cat.itur.app.core.data.repository.SignInFailureReason
@@ -44,13 +46,20 @@ import cat.itur.app.feature.map.notifications.BroadcastNotifier
 import cat.itur.app.feature.map.ui.MapUiState.Ongoing
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
 import java.util.Date
 import javax.inject.Inject
@@ -100,10 +109,26 @@ constructor(
 
     private val _backendAvailability = MutableStateFlow(BackendAvailabilityUiState())
     val backendAvailability = _backendAvailability.asStateFlow()
-    private var participantLocationMonitoringJob: Job? = null
+    val backendHealthServices = backendHealthCoordinator.services
+    val backendHealthRetryCountdown = backendHealthCoordinator.retryCountdown
+    private var participantLocationMonitoring: ParticipantLocationMonitoring? = null
+    private var latestLocationSnapshot: List<ParticipantLocation> = emptyList()
     private var initialRestorePending = true
     private var initialRestoreRunning = false
-    private var locationUpdatesActive = false
+    private val locationReports = LocationReportController(
+        LocationReportDependencies(
+            locationsRepository = locationsRepository,
+            locationClient = locationClient,
+            locationUpdateConfig = locationUpdateConfig,
+            scope = viewModelScope,
+        ),
+        LocationReportCallbacks(
+            ongoingActivityId = { _ongoingActivityId.value },
+            currentUser = { _currentUser.value },
+            onLocationReceived = _lastLocation::postValue,
+            writeReport = ::writeLocationReport,
+        ),
+    )
 
     fun reportMapStyleLoadFailed() = mapStyleRendererHealthReporter.styleLoadFailed()
 
@@ -167,7 +192,11 @@ constructor(
             _ongoingActivityId.value = findOngoingActivity()?.id
 
             initialRestorePending = false
-            _uiState.value = MapUiState.Idle()
+            // Location startup can fail while this asynchronous initial restore is still
+            // resolving backend state. Do not hide its actor-facing recovery action.
+            if (_uiState.value !is MapUiState.RecoverableError) {
+                _uiState.value = MapUiState.Idle()
+            }
         } catch (e: Exception) {
             Log.e("MapViewModel", "Backend unavailable: ${e.message}", e)
             reportBackendFailure(e, assumeAllServices = true)
@@ -214,26 +243,36 @@ constructor(
         backendHealthCoordinator.stop()
     }
 
-    /**
-     * Refreshes participant markers independently of this device's own GPS callback while the
-     * map screen is visible. The optional interval keeps the cadence deterministic in tests.
-     */
+    /** Keeps participant membership and transport observation current while the map is visible. */
     fun startParticipantLocationMonitoring(
         refreshIntervalMillis: Long = PARTICIPANT_LOCATION_REFRESH_INTERVAL_MILLIS,
     ) {
-        if (participantLocationMonitoringJob?.isActive == true) return
-        participantLocationMonitoringJob = viewModelScope.launch {
-            while (true) {
-                delay(refreshIntervalMillis)
-                refreshParticipantLocations()
-            }
-        }
+        if (participantLocationMonitoring?.isActive == true) return
+        participantLocationMonitoring?.cancel()
+        participantLocationMonitoring = viewModelScope.launchParticipantLocationMonitoring(
+            _ongoingActivityId,
+            locationsRepository,
+            refreshIntervalMillis,
+            ParticipantLocationMonitoringCallbacks(
+                onFailure = { cause ->
+                    Log.e("MapViewModel", "Participant location listener failed", cause)
+                    reportBackendFailure(cause)
+                },
+                onSnapshot = { activityId, locations ->
+                    if (_ongoingActivityId.value == activityId) {
+                        latestLocationSnapshot = locations
+                        publishParticipantLocations(activityId)
+                    }
+                },
+                refreshMembership = ::refreshParticipantMembership,
+            ),
+        )
     }
 
-    /** Stops participant-marker polling while the map screen is not visible. */
+    /** Stops participant observation and membership reconciliation while the map is not visible. */
     fun stopParticipantLocationMonitoring() {
-        participantLocationMonitoringJob?.cancel()
-        participantLocationMonitoringJob = null
+        participantLocationMonitoring?.cancel()
+        participantLocationMonitoring = null
     }
 
     /**
@@ -241,6 +280,11 @@ constructor(
      */
     fun retryNow() {
         backendHealthCoordinator.retryNow(viewModelScope)
+    }
+
+    /** Refreshes the shared registry used by both the map controls and host diagnostics. */
+    suspend fun refreshBackendHealth() {
+        backendHealthCoordinator.refresh()
     }
 
     private fun reportBackendFailure(
@@ -368,6 +412,7 @@ constructor(
     fun signOut() {
         viewModelScope.launch {
             try {
+                locationReports.invalidateAndJoin()
                 userRepository.signOut()
                 _currentUser.value = userRepository.getCurrentUser()
                 triggerIdleState()
@@ -439,6 +484,7 @@ constructor(
             _ongoingActivityId.value?.let { activityId ->
                 val previousState = _uiState.value
                 try {
+                    locationReports.invalidateAndJoin()
                     currentUser.value?.let {
                         if (_organizerId.value == it.id) {
                             // If it's the organiser, finish the activity for everyone and clean
@@ -481,7 +527,9 @@ constructor(
     }
 
     fun triggerIdleState(message: String? = null) {
+        locationReports.invalidate()
         _ongoingActivityId.value = null
+        latestLocationSnapshot = emptyList()
         _participantLocations.value = emptyList()
         _uiState.value = MapUiState.Idle(message)
         lastBroadcastSeen = null
@@ -529,11 +577,14 @@ constructor(
     }
 
     private suspend fun triggerOngoingState(activity: IturActivity) {
-        val locations = locationsRepository.getForActivity(activity.id)
+        if (_ongoingActivityId.value != activity.id) locationReports.invalidate()
         // Keep a record of activity's organiser ID.
         _organizerId.value = activity.organizerId
         // Select the joined activity as the current one.
         _ongoingActivityId.value = activity.id
+        locationsRepository.reconcileObservation(activity.locationObservationScope())
+        val locations = activity.activeLocations(locationsRepository.getForActivity(activity.id))
+        latestLocationSnapshot = locations
         // Show the ongoing activity state.
         _participantLocations.value = locations
         val organizer = runCatching {
@@ -586,10 +637,24 @@ constructor(
         }
     }
 
-    private suspend fun refreshParticipantLocations() {
+    private suspend fun refreshParticipantMembership() {
         val activityId = _ongoingActivityId.value ?: return
         try {
-            _participantLocations.value = locationsRepository.getForActivity(activityId)
+            val activity = activityRepository.getActivity(activityId).dataOrNullOrThrow() ?: return
+            locationsRepository.reconcileObservation(activity.locationObservationScope())
+            if (_ongoingActivityId.value == activityId) {
+                val locations = activity.activeLocations(latestLocationSnapshot)
+                _participantLocations.value = locations
+                val current = _uiState.value as? Ongoing
+                if (current?.activity?.id == activityId) {
+                    _organizerId.value = activity.organizerId
+                    _uiState.value = current.copy(
+                        activity = activity,
+                        participantIds = activity.participantIds,
+                        locations = locations,
+                    )
+                }
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -598,36 +663,79 @@ constructor(
         }
     }
 
-    /**
-     * Posts the location of the current user along with the activity.
-     */
-    private suspend fun updateUserLocation(
-        userId: UserId,
-        activityId: IturActivityId,
-        location: Location,
+    private fun IturActivity.activeLocations(
+        locations: List<ParticipantLocation>,
+    ): List<ParticipantLocation> {
+        val activeUserIds = participantIds.toSet() + organizerId
+        return locations.filter { it.userId in activeUserIds }
+    }
+
+    private fun IturActivity.locationObservationScope() = LocationObservationScope(
+        activityId = id,
+        organizerId = organizerId,
+        participantIds = participantIds,
+    )
+
+    private fun publishParticipantLocations(activityId: IturActivityId) {
+        val current = _uiState.value as? Ongoing ?: return
+        if (current.activity.id != activityId) return
+        val locations = current.activity.activeLocations(latestLocationSnapshot)
+        _participantLocations.value = locations
+        _uiState.value = current.copy(locations = locations)
+    }
+
+    private fun handleLocationUpdateFailure(
+        cause: Exception,
+        report: QueuedLocationReport,
+        previousState: MapUiState,
     ) {
+        // Preserve this callback's pre-instrumentation semantics: it reports and absorbs update
+        // failures (including cancellation) rather than changing coroutine behavior.
+        Log.e(
+            "MapViewModel",
+            "Failed to update the location of user ${report.userId.value} in activity ${report.activityId.value}",
+            cause,
+        )
+        reportBackendFailure(cause)
+        _uiState.value = MapUiState.RecoverableError(
+            message = "Location sharing is temporarily unavailable.",
+            onRetry = {
+                locationReports.enqueue(
+                    report.copy(measurement = locationsRepository.newReportMeasurement()),
+                )
+            },
+            onCancel = { _uiState.value = previousState },
+        )
+    }
+
+    private suspend fun writeLocationReport(report: QueuedLocationReport) {
         val previousState = _uiState.value
         try {
             locationsRepository.updateForParticipant(
-                userId,
-                activityId,
-                location.toIturLocation(),
+                report.userId,
+                report.activityId,
+                report.location,
+                report.measurement,
             )
-            refreshParticipantLocations()
+            report.measurement.complete(LocationReportOutcome.SUCCESS)
+        } catch (e: CancellationException) {
+            report.measurement.complete(LocationReportOutcome.CANCELLED)
+            throw e
         } catch (e: Exception) {
-            Log.e(
-                "MapViewModel",
-                "Failed to update the location of user ${userId.value} in activity ${activityId.value}",
-                e,
-            )
-            reportBackendFailure(e)
+            handleLocationUpdateFailure(e, report, previousState)
+            report.measurement.complete(LocationReportOutcome.FAILED)
+        }
+    }
+
+    private fun startLocationReports() {
+        val previousState = _uiState.value
+        try {
+            locationReports.start()
+        } catch (e: Exception) {
+            Log.e("MapScreen", "Location provider is unavailable", e)
             _uiState.value = MapUiState.RecoverableError(
-                message = "Location sharing is temporarily unavailable.",
-                onRetry = {
-                    viewModelScope.launch(Dispatchers.IO) {
-                        updateUserLocation(userId, activityId, location)
-                    }
-                },
+                message = "Location provider is unavailable.",
+                onRetry = ::startLocationReports,
                 onCancel = { _uiState.value = previousState },
             )
         }
@@ -683,60 +791,21 @@ constructor(
         )
     }
 
-    // The callback to use when the device's location is received.
-    private val locationCallback: (Location) -> Unit = { location ->
-        _lastLocation.postValue(location)
-        // If there's an activity ID and a user,
-        // update the user's location for that activity.
-        ongoingActivityId.value?.let { activityId ->
-            currentUser.value?.let { participant ->
-                // Tied to viewModelScope (instead of an unmanaged CoroutineScope) so this
-                // work is cancelled along with the rest of the ViewModel's work, rather
-                // than continuing to run -- and potentially update now-stale state --
-                // after the ViewModel is cleared.
-                viewModelScope.launch(Dispatchers.IO) {
-                    updateUserLocation(participant.id, activityId, location)
-                }
-            }
-        }
-    }
-
     /**
      * Starts collecting the device's location.
      */
     fun startLocationUpdates(context: Context) {
-        if (locationUpdatesActive) return
+        if (locationReports.isActive) return
         Log.d("MapScreen", "Checking location permissions")
         if (ActivityCompat.checkSelfPermission(
                 context,
                 Manifest.permission.ACCESS_FINE_LOCATION,
             ) == PackageManager.PERMISSION_GRANTED &&
-            !locationUpdatesActive
+            !locationReports.isActive
         ) {
-            beginLocationUpdates()
+            startLocationReports()
         } else {
             Log.d("MapScreen", "No location permission...")
-        }
-    }
-
-    private fun beginLocationUpdates() {
-        if (locationUpdatesActive) return
-        Log.d("MapScreen", "Requesting location updates")
-        val previousState = _uiState.value
-        try {
-            locationClient.requestUpdates(
-                locationUpdateConfig.updateIntervalMillis,
-                locationCallback,
-            )
-            locationUpdatesActive = true
-            Log.d("MapScreen", "Location updates requested successfully")
-        } catch (e: Exception) {
-            Log.e("MapScreen", "Location provider is unavailable", e)
-            _uiState.value = MapUiState.RecoverableError(
-                message = "Location provider is unavailable.",
-                onRetry = ::beginLocationUpdates,
-                onCancel = { _uiState.value = previousState },
-            )
         }
     }
 
@@ -744,15 +813,18 @@ constructor(
      * Stops collecting the device's location.
      */
     fun stopLocationUpdates() {
-        if (!locationUpdatesActive) return
-        locationClient.removeUpdates(locationCallback)
-        locationUpdatesActive = false
+        locationReports.stop()
+    }
+
+    override fun onCleared() {
+        locationReports.invalidate()
+        super.onCleared()
     }
 
     /** Applies a runtime permission change without recreating the map or activity shell. */
     fun onLocationPermissionChanged(granted: Boolean) {
         if (granted && _ongoingActivityId.value != null) {
-            beginLocationUpdates()
+            startLocationReports()
         } else if (!granted) {
             stopLocationUpdates()
         }
@@ -812,5 +884,56 @@ data class BackendAvailabilityUiState(
 
 private class BackendInitializationException(message: String) : Exception(message)
 private class BackendOperationException(message: String) : Exception(message)
+
+private data class ParticipantLocationMonitoringCallbacks(
+    val onFailure: (Throwable) -> Unit,
+    val onSnapshot: (IturActivityId, List<ParticipantLocation>) -> Unit,
+    val refreshMembership: suspend () -> Unit,
+)
+
+private data class ParticipantLocationMonitoring(
+    val cadence: Job,
+    val observation: Job,
+) {
+    val isActive: Boolean
+        get() = cadence.isActive && observation.isActive
+
+    fun cancel() {
+        cadence.cancel()
+        observation.cancel()
+    }
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+private fun CoroutineScope.launchParticipantLocationMonitoring(
+    activityIds: Flow<IturActivityId?>,
+    locationsRepository: LocationRepository,
+    refreshIntervalMillis: Long,
+    callbacks: ParticipantLocationMonitoringCallbacks,
+): ParticipantLocationMonitoring {
+    val observation = launch {
+        activityIds.flatMapLatest { activityId ->
+            if (activityId == null) {
+                emptyFlow()
+            } else {
+                locationsRepository.observeForActivity(activityId)
+                    .map { activityId to it }
+                    .retryWhen { cause, _ ->
+                        if (cause is CancellationException) throw cause
+                        callbacks.onFailure(cause)
+                        delay(refreshIntervalMillis)
+                        true
+                    }
+            }
+        }.collect { (activityId, locations) -> callbacks.onSnapshot(activityId, locations) }
+    }
+    val cadence = launch {
+        while (true) {
+            delay(refreshIntervalMillis)
+            callbacks.refreshMembership()
+        }
+    }
+    return ParticipantLocationMonitoring(cadence, observation)
+}
 
 private const val PARTICIPANT_LOCATION_REFRESH_INTERVAL_MILLIS = 15_000L

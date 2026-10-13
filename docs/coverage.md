@@ -26,3 +26,27 @@ variants are likewise not added until they have executable unit tests.
 produce an executable coverage report. They remain visible here rather than
 silently shrinking the reporting scope; adding tests to either module requires
 adding its report to the guarded list and to the Codecov upload list together.
+
+## Android-backed datastore coverage
+
+`AndroidKeystoreEmailCipher` uses the Android Keystore and therefore cannot be
+executed by the JVM unit-test runner. With an authorized connected device or
+emulator, run:
+
+```sh
+./gradlew :core:datastore:collectDebugCoverage
+```
+
+This runs the datastore debug instrumentation and unit tests, then writes the
+combined native AGP report to
+`core/datastore/build/reports/code_coverage_html_report/global/index.html`.
+The device execution data is retained at
+`core/datastore/build/outputs/code_coverage/debugAndroidTest/connected/<device>/coverage.ec`,
+and the instrumentation result XML is retained beneath
+`core/datastore/build/outputs/androidTest-results/connected/debug/`.
+
+The debug test APK uses multidex because its Android-test dependency graph
+exceeds the single-dex method limit when coverage instrumentation is enabled.
+This device report is evidence for Android-runtime adapters; it is deliberately
+separate from the reproducible JVM-only `unitTestCoverage` aggregate and its
+Codecov inputs.

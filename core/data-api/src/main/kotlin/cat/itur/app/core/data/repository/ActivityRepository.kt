@@ -58,7 +58,9 @@ interface ActivityRepository {
     suspend fun addParticipant(activityId: IturActivityId, userId: UserId): DataResult<IturActivity>
 
     /**
-     * Removes a user from the activity's participants.
+     * Completes this device's trusted departure cleanup. Participants may leave while the
+     * activity is non-terminal; the organiser calls this after marking the activity terminal.
+     * Repeating organiser cleanup must be safe and must not change terminal activity state.
      * @returns The updated activity.
      */
     suspend fun removeParticipant(activityId: IturActivityId, userId: UserId): DataResult<IturActivity>

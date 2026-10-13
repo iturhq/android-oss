@@ -6,6 +6,7 @@
 package cat.itur.app.core.auth.repository
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import androidx.core.content.edit
 import androidx.credentials.CredentialManager
@@ -53,7 +54,32 @@ class FirebaseUserRepository @Inject constructor(
     private val googleSignInConfig: GoogleSignInConfig,
     private val backendHealthReporter: Lazy<BackendHealthReporter>,
 ) : UserRepository {
+    private var credentialManagerFactory: (Context) -> CredentialManager = CredentialManager::create
+    private var securePreferencesFactory: (Context) -> SharedPreferences = { secureContext ->
+        val masterKey = MasterKey.Builder(secureContext)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        EncryptedSharedPreferences.create(
+            secureContext,
+            "itur_secure_prefs",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+        )
+    }
     private var currentUser: User? = null
+
+    internal constructor(
+        firebaseAuth: FirebaseAuth,
+        context: Context,
+        googleSignInConfig: GoogleSignInConfig,
+        backendHealthReporter: Lazy<BackendHealthReporter>,
+        credentialManagerFactory: (Context) -> CredentialManager,
+        securePreferencesFactory: ((Context) -> SharedPreferences)? = null,
+    ) : this(firebaseAuth, context, googleSignInConfig, backendHealthReporter) {
+        this.credentialManagerFactory = credentialManagerFactory
+        securePreferencesFactory?.let { this.securePreferencesFactory = it }
+    }
 
     override suspend fun getCurrentUser(): User {
         // Firebase restores a persisted session asynchronously during process startup. Reading
@@ -73,16 +99,7 @@ class FirebaseUserRepository @Inject constructor(
             )
         } ?: run {
             // There is no Firebase Auth user; retrieve or create an anonymous device ID.
-            val masterKey = MasterKey.Builder(context)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-            val securePrefs = EncryptedSharedPreferences.create(
-                context,
-                "itur_secure_prefs",
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-            )
+            val securePrefs = securePreferencesFactory(context)
             val deviceId = securePrefs.getString("device_uuid", null)
                 ?: run {
                     // Migrate from legacy plain SharedPreferences if a UUID is stored there.
@@ -119,7 +136,7 @@ class FirebaseUserRepository @Inject constructor(
             backendHealthReporter.get().reportFirebaseAuthFailed(SignInFailureReason.NOT_CONFIGURED)
             return SignInResult.Failure(SignInFailureReason.NOT_CONFIGURED)
         }
-        val credentialManager = CredentialManager.create(context)
+        val credentialManager = credentialManagerFactory(context)
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
             .setServerClientId(googleSignInConfig.webClientId)

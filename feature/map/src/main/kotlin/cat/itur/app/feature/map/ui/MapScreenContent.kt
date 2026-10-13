@@ -9,10 +9,16 @@ import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
@@ -47,11 +53,19 @@ internal fun MapScaffold(
     snackbarHostState: SnackbarHostState,
 ) {
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = {
-            SnackbarHost(snackbarHostState) { data -> Snackbar(snackbarData = data) }
+            SnackbarHost(
+                snackbarHostState,
+                modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing),
+            ) { data -> Snackbar(snackbarData = data) }
         },
     ) { paddingValues ->
-        Box(modifier = androidx.compose.ui.Modifier.padding(paddingValues)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+        ) {
             MapContent(viewModel, environment, presentation, interaction)
         }
     }
@@ -65,12 +79,19 @@ private fun MapContent(
     interaction: MapInteractionState,
 ) {
     when {
-        !environment.openGlEsSupport.isSupported && !environment.isInspection -> ErrorState(
-            guidance = "This device does not provide the graphics support required by the map.",
-            message = "OpenGL ES 3.0 or newer is required; this device reports " +
-                "${environment.openGlEsSupport.reportedVersion}.",
-            modifier = environment.modifier,
-        )
+        !environment.openGlEsSupport.isSupported && !environment.isInspection ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing),
+            ) {
+                ErrorState(
+                    guidance = "This device does not provide the graphics support required by the map.",
+                    message = "OpenGL ES 3.0 or newer is required; this device reports " +
+                        "${environment.openGlEsSupport.reportedVersion}.",
+                    modifier = environment.modifier,
+                )
+            }
         else -> MapReadyContent(viewModel, environment, presentation, interaction)
     }
 }
@@ -82,8 +103,14 @@ private fun MapReadyContent(
     presentation: MapPresentation,
     interaction: MapInteractionState,
 ) {
+    val mapSurfaceModifier = environment.modifier
+        .fillMaxSize()
+        .windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top))
+        .onGloballyPositioned { interaction.mapBounds = it.boundsInRoot() }
+        .testTag("map_surface")
+
     if (environment.isInspection) {
-        NoMapView(modifier = environment.modifier.testTag("persistent_map_surface"))
+        NoMapView(modifier = mapSurfaceModifier)
     } else {
         MapLibreView(
             input = MapLibreViewInput(
@@ -101,10 +128,7 @@ private fun MapReadyContent(
                 isDirectionOfTravel = presentation.ongoingActivityId != null &&
                     interaction.isDirectionOfTravel,
             ),
-            modifier = environment.modifier
-                .fillMaxSize()
-                .onGloballyPositioned { interaction.mapBounds = it.boundsInRoot() }
-                .testTag("persistent_map_surface"),
+            modifier = mapSurfaceModifier,
             callbacks = MapLibreViewCallbacks(
                 onMapReady = { interaction.mapLibreMap = it },
                 onViewportHeightChanged = { interaction.mapViewportHeightPixels = it },
@@ -114,10 +138,16 @@ private fun MapReadyContent(
             ),
         )
     }
-    MapStateControls(viewModel, environment, presentation, interaction)
-    if (!interaction.locationPermissionGranted) {
-        LocationPermissionNotice {
-            interaction.locationPermissionRequests++
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing),
+    ) {
+        MapStateControls(viewModel, environment, presentation, interaction)
+        if (!interaction.locationPermissionGranted) {
+            LocationPermissionNotice {
+                interaction.locationPermissionRequests++
+            }
         }
     }
 }
@@ -218,12 +248,17 @@ private fun OngoingControls(
     stateTag: String,
 ) {
     val ongoingUiState = presentation.uiState as MapUiState.Ongoing
+    val isOrganizer = ongoingUiState.organizer.id == presentation.currentUser?.id
     OngoingState(
         actions = OngoingStateActions(
             onStopRequested = {
-                interaction.isDirectionOfTravel = false
-                interaction.stopCameraTracking()
-                viewModel.leaveActivity()
+                if (isOrganizer) {
+                    interaction.requestStopActivityConfirmation()
+                } else {
+                    interaction.isDirectionOfTravel = false
+                    interaction.stopCameraTracking()
+                    viewModel.leaveActivity()
+                }
             },
             onQrRequested = { interaction.showQrDisplaySheet = true },
             onTrackUserRequested = { toggleUserTracking(interaction) },
@@ -237,7 +272,7 @@ private fun OngoingControls(
             onHelpRequested = { interaction.showHelp = true },
         ),
         presentation = OngoingState(
-            isOrganizer = ongoingUiState.organizer.id == presentation.currentUser?.id,
+            isOrganizer = isOrganizer,
             selfSignal = presentation.currentUser?.id?.let(ongoingUiState.activity.participantSignals::get),
             selfLocationAvailable = interaction.locationPermissionGranted,
             activityActionsEnabled = presentation.activityActionsEnabled,

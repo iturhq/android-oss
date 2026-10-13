@@ -14,9 +14,11 @@ import com.google.firebase.functions.HttpsCallableReference
 import com.google.firebase.functions.HttpsCallableResult
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 
 class ActivityAdmissionGatewayTest {
@@ -115,5 +117,45 @@ class ActivityAdmissionGatewayTest {
         val result = gateway.setParticipantSignal(IturActivityId("Activity000000000001"), null)
 
         assertEquals(IturActivityId("Activity000000000001"), assertIs<DataResult.Success<IturActivityId>>(result).data)
+    }
+
+    @Test
+    fun `GIVEN a malformed join response WHEN joining THEN it is rejected`() = runBlocking {
+        every { functions.getHttpsCallable("joinActivity") } returns callable
+        every { callable.call(mapOf("activityId" to "Activity000000000001")) } returns
+            Tasks.forResult(
+                HttpsCallableResult::class.java
+                    .getConstructor(Any::class.java)
+                    .newInstance(mapOf("unexpected" to "response")),
+            )
+
+        val result = gateway.join(IturActivityId("Activity000000000001"))
+
+        assertEquals(
+            "The activity service returned an invalid response",
+            assertIs<DataResult.Error>(result).message,
+        )
+    }
+
+    @Test
+    fun `GIVEN an unclassified silent failure WHEN leaving THEN a stable fallback is returned`() = runBlocking {
+        every { functions.getHttpsCallable("leaveActivity") } returns callable
+        every { callable.call(mapOf("activityId" to "Activity000000000001")) } returns
+            Tasks.forException(IllegalStateException())
+
+        val result = gateway.leave(IturActivityId("Activity000000000001"))
+
+        assertEquals("Activity admission failed", assertIs<DataResult.Error>(result).message)
+    }
+
+    @Test
+    fun `GIVEN callable cancellation WHEN starting THEN cancellation is propagated`() = runBlocking {
+        every { functions.getHttpsCallable("startActivity") } returns callable
+        every { callable.call(emptyMap<String, String>()) } returns
+            Tasks.forException(CancellationException("caller cancelled"))
+
+        val failure = assertFailsWith<CancellationException> { gateway.start() }
+
+        assertEquals("caller cancelled", failure.message)
     }
 }

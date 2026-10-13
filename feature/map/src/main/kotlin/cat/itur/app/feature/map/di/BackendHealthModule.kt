@@ -8,10 +8,12 @@ package cat.itur.app.feature.map.di
 import cat.itur.app.core.data.health.BackendHealthCheck
 import cat.itur.app.core.data.health.BackendHealthReporter
 import cat.itur.app.feature.map.health.BackendHealthRecoveryCoordinator
+import cat.itur.app.feature.map.health.MapStyleBackendHealthCheck
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import dagger.multibindings.IntoSet
 import dagger.multibindings.Multibinds
 
 /**
@@ -25,6 +27,12 @@ abstract class BackendHealthModule {
     abstract fun backendHealthReporter(
         coordinator: BackendHealthRecoveryCoordinator,
     ): BackendHealthReporter
+
+    @Binds
+    @IntoSet
+    abstract fun mapStyleBackendHealthCheck(
+        check: MapStyleBackendHealthCheck,
+    ): BackendHealthCheck
 
     @Multibinds
     abstract fun backendHealthChecks(): Set<BackendHealthCheck>
