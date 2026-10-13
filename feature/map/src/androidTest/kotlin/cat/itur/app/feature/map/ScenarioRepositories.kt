@@ -94,7 +94,7 @@ class ScenarioActivityRepository :
     var removeFailure: Throwable? = null
     var updateFailure: Throwable? = null
     var signalFailure: Throwable? = null
-    var broadcastFailure: Throwable? = null
+    var broadcastFailuresRemaining = 0
     var getActivitySuccessesBeforeFailure = 0
     var getActivityFailuresRemaining = 0
     val initialLookupComplete = AtomicBoolean()
@@ -273,7 +273,10 @@ class ScenarioActivityRepository :
         since: Date?,
     ): List<Broadcast> {
         broadcastReadCount.incrementAndGet()
-        broadcastFailure?.let { throw it }
+        if (broadcastFailuresRemaining > 0) {
+            broadcastFailuresRemaining--
+            throw IllegalStateException("temporarily offline")
+        }
         return broadcasts[activityId].orEmpty().filter { since == null || it.sentOn.after(since) }
     }
 }

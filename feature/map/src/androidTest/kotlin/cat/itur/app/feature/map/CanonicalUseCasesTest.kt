@@ -649,16 +649,15 @@ class CanonicalUseCasesTest {
             TestFixtures.ONGOING_ACTIVITY_ID,
             Broadcast("retry", "The route has changed", Date()),
         )
-        activities.broadcastFailure = IllegalStateException("temporarily offline")
+        activities.broadcastFailuresRemaining = 1
         launch(
             scanCode = TestFixtures.ONGOING_ACTIVITY_ID.url,
             broadcastPollIntervalMillis = 25L,
         )
         joinAsParticipant()
-        composeRule.waitUntil { activities.broadcastReadCount.get() > 0 }
+        composeRule.waitUntil { activities.broadcastReadCount.get() >= 2 }
         composeRule.onNodeWithText("Safety status could not be updated.").assertDoesNotExist()
 
-        activities.broadcastFailure = null
         waitForText("Alert: The route has changed")
     }
 
