@@ -23,6 +23,9 @@ android {
         multiDexEnabled = true
         testInstrumentationRunner = "cat.itur.app.feature.map.HiltTestRunner"
         testInstrumentationRunnerArguments["clearPackageData"] = "true"
+        // Test Orchestrator clears package data after every test. Keep its
+        // per-test JaCoCo files in Test Storage so AGP can merge them.
+        testInstrumentationRunnerArguments["useTestStorageService"] = "true"
     }
 
     buildTypes {
