@@ -16,7 +16,9 @@ See the [Getting started](README.md#getting-started) section of the README for t
 
 ## Branching and pull requests
 
-1. Fork the repository and create a feature branch from `main`.
+1. Ask the maintainer which active `release/<version>` integration line to
+   target, then create a feature branch from that line. `main` mirrors the
+   latest published release and is not the local development branch.
 2. Keep each pull request focused on a single change.
 3. Sign off every commit as described below.
 4. Make sure the CI checks pass before requesting a review.
