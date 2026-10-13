@@ -125,7 +125,7 @@ class PermissionUseCasesTest {
         }
         composeRule.onNodeWithTag("join_activity_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("sign_in_fab").assertIsDisplayed()
-        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
         composeRule.onNodeWithTag("location_permission_notice").assertDoesNotExist()
     }
 
@@ -154,7 +154,7 @@ class PermissionUseCasesTest {
         }
         composeRule.onNodeWithText("Location access is off", substring = true)
             .assertIsDisplayed()
-        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
         composeRule.onNodeWithTag("join_activity_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("sign_in_fab").performClick()
         composeRule.waitUntil(timeoutMillis = 10_000) {

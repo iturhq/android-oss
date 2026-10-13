@@ -22,8 +22,11 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 
 class FirebaseLocationRepository
@@ -57,6 +60,9 @@ constructor(
     }
 
     override fun observeForActivity(activityId: IturActivityId): Flow<List<ParticipantLocation>> = callbackFlow {
+        val receivedSnapshot = AtomicLong()
+        val emissionMutex = Mutex()
+        var emittedSnapshot = 0L
         val registration = locationsCollection
             .whereEqualTo("activityId", activityId.value)
             .addSnapshotListener { snapshot, error ->
@@ -65,7 +71,16 @@ constructor(
                     return@addSnapshotListener
                 }
                 val dtoList = snapshot?.toObjects(ParticipantLocationDTO::class.java).orEmpty()
-                launch { trySend(toParticipantLocations(dtoList)) }
+                val snapshotOrder = receivedSnapshot.incrementAndGet()
+                launch {
+                    val locations = toParticipantLocations(dtoList)
+                    emissionMutex.withLock {
+                        if (snapshotOrder > emittedSnapshot) {
+                            trySend(locations)
+                            emittedSnapshot = snapshotOrder
+                        }
+                    }
+                }
             }
         awaitClose { registration.remove() }
     }
