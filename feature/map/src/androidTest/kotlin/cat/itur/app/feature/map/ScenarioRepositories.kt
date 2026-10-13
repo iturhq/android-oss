@@ -12,6 +12,7 @@ import cat.itur.app.core.data.health.BackendService
 import cat.itur.app.core.data.repository.ActivityFilter
 import cat.itur.app.core.data.repository.ActivityRepository
 import cat.itur.app.core.data.repository.DataResult
+import cat.itur.app.core.data.repository.LocationObservationScope
 import cat.itur.app.core.data.repository.LocationReportMeasurement
 import cat.itur.app.core.data.repository.LocationRepository
 import cat.itur.app.core.data.repository.ParticipantSignalRepository
@@ -27,6 +28,8 @@ import cat.itur.app.core.model.Location
 import cat.itur.app.core.model.ParticipantLocation
 import cat.itur.app.core.model.ParticipantSignal
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import java.util.Date
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -283,6 +286,8 @@ class ScenarioLocationRepository(
             .associate { it.userId to it.location }
             .toMutableMap(),
     )
+    private val snapshots =
+        mutableMapOf<IturActivityId, MutableStateFlow<List<ParticipantLocation>>>()
 
     var removeFailure: Throwable? = null
     var updateFailure: Throwable? = null
@@ -296,19 +301,30 @@ class ScenarioLocationRepository(
         activityId: IturActivityId,
     ): List<ParticipantLocation> {
         readCount.incrementAndGet()
-        return locations[activityId].orEmpty().map { (userId, location) ->
-            ParticipantLocation(
-                activityId = activityId,
-                userId = userId,
-                userName = "User ${userId.value}",
-                location = location,
-                recordedAt = recordedAt,
-            )
-        }
+        return snapshot(activityId)
+    }
+
+    override fun observeForActivity(activityId: IturActivityId): Flow<List<ParticipantLocation>> = snapshots.getOrPut(activityId) { MutableStateFlow(snapshot(activityId)) }
+
+    override suspend fun reconcileObservation(scope: LocationObservationScope) = Unit
+
+    private fun snapshot(activityId: IturActivityId): List<ParticipantLocation> = locations[activityId].orEmpty().map { (userId, location) ->
+        ParticipantLocation(
+            activityId = activityId,
+            userId = userId,
+            userName = "User ${userId.value}",
+            location = location,
+            recordedAt = recordedAt,
+        )
+    }
+
+    private fun publish(activityId: IturActivityId) {
+        snapshots[activityId]?.value = snapshot(activityId)
     }
 
     fun seedLocation(activityId: IturActivityId, userId: UserId, location: Location) {
         locations.getOrPut(activityId) { mutableMapOf() }[userId] = location
+        publish(activityId)
     }
 
     override suspend fun updateForParticipant(
@@ -321,17 +337,20 @@ class ScenarioLocationRepository(
         updateCount.incrementAndGet()
         updateFailure?.let { throw it }
         locations.getOrPut(activityId) { mutableMapOf() }[userId] = location
+        publish(activityId)
     }
 
     override suspend fun removeForActivity(activityId: IturActivityId) {
         removeFailure?.let { throw it }
         removeCount.incrementAndGet()
         locations.remove(activityId)
+        publish(activityId)
     }
 
     override suspend fun removeForParticipant(userId: UserId, activityId: IturActivityId) {
         removeFailure?.let { throw it }
         removeCount.incrementAndGet()
         locations[activityId]?.remove(userId)
+        publish(activityId)
     }
 }
