@@ -28,8 +28,12 @@ internal class ParticipantSignalController(
     val message = mutableMessage.asStateFlow()
     private val mutableParticipantMap = MutableStateFlow<Map<UserId, ParticipantSignal>>(emptyMap())
     val participantMap = mutableParticipantMap.asStateFlow()
+    private var mutationVersion = 0L
+
+    fun captureMutationVersion(): Long = mutationVersion
 
     fun restore(activity: IturActivity, userId: UserId?) {
+        mutationVersion++
         mutableParticipantMap.value = activity.currentParticipantSignals()
         mutableState.value = ParticipantSignalUiState(
             confirmed = userId?.let(activity.participantSignals::get),
@@ -37,7 +41,30 @@ internal class ParticipantSignalController(
         mutableMessage.value = null
     }
 
+    fun refresh(
+        activity: IturActivity,
+        userId: UserId?,
+        expectedMutationVersion: Long,
+    ): Map<UserId, ParticipantSignal> {
+        val currentState = mutableState.value
+        val preserveLocal = currentState.inFlight != null || mutationVersion != expectedMutationVersion
+        val refreshed = activity.currentParticipantSignals()
+        val effective = if (preserveLocal && userId != null) {
+            refreshed.withSignal(userId, mutableParticipantMap.value[userId])
+        } else {
+            refreshed
+        }
+        mutableParticipantMap.value = effective
+        if (!preserveLocal) {
+            mutableState.value = currentState.copy(
+                confirmed = userId?.let(activity.participantSignals::get),
+            )
+        }
+        return effective
+    }
+
     fun clear() {
+        mutationVersion++
         mutableParticipantMap.value = emptyMap()
         mutableState.value = ParticipantSignalUiState()
         mutableMessage.value = null
@@ -49,6 +76,7 @@ internal class ParticipantSignalController(
 
     fun update(signal: ParticipantSignal?) {
         val request = request(signal) ?: return
+        mutationVersion++
         mutableState.value = request.current.copy(inFlight = signal.asAction())
         scope.launch {
             runUpdate(request, signal)
@@ -103,6 +131,7 @@ internal class ParticipantSignalController(
     }
 
     private fun signalUpdated(activity: IturActivity, userId: UserId) {
+        mutationVersion++
         mutableParticipantMap.value = activity.currentParticipantSignals()
         callbacks.onActivityUpdated(activity)
         mutableState.value = ParticipantSignalUiState(
@@ -111,6 +140,7 @@ internal class ParticipantSignalController(
     }
 
     private fun signalFailed(detail: String?) {
+        mutationVersion++
         mutableState.value = mutableState.value.copy(inFlight = null)
         mutableMessage.value = buildString {
             append("Your safety status could not be updated. Please try again.")
@@ -121,6 +151,15 @@ internal class ParticipantSignalController(
     private fun IturActivity.currentParticipantSignals(): Map<UserId, ParticipantSignal> {
         val participants = participantIds.toSet()
         return participantSignals.filterKeys { it in participants }
+    }
+
+    private fun Map<UserId, ParticipantSignal>.withSignal(
+        userId: UserId,
+        signal: ParticipantSignal?,
+    ): Map<UserId, ParticipantSignal> = if (signal == null) {
+        this - userId
+    } else {
+        this + (userId to signal)
     }
 }
 

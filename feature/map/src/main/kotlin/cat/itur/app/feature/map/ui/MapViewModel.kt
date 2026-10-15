@@ -659,18 +659,24 @@ constructor(
 
     private suspend fun refreshParticipantMembership() {
         val activityId = _ongoingActivityId.value ?: return
+        val signalMutationVersion = participantSignals.captureMutationVersion()
         try {
             val activity = activityRepository.getActivity(activityId).dataOrNullOrThrow() ?: return
             locationsRepository.reconcileObservation(activity.locationObservationScope())
             if (_ongoingActivityId.value == activityId) {
                 val locations = activity.activeLocations(latestLocationSnapshot)
                 _participantLocations.value = locations
-                participantSignals.restore(activity, currentUser.value?.id)
+                val refreshedSignals = participantSignals.refresh(
+                    activity,
+                    currentUser.value?.id,
+                    signalMutationVersion,
+                )
+                val refreshedActivity = activity.copy(participantSignals = refreshedSignals)
                 val current = _uiState.value as? Ongoing
                 if (current?.activity?.id == activityId) {
                     _organizerId.value = activity.organizerId
                     _uiState.value = current.copy(
-                        activity = activity,
+                        activity = refreshedActivity,
                         participantIds = activity.participantIds,
                         locations = locations,
                     )

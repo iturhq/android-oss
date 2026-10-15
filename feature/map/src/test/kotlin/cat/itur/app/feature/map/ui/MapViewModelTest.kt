@@ -1465,6 +1465,103 @@ class MapViewModelTest {
     }
 
     @Test
+    fun `cadence refresh cannot reset an in-flight write or revert its result`() = runTest {
+        val currentUserId = UserId("1")
+        val initial = PARTICIPANT_ACTIVITY.copy(participantIds = listOf(currentUserId))
+        val updated = initial.copy(
+            participantSignals = mapOf(currentUserId to ParticipantSignal.DELAYED),
+        )
+        val refreshStarted = CompletableDeferred<Unit>()
+        val releaseRefresh = CompletableDeferred<Unit>()
+        var activityReads = 0
+        val activityRepo = mockk<ActivityRepository>(relaxed = true)
+        coEvery { activityRepo.getActivity(initial.id) } coAnswers {
+            if (activityReads++ == 0) {
+                DataResult.Success(initial)
+            } else {
+                refreshStarted.complete(Unit)
+                releaseRefresh.await()
+                DataResult.Success(initial)
+            }
+        }
+        val locationRepo = mockk<LocationRepository>()
+        coEvery { locationRepo.getForActivity(initial.id) } returns emptyList()
+        every { locationRepo.observeForActivity(initial.id) } returns MutableStateFlow(emptyList())
+        coEvery { locationRepo.reconcileObservation(any()) } returns Unit
+        val signalRepo = mockk<ParticipantSignalRepository>()
+        val writeCompletion = CompletableDeferred<DataResult<IturActivity>>()
+        coEvery {
+            signalRepo.setParticipantSignal(initial.id, currentUserId, ParticipantSignal.DELAYED)
+        } coAnswers { writeCompletion.await() }
+        val vm = viewModel(
+            activityRepo = activityRepo,
+            locationRepo = locationRepo,
+            participantSignalRepo = signalRepo,
+        )
+        vm.triggerOngoingState(initial.id, context)
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        try {
+            advanceTimeBy(1_001L)
+            runCurrent()
+            refreshStarted.await()
+            assertEquals(
+                ParticipantSignalAction.REPORT_DELAYED,
+                vm.participantSignalState.value.inFlight,
+            )
+
+            writeCompletion.complete(DataResult.Success(updated))
+            runCurrent()
+            releaseRefresh.complete(Unit)
+            runCurrent()
+
+            assertEquals(ParticipantSignal.DELAYED, vm.participantSignalState.value.confirmed)
+            assertEquals(ParticipantSignal.DELAYED, vm.participantSignalMap.value[currentUserId])
+            vm.setParticipantSignal(ParticipantSignal.DELAYED)
+            runCurrent()
+            coVerify(exactly = 1) {
+                signalRepo.setParticipantSignal(
+                    initial.id,
+                    currentUserId,
+                    ParticipantSignal.DELAYED,
+                )
+            }
+        } finally {
+            releaseRefresh.complete(Unit)
+            vm.stopParticipantLocationMonitoring()
+        }
+    }
+
+    @Test
+    fun `cadence refresh preserves a signal write failure message`() = runTest {
+        val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
+        val signalRepo = mockk<ParticipantSignalRepository>()
+        coEvery {
+            signalRepo.setParticipantSignal(
+                PARTICIPANT_ACTIVITY.id,
+                UserId("1"),
+                ParticipantSignal.DELAYED,
+            )
+        } returns DataResult.Error("offline")
+        val vm = viewModel(activityRepo = activityRepo, participantSignalRepo = signalRepo)
+        vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+        val message = vm.participantSignalMessage.value
+
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        try {
+            advanceTimeBy(1_001L)
+            runCurrent()
+
+            assertEquals(message, vm.participantSignalMessage.value)
+        } finally {
+            vm.stopParticipantLocationMonitoring()
+        }
+    }
+
+    @Test
     fun `failed signal write restores controls and permits retry without leaving ongoing state`() = runTest {
         val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
         val signalRepo = mockk<ParticipantSignalRepository>()
