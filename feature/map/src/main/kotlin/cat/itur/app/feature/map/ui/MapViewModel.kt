@@ -100,10 +100,8 @@ constructor(
     val organizerId = _organizerId.asStateFlow()
 
     // A MapLibre feature collection representing the participants' locations.
-    private val _participantLocations =
-        MutableStateFlow<List<ParticipantLocation>>(mutableListOf<ParticipantLocation>())
-    val participantLocations: StateFlow<List<ParticipantLocation>> =
-        _participantLocations.asStateFlow()
+    private val _participantLocations = MutableStateFlow<List<ParticipantLocation>>(emptyList())
+    val participantLocations = _participantLocations.asStateFlow()
 
     // The last know location, as collected by the location service.
     private val _lastLocation = MutableLiveData<Location?>()
@@ -659,24 +657,19 @@ constructor(
 
     private suspend fun refreshParticipantMembership() {
         val activityId = _ongoingActivityId.value ?: return
-        val signalMutationVersion = participantSignals.captureMutationVersion()
+        val signalVersion = participantSignals.mutationVersion
         try {
             val activity = activityRepository.getActivity(activityId).dataOrNullOrThrow() ?: return
             locationsRepository.reconcileObservation(activity.locationObservationScope())
             if (_ongoingActivityId.value == activityId) {
                 val locations = activity.activeLocations(latestLocationSnapshot)
                 _participantLocations.value = locations
-                val refreshedSignals = participantSignals.refresh(
-                    activity,
-                    currentUser.value?.id,
-                    signalMutationVersion,
-                )
-                val refreshedActivity = activity.copy(participantSignals = refreshedSignals)
+                val freshActivity = participantSignals.refresh(activity, currentUser.value?.id, signalVersion)
                 val current = _uiState.value as? Ongoing
                 if (current?.activity?.id == activityId) {
                     _organizerId.value = activity.organizerId
                     _uiState.value = current.copy(
-                        activity = refreshedActivity,
+                        activity = freshActivity,
                         participantIds = activity.participantIds,
                         locations = locations,
                     )

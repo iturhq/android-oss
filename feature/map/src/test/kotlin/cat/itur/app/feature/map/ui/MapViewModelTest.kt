@@ -88,6 +88,13 @@ private val PARTICIPANT_ACTIVITY = TestFixtures.ongoingActivity.copy(
     participantIds = emptyList(),
 )
 
+private fun emptyLocations(id: IturActivityId): LocationRepository = mockk<LocationRepository>().also { repository ->
+    coEvery { repository.getForActivity(id) } returns emptyList()
+    every { repository.observeForActivity(id) } returns
+        MutableStateFlow(emptyList())
+    coEvery { repository.reconcileObservation(any()) } returns Unit
+}
+
 // A generous threshold (~111m) for distinguishing an unchanged stored location (which only
 // moves by FakeLocationRepository's small "GPS noise" jitter, a few meters) from a location
 // regenerated from scratch after removal (which lands near a different, unrelated fallback).
@@ -1484,10 +1491,7 @@ class MapViewModelTest {
                 DataResult.Success(initial)
             }
         }
-        val locationRepo = mockk<LocationRepository>()
-        coEvery { locationRepo.getForActivity(initial.id) } returns emptyList()
-        every { locationRepo.observeForActivity(initial.id) } returns MutableStateFlow(emptyList())
-        coEvery { locationRepo.reconcileObservation(any()) } returns Unit
+        val locationRepo = emptyLocations(initial.id)
         val signalRepo = mockk<ParticipantSignalRepository>()
         val writeCompletion = CompletableDeferred<DataResult<IturActivity>>()
         coEvery {
@@ -1521,11 +1525,7 @@ class MapViewModelTest {
             vm.setParticipantSignal(ParticipantSignal.DELAYED)
             runCurrent()
             coVerify(exactly = 1) {
-                signalRepo.setParticipantSignal(
-                    initial.id,
-                    currentUserId,
-                    ParticipantSignal.DELAYED,
-                )
+                signalRepo.setParticipantSignal(initial.id, currentUserId, ParticipantSignal.DELAYED)
             }
         } finally {
             releaseRefresh.complete(Unit)

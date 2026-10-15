@@ -28,9 +28,8 @@ internal class ParticipantSignalController(
     val message = mutableMessage.asStateFlow()
     private val mutableParticipantMap = MutableStateFlow<Map<UserId, ParticipantSignal>>(emptyMap())
     val participantMap = mutableParticipantMap.asStateFlow()
-    private var mutationVersion = 0L
-
-    fun captureMutationVersion(): Long = mutationVersion
+    var mutationVersion = 0L
+        private set
 
     fun restore(activity: IturActivity, userId: UserId?) {
         mutationVersion++
@@ -45,12 +44,13 @@ internal class ParticipantSignalController(
         activity: IturActivity,
         userId: UserId?,
         expectedMutationVersion: Long,
-    ): Map<UserId, ParticipantSignal> {
+    ): IturActivity {
         val currentState = mutableState.value
         val preserveLocal = currentState.inFlight != null || mutationVersion != expectedMutationVersion
         val refreshed = activity.currentParticipantSignals()
         val effective = if (preserveLocal && userId != null) {
-            refreshed.withSignal(userId, mutableParticipantMap.value[userId])
+            val localSignal = mutableParticipantMap.value[userId]
+            if (localSignal == null) refreshed - userId else refreshed + (userId to localSignal)
         } else {
             refreshed
         }
@@ -60,7 +60,7 @@ internal class ParticipantSignalController(
                 confirmed = userId?.let(activity.participantSignals::get),
             )
         }
-        return effective
+        return activity.copy(participantSignals = effective)
     }
 
     fun clear() {
@@ -151,15 +151,6 @@ internal class ParticipantSignalController(
     private fun IturActivity.currentParticipantSignals(): Map<UserId, ParticipantSignal> {
         val participants = participantIds.toSet()
         return participantSignals.filterKeys { it in participants }
-    }
-
-    private fun Map<UserId, ParticipantSignal>.withSignal(
-        userId: UserId,
-        signal: ParticipantSignal?,
-    ): Map<UserId, ParticipantSignal> = if (signal == null) {
-        this - userId
-    } else {
-        this + (userId to signal)
     }
 }
 
