@@ -645,21 +645,23 @@ class CanonicalUseCasesTest {
 
     @Test
     fun broadcastReadFailureIsSilentAndLaterPollDeliversTheAlert() {
-        activities.addBroadcast(
-            TestFixtures.ONGOING_ACTIVITY_ID,
-            Broadcast("retry", "The route has changed", Date()),
-        )
-        activities.broadcastFailure = IllegalStateException("temporarily offline")
         launch(
             scanCode = TestFixtures.ONGOING_ACTIVITY_ID.url,
             broadcastPollIntervalMillis = 25L,
         )
         joinAsParticipant()
-        composeRule.waitUntil { activities.broadcastReadCount.get() > 0 }
-        composeRule.onNodeWithText("Safety status could not be updated.").assertDoesNotExist()
+
+        activities.addBroadcast(
+            TestFixtures.ONGOING_ACTIVITY_ID,
+            Broadcast("retry", "The route has changed", Date()),
+        )
+        val readsBeforeFailure = activities.broadcastReadCount.get()
+        activities.broadcastFailure = IllegalStateException("temporarily offline")
+        composeRule.waitUntil { activities.broadcastReadCount.get() > readsBeforeFailure }
 
         activities.broadcastFailure = null
         waitForText("Alert: The route has changed")
+        composeRule.onNodeWithText("Safety status could not be updated.").assertDoesNotExist()
     }
 
     @Test
