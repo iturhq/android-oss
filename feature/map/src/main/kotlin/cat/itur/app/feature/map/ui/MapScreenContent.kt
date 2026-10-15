@@ -121,10 +121,7 @@ private fun MapReadyContent(
                 currentUserId = presentation.currentUser?.id,
                 currentLocation = presentation.lastLocation,
                 participantLocations = presentation.participantLocations,
-                participantSignals = (presentation.uiState as? MapUiState.Ongoing)
-                    ?.activity
-                    ?.participantSignals
-                    .orEmpty(),
+                participantSignals = presentation.participantSignals,
                 isDirectionOfTravel = presentation.ongoingActivityId != null &&
                     interaction.isDirectionOfTravel,
             ),

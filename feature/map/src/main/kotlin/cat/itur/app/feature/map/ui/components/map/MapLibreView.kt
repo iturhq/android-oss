@@ -107,6 +107,7 @@ private data class MapLocationTrackingState(
     val isDirectionOfTravel: Boolean,
     val locationPermissionGranted: Boolean,
     val currentLocation: Location?,
+    val selfSignal: ParticipantSignal?,
     val styleLoaded: Boolean,
     val map: MapLibreMap?,
     val viewportHeight: Int,
@@ -122,6 +123,7 @@ private data class MapLocationTrackingState(
             isDirectionOfTravel = input.isDirectionOfTravel,
             locationPermissionGranted = input.locationPermissionGranted,
             currentLocation = input.currentLocation,
+            selfSignal = input.currentUserId?.let(input.participantSignals::get),
             styleLoaded = styleLoaded,
             map = map,
             viewportHeight = viewportHeight,
@@ -160,11 +162,7 @@ fun MapLibreView(
     var styleLoaded by remember { mutableStateOf(false) }
     var locationComponent by remember { mutableStateOf<LocationComponent?>(null) }
     var mapViewportHeight by remember { mutableStateOf(0) }
-    val accessibilityDescription = input.participantLocations
-        .filter { it.userId != input.currentUserId }
-        .joinToString(", ", prefix = "Participant locations. ") {
-            it.accessibleAge(nowMillis, recencyThresholds)
-        }
+    val accessibilityDescription = input.accessibilityDescription(nowMillis, recencyThresholds)
     MapViewHost.UpdateRecencyClock { nowMillis = it }
 
     MapRenderingCallbacks(mapView, callbacks.onStyleLoadFailed, callbacks.onStyleLoadSucceeded)
@@ -282,6 +280,7 @@ private fun MapLocationComponentEffect(
         state.isDirectionOfTravel,
         state.locationPermissionGranted,
         state.currentLocation,
+        state.selfSignal,
         state.styleLoaded,
         state.map,
         state.viewportHeight,
@@ -299,6 +298,18 @@ private fun MapLocationComponentEffect(
             }
             component.isLocationComponentEnabled = state.isActivityOngoing
             if (state.isActivityOngoing) state.currentLocation?.let(component::forceLocationUpdate)
+            val selfPointer = pointerPresentation(
+                role = PointerRole.SELF,
+                signal = state.selfSignal,
+                directional = true,
+            )
+            component.applyStyle(
+                LocationComponentOptions.builder(context)
+                    .foregroundDrawable(selfPointer.drawable)
+                    .foregroundDrawableStale(selfPointer.drawable)
+                    .pulseEnabled(true)
+                    .build(),
+            )
             component.setCameraMode(
                 if (state.isActivityOngoing && state.isDirectionOfTravel) {
                     CameraMode.TRACKING_GPS
@@ -347,7 +358,7 @@ private object MapStyleInitializer {
     }
 
     private fun addMapMarkers(style: Style, context: Context) {
-        PointerRole.entries.forEach { role ->
+        listOf(PointerRole.ORGANIZER, PointerRole.OTHER).forEach { role ->
             listOf(null, ParticipantSignal.DELAYED, ParticipantSignal.NEEDS_HELP).forEach { signal ->
                 listOf(true, false).forEach { directional ->
                     val pointer = pointerPresentation(role, signal, directional)

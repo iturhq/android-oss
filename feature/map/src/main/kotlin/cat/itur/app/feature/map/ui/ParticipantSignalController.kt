@@ -26,8 +26,11 @@ internal class ParticipantSignalController(
     val state = mutableState.asStateFlow()
     private val mutableMessage = MutableStateFlow<String?>(null)
     val message = mutableMessage.asStateFlow()
+    private val mutableParticipantMap = MutableStateFlow<Map<UserId, ParticipantSignal>>(emptyMap())
+    val participantMap = mutableParticipantMap.asStateFlow()
 
     fun restore(activity: IturActivity, userId: UserId?) {
+        mutableParticipantMap.value = activity.currentParticipantSignals()
         mutableState.value = ParticipantSignalUiState(
             confirmed = userId?.let(activity.participantSignals::get),
         )
@@ -35,6 +38,7 @@ internal class ParticipantSignalController(
     }
 
     fun clear() {
+        mutableParticipantMap.value = emptyMap()
         mutableState.value = ParticipantSignalUiState()
         mutableMessage.value = null
     }
@@ -99,6 +103,7 @@ internal class ParticipantSignalController(
     }
 
     private fun signalUpdated(activity: IturActivity, userId: UserId) {
+        mutableParticipantMap.value = activity.currentParticipantSignals()
         callbacks.onActivityUpdated(activity)
         mutableState.value = ParticipantSignalUiState(
             confirmed = activity.participantSignals[userId],
@@ -111,6 +116,11 @@ internal class ParticipantSignalController(
             append("Your safety status could not be updated. Please try again.")
             if (!detail.isNullOrBlank()) append(" ").append(detail)
         }
+    }
+
+    private fun IturActivity.currentParticipantSignals(): Map<UserId, ParticipantSignal> {
+        val participants = participantIds.toSet()
+        return participantSignals.filterKeys { it in participants }
     }
 }
 

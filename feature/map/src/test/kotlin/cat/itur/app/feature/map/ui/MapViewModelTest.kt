@@ -508,7 +508,10 @@ class MapViewModelTest {
 
     @Test
     fun `GIVEN no local GPS fix WHEN a participant snapshot arrives THEN markers refresh immediately`() = runTest {
-        val activityRepo = activityRepo(TestFixtures.ongoingActivity)
+        val seededActivity = TestFixtures.ongoingActivity.copy(
+            participantSignals = mapOf(TestFixtures.PARTICIPANT_2_ID to ParticipantSignal.DELAYED),
+        )
+        val activityRepo = activityRepo(seededActivity)
         val initialLocations = TestFixtures.ongoingActivityLocations
         val refreshedLocations = initialLocations.dropLast(1)
         val locationSnapshots = MutableStateFlow(initialLocations)
@@ -526,6 +529,13 @@ class MapViewModelTest {
         runCurrent()
         vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
         assertEquals(initialLocations, vm.participantLocations.value)
+        assertEquals(seededActivity.participantSignals, vm.participantSignalMap.value)
+
+        activityRepo.participantSignalRepository.setParticipantSignal(
+            TestFixtures.ONGOING_ACTIVITY_ID,
+            TestFixtures.PARTICIPANT_2_ID,
+            ParticipantSignal.NEEDS_HELP,
+        )
 
         vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
         try {
@@ -541,6 +551,10 @@ class MapViewModelTest {
             advanceTimeBy(2L)
             runCurrent()
             assertEquals(refreshedLocations, vm.participantLocations.value)
+            assertEquals(
+                mapOf(TestFixtures.PARTICIPANT_2_ID to ParticipantSignal.NEEDS_HELP),
+                vm.participantSignalMap.value,
+            )
             coVerify(exactly = 0) {
                 locationRepo.updateForParticipant(
                     TestFixtures.ORGANIZER_ID,
@@ -620,6 +634,41 @@ class MapViewModelTest {
     }
 
     @Test
+    fun `GIVEN stale signals WHEN membership refreshes THEN only current participants remain`() = runTest {
+        val retainedParticipantId = TestFixtures.PARTICIPANT_1_ID
+        val departingParticipantId = TestFixtures.PARTICIPANT_2_ID
+        val unrelatedId = UserId("unrelated-user")
+        val activity = TestFixtures.ongoingActivity.copy(
+            participantIds = listOf(retainedParticipantId, departingParticipantId),
+            participantSignals = mapOf(
+                retainedParticipantId to ParticipantSignal.DELAYED,
+                departingParticipantId to ParticipantSignal.NEEDS_HELP,
+                unrelatedId to ParticipantSignal.NEEDS_HELP,
+            ),
+        )
+        val activityRepo = activityRepo(activity)
+        val locationRepo = ControlledParticipantLocationRepository { _, _ -> emptyList() }
+        val vm = viewModel(activityRepo = activityRepo, locationRepo = locationRepo)
+
+        vm.triggerOngoingState(activity.id, context)
+        assertEquals(
+            setOf(retainedParticipantId, departingParticipantId),
+            vm.participantSignalMap.value.keys,
+        )
+
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        try {
+            activityRepo.removeParticipant(activity.id, departingParticipantId)
+            advanceTimeBy(1_001L)
+            runCurrent()
+
+            assertEquals(setOf(retainedParticipantId), vm.participantSignalMap.value.keys)
+        } finally {
+            vm.stopParticipantLocationMonitoring()
+        }
+    }
+
+    @Test
     fun `GIVEN participant monitoring is already active WHEN started again THEN only one refresh loop runs`() = runTest {
         val initialLocations = TestFixtures.ongoingActivityLocations
         val locationRepo = mockk<LocationRepository>()
@@ -690,7 +739,7 @@ class MapViewModelTest {
     }
 
     @Test
-    fun `GIVEN a participant refresh is in flight WHEN activity becomes idle THEN stale locations are not restored`() = runTest {
+    fun `GIVEN a participant refresh is in flight WHEN activity becomes idle THEN stale map state is not restored`() = runTest {
         val initialLocations = TestFixtures.ongoingActivityLocations
         val staleLocations = initialLocations.dropLast(1)
         val refreshStarted = CompletableDeferred<Unit>()
@@ -704,7 +753,13 @@ class MapViewModelTest {
             emit(staleLocations)
         }
         val vm = viewModel(
-            activityRepo = activityRepo(TestFixtures.ongoingActivity),
+            activityRepo = activityRepo(
+                TestFixtures.ongoingActivity.copy(
+                    participantSignals = mapOf(
+                        TestFixtures.PARTICIPANT_2_ID to ParticipantSignal.DELAYED,
+                    ),
+                ),
+            ),
             locationRepo = locationRepo,
         )
         vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
@@ -718,9 +773,117 @@ class MapViewModelTest {
             runCurrent()
 
             assertTrue(vm.participantLocations.value.isEmpty())
+            assertTrue(vm.participantSignalMap.value.isEmpty())
+            assertNull(vm.organizerId.value)
         } finally {
             vm.stopParticipantLocationMonitoring()
         }
+    }
+
+    @Test
+    fun `GIVEN signal refresh fails WHEN cadence elapses THEN last confirmed signals remain`() = runTest {
+        val seeded = TestFixtures.ongoingActivity.copy(
+            participantSignals = mapOf(TestFixtures.PARTICIPANT_2_ID to ParticipantSignal.DELAYED),
+        )
+        val activityRepo = mockk<ActivityRepository>(relaxed = true)
+        coEvery { activityRepo.getActivity(seeded.id) } returns
+            DataResult.Success(seeded) andThen DataResult.Error("offline")
+        val locationRepo = mockk<LocationRepository>()
+        coEvery { locationRepo.getForActivity(seeded.id) } returns TestFixtures.ongoingActivityLocations
+        every { locationRepo.observeForActivity(seeded.id) } returns
+            MutableStateFlow(TestFixtures.ongoingActivityLocations)
+        coEvery { locationRepo.reconcileObservation(any()) } returns Unit
+        val vm = viewModel(activityRepo = activityRepo, locationRepo = locationRepo)
+        vm.triggerOngoingState(seeded.id, context)
+
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        advanceTimeBy(1_001L)
+        runCurrent()
+        vm.stopParticipantLocationMonitoring()
+
+        assertEquals(seeded.participantSignals, vm.participantSignalMap.value)
+    }
+
+    @Test
+    fun `GIVEN old activity refresh is in flight WHEN activity switches THEN old signals cannot leak`() = runTest {
+        val activityA = TestFixtures.ongoingActivity.copy(
+            participantSignals = mapOf(TestFixtures.PARTICIPANT_2_ID to ParticipantSignal.DELAYED),
+        )
+        val activityB = activityA.copy(
+            id = IturActivityId("switchActivity000001"),
+            participantSignals = mapOf(TestFixtures.PARTICIPANT_2_ID to ParticipantSignal.NEEDS_HELP),
+        )
+        val refreshStarted = CompletableDeferred<Unit>()
+        val releaseRefresh = CompletableDeferred<Unit>()
+        var readsA = 0
+        val activityRepo = mockk<ActivityRepository>(relaxed = true)
+        coEvery { activityRepo.getActivity(activityA.id) } coAnswers {
+            if (readsA++ == 0) {
+                DataResult.Success(activityA)
+            } else {
+                refreshStarted.complete(Unit)
+                releaseRefresh.await()
+                DataResult.Success(activityA)
+            }
+        }
+        coEvery { activityRepo.getActivity(activityB.id) } returns DataResult.Success(activityB)
+        val locationRepo = mockk<LocationRepository>()
+        coEvery { locationRepo.getForActivity(activityA.id) } returns TestFixtures.ongoingActivityLocations
+        coEvery { locationRepo.getForActivity(activityB.id) } returns TestFixtures.ongoingActivityLocations
+        every { locationRepo.observeForActivity(activityA.id) } returns
+            MutableStateFlow(TestFixtures.ongoingActivityLocations)
+        every { locationRepo.observeForActivity(activityB.id) } returns
+            MutableStateFlow(TestFixtures.ongoingActivityLocations)
+        coEvery { locationRepo.reconcileObservation(any()) } returns Unit
+        val vm = viewModel(activityRepo = activityRepo, locationRepo = locationRepo)
+        vm.triggerOngoingState(activityA.id, context)
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        advanceTimeBy(1_001L)
+        runCurrent()
+        refreshStarted.await()
+
+        vm.triggerOngoingState(activityB.id, context)
+        releaseRefresh.complete(Unit)
+        runCurrent()
+        vm.stopParticipantLocationMonitoring()
+
+        assertEquals(activityB.id, vm.ongoingActivityId.value)
+        assertEquals(activityB.participantSignals, vm.participantSignalMap.value)
+    }
+
+    @Test
+    fun `GIVEN signal refresh is suspended WHEN monitoring stops THEN refresh is cancelled`() = runTest {
+        var cancellationObserved = false
+        var reads = 0
+        val activityRepo = mockk<ActivityRepository>(relaxed = true)
+        coEvery { activityRepo.getActivity(TestFixtures.ONGOING_ACTIVITY_ID) } coAnswers {
+            if (reads++ == 0) {
+                DataResult.Success(TestFixtures.ongoingActivity)
+            } else {
+                try {
+                    kotlinx.coroutines.awaitCancellation()
+                } finally {
+                    cancellationObserved = true
+                }
+            }
+        }
+        val locationRepo = mockk<LocationRepository>()
+        coEvery { locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns
+            TestFixtures.ongoingActivityLocations
+        every { locationRepo.observeForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns
+            MutableStateFlow(TestFixtures.ongoingActivityLocations)
+        coEvery { locationRepo.reconcileObservation(any()) } returns Unit
+        val vm = viewModel(activityRepo = activityRepo, locationRepo = locationRepo)
+        vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        advanceTimeBy(1_001L)
+        runCurrent()
+
+        vm.stopParticipantLocationMonitoring()
+        runCurrent()
+
+        assertTrue(cancellationObserved)
+        assertEquals(TestFixtures.ongoingActivity.participantSignals, vm.participantSignalMap.value)
     }
 
     @Test

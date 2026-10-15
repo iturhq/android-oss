@@ -97,7 +97,7 @@ constructor(
 
     // The current activity's organiser ID.
     private val _organizerId = MutableStateFlow<UserId?>(null)
-    val organizerId = MutableStateFlow<UserId?>(null)
+    val organizerId = _organizerId.asStateFlow()
 
     // A MapLibre feature collection representing the participants' locations.
     private val _participantLocations =
@@ -125,6 +125,7 @@ constructor(
     )
     val participantSignalState = participantSignals.state
     val participantSignalMessage = participantSignals.message
+    val participantSignalMap = participantSignals.participantMap
     val backendHealthServices = backendHealthCoordinator.services
     val backendHealthRetryCountdown = backendHealthCoordinator.retryCountdown
     private var participantLocationMonitoring: ParticipantLocationMonitoring? = null
@@ -545,6 +546,7 @@ constructor(
     fun triggerIdleState(message: String? = null) {
         locationReports.invalidate()
         _ongoingActivityId.value = null
+        _organizerId.value = null
         latestLocationSnapshot = emptyList()
         _participantLocations.value = emptyList()
         participantSignals.clear()
@@ -663,6 +665,7 @@ constructor(
             if (_ongoingActivityId.value == activityId) {
                 val locations = activity.activeLocations(latestLocationSnapshot)
                 _participantLocations.value = locations
+                participantSignals.restore(activity, currentUser.value?.id)
                 val current = _uiState.value as? Ongoing
                 if (current?.activity?.id == activityId) {
                     _organizerId.value = activity.organizerId
@@ -778,6 +781,7 @@ constructor(
 
     private fun updateOngoingActivity(activity: IturActivity) {
         val current = _uiState.value as? Ongoing ?: return
+        if (current.activity.id != activity.id) return
         _organizerId.value = activity.organizerId
         _uiState.value = current.copy(
             activity = activity,
