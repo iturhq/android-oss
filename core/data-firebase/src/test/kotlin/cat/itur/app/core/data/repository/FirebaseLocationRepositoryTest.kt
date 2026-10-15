@@ -9,11 +9,14 @@ import cat.itur.app.core.domain.id.IturActivityId
 import cat.itur.app.core.domain.id.UserId
 import cat.itur.app.core.domain.model.User
 import cat.itur.app.core.model.Location
+import cat.itur.app.core.model.ParticipantLocation
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.EventListener
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.GeoPoint
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
 import io.mockk.coEvery
@@ -22,8 +25,19 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import java.util.Date
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -32,6 +46,7 @@ import kotlin.test.assertTrue
 
 private val ACTIVITY_ID = IturActivityId("TestActivity00000001")
 private val USER_ID = UserId("user1")
+private val DEPARTED_USER_ID = UserId("user2")
 private val NEW_LOCATION = Location(
     latitude = 51.5,
     longitude = -0.1,
@@ -152,6 +167,101 @@ class FirebaseLocationRepositoryTest {
 
         assertFailsWith<RuntimeException> { repository.getForActivity(ACTIVITY_ID) }
         Unit
+    }
+
+    @Test
+    fun `GIVEN an activity listener WHEN Firestore pushes a change THEN the snapshot is emitted and listener removed`() = runBlocking {
+        val query = mockk<Query>()
+        every { locationsCollection.whereEqualTo("activityId", ACTIVITY_ID.value) } returns query
+        val listener = slot<EventListener<QuerySnapshot>>()
+        val registration = mockk<ListenerRegistration>(relaxed = true)
+        every { query.addSnapshotListener(capture(listener)) } returns registration
+        val dto = ParticipantLocationDTO(
+            activityId = ACTIVITY_ID.value,
+            userId = USER_ID.value,
+            location = GeoPoint(51.4, -0.2),
+        )
+        val snapshot = mockk<QuerySnapshot> {
+            every { toObjects(ParticipantLocationDTO::class.java) } returns listOf(dto)
+        }
+        coEvery { userRepository.getAll(listOf(USER_ID)) } returns listOf(
+            User.RegisteredUser(id = USER_ID, name = "Ada Lovelace", email = "ada@example.com"),
+        )
+
+        val emitted = async(start = CoroutineStart.UNDISPATCHED) {
+            repository.observeForActivity(ACTIVITY_ID).first()
+        }
+        withTimeout(1_000L) {
+            while (!listener.isCaptured) yield()
+        }
+        listener.captured.onEvent(snapshot, null)
+
+        assertEquals("Ada Lovelace", emitted.await().single().userName)
+        verify(exactly = 1) { registration.remove() }
+    }
+
+    @Test
+    fun `GIVEN overlapping snapshots WHEN an older lookup finishes last THEN departed participants stay removed across listener restarts`() = runBlocking {
+        val query = mockk<Query>()
+        every { locationsCollection.whereEqualTo("activityId", ACTIVITY_ID.value) } returns query
+        val listeners = mutableListOf<EventListener<QuerySnapshot>>()
+        val registration = mockk<ListenerRegistration>(relaxed = true)
+        every { query.addSnapshotListener(capture(listeners)) } returns registration
+
+        val presentDto = ParticipantLocationDTO(activityId = ACTIVITY_ID.value, userId = USER_ID.value)
+        val departedDto = ParticipantLocationDTO(activityId = ACTIVITY_ID.value, userId = DEPARTED_USER_ID.value)
+        val olderSnapshot = mockk<QuerySnapshot> {
+            every { toObjects(ParticipantLocationDTO::class.java) } returns listOf(presentDto, departedDto)
+        }
+        val newerSnapshot = mockk<QuerySnapshot> {
+            every { toObjects(ParticipantLocationDTO::class.java) } returns listOf(presentDto)
+        }
+        val presentUser = User.RegisteredUser(id = USER_ID, name = "Ada Lovelace", email = "ada@example.com")
+        val departedUser = User.RegisteredUser(
+            id = DEPARTED_USER_ID,
+            name = "Grace Hopper",
+            email = "grace@example.com",
+        )
+        val olderLookupStarted = List(2) { CompletableDeferred<Unit>() }
+        val releaseOlderLookup = List(2) { CompletableDeferred<Unit>() }
+        val olderLookupCompleted = List(2) { CompletableDeferred<Unit>() }
+        val olderLookupIndex = AtomicInteger()
+        coEvery { userRepository.getAll(listOf(USER_ID, DEPARTED_USER_ID)) } coAnswers {
+            val index = olderLookupIndex.getAndIncrement()
+            olderLookupStarted[index].complete(Unit)
+            releaseOlderLookup[index].await()
+            olderLookupCompleted[index].complete(Unit)
+            listOf(presentUser, departedUser)
+        }
+        coEvery { userRepository.getAll(listOf(USER_ID)) } returns listOf(presentUser)
+
+        suspend fun assertListenerDropsItsLateOlderSnapshot(listenerIndex: Int) {
+            val emissions = Channel<List<ParticipantLocation>>(Channel.UNLIMITED)
+            val collection = launch(start = CoroutineStart.UNDISPATCHED) {
+                repository.observeForActivity(ACTIVITY_ID).collect { emissions.send(it) }
+            }
+            withTimeout(1_000L) {
+                while (listeners.size <= listenerIndex) yield()
+            }
+
+            listeners[listenerIndex].onEvent(olderSnapshot, null)
+            olderLookupStarted[listenerIndex].await()
+            listeners[listenerIndex].onEvent(newerSnapshot, null)
+
+            val current = withTimeout(1_000L) { emissions.receive() }
+            assertEquals(listOf(USER_ID), current.map { it.userId })
+            releaseOlderLookup[listenerIndex].complete(Unit)
+            olderLookupCompleted[listenerIndex].await()
+            repeat(5) { yield() }
+            assertTrue(emissions.tryReceive().isFailure)
+            collection.cancelAndJoin()
+        }
+
+        assertListenerDropsItsLateOlderSnapshot(listenerIndex = 0)
+        assertListenerDropsItsLateOlderSnapshot(listenerIndex = 1)
+
+        assertEquals(2, olderLookupIndex.get())
+        verify(exactly = 2) { registration.remove() }
     }
 
     // --- removeForActivity ---

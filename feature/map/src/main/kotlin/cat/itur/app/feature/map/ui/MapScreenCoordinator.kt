@@ -70,6 +70,8 @@ internal class MapInteractionState(
     var showQrDisplaySheet by mutableStateOf(false)
     var showQrScanSheet by mutableStateOf(false)
     var showHelp by mutableStateOf(false)
+    var showStopActivityConfirmation by mutableStateOf(false)
+        private set
     var localMessage by mutableStateOf<String?>(null)
     var cameraPermissionGranted by mutableStateOf(false)
     var locationPermissionGranted by locationPermissionState
@@ -91,6 +93,20 @@ internal class MapInteractionState(
 
     fun stopCameraTracking() {
         cameraTrackingMode = CameraTrackingMode.NONE
+    }
+
+    fun requestStopActivityConfirmation() {
+        showStopActivityConfirmation = true
+    }
+
+    fun cancelStopActivityConfirmation() {
+        showStopActivityConfirmation = false
+    }
+
+    fun confirmStopActivity(onConfirmed: () -> Unit) {
+        if (!showStopActivityConfirmation) return
+        showStopActivityConfirmation = false
+        onConfirmed()
     }
 }
 

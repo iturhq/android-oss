@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.BasicAlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -25,6 +26,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -113,6 +115,48 @@ fun RecoverableErrorDialog(message: String, onRetry: () -> Unit, onCancel: () ->
                 Row(modifier = Modifier.align(Alignment.End)) {
                     TextButton(onClick = onCancel) { Text(stringResource(R.string.feature_map_cancel)) }
                     TextButton(onClick = onRetry) { Text(stringResource(R.string.feature_map_try_again)) }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ConfirmationDialog(
+    title: String,
+    message: String,
+    confirmLabel: String,
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    BasicAlertDialog(onDismissRequest = onCancel) {
+        Surface(
+            modifier = Modifier.wrapContentWidth().wrapContentHeight(),
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = AlertDialogDefaults.TonalElevation,
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(text = title, style = MaterialTheme.typography.headlineSmall)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(text = message)
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(modifier = Modifier.align(Alignment.End)) {
+                    TextButton(
+                        onClick = onCancel,
+                        modifier = Modifier.testTag("cancel_stop_activity"),
+                    ) {
+                        Text(stringResource(R.string.feature_map_cancel))
+                    }
+                    TextButton(
+                        onClick = onConfirm,
+                        modifier = Modifier.testTag("confirm_stop_activity"),
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                    ) {
+                        Text(confirmLabel)
+                    }
                 }
             }
         }
