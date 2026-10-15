@@ -681,19 +681,6 @@ constructor(
         }
     }
 
-    private fun IturActivity.activeLocations(
-        locations: List<ParticipantLocation>,
-    ): List<ParticipantLocation> {
-        val activeUserIds = participantIds.toSet() + organizerId
-        return locations.filter { it.userId in activeUserIds }
-    }
-
-    private fun IturActivity.locationObservationScope() = LocationObservationScope(
-        activityId = id,
-        organizerId = organizerId,
-        participantIds = participantIds,
-    )
-
     private fun publishParticipantLocations(activityId: IturActivityId) {
         val current = _uiState.value as? Ongoing ?: return
         if (current.activity.id != activityId) return
@@ -837,6 +824,19 @@ constructor(
         }
     }
 }
+
+private fun IturActivity.activeLocations(
+    locations: List<ParticipantLocation>,
+): List<ParticipantLocation> {
+    val activeUserIds = participantIds.toSet() + organizerId
+    return locations.filter { it.userId in activeUserIds }
+}
+
+private fun IturActivity.locationObservationScope() = LocationObservationScope(
+    activityId = id,
+    organizerId = organizerId,
+    participantIds = participantIds,
+)
 
 sealed interface MapUiState {
     data object Loading : MapUiState
