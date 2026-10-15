@@ -44,6 +44,8 @@
     <string name="feature_map_hail_organiser">Avisar al organizador</string>
     <string name="feature_map_help_stop_activity">Detén la actividad para todos</string>
     <string name="feature_map_help_leave_activity">Sal de la actividad</string>
+    <string name="feature_map_stop_activity_title">¿Detener la actividad?</string>
+    <string name="feature_map_stop_activity_message">¿Quieres detener esta actividad para todos?</string>
     <string name="feature_map_stop_activity">Detener actividad</string>
     <string name="feature_map_exit_activity">Salir de la actividad</string>
     <string name="feature_map_itur_logo">Logotipo de Itur</string>

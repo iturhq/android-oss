@@ -12,8 +12,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import cat.itur.app.core.domain.id.IturActivityId
+import cat.itur.app.feature.map.R
+import cat.itur.app.feature.map.ui.MapUiState.Ongoing
 import cat.itur.app.feature.map.ui.components.help.HelpOverlay
 import cat.itur.app.feature.map.ui.components.help.LocalHelpAnchorRegistry
 import cat.itur.app.feature.map.ui.components.qrdisplay.QRDisplaySheet
@@ -31,6 +34,38 @@ internal fun MapTransientSurfaces(
     QrDisplaySurface(presentation.ongoingActivityId, interaction, qrCustomization.displayUrl)
     QrScanSurface(viewModel, environment.context, interaction, qrCustomization.scanSheet)
     HelpSurface(interaction)
+    StopActivityConfirmationSurface(viewModel, presentation, interaction)
+}
+
+@Composable
+private fun StopActivityConfirmationSurface(
+    viewModel: MapViewModel,
+    presentation: MapPresentation,
+    interaction: MapInteractionState,
+) {
+    val ongoing = presentation.uiState as? Ongoing
+    val isOrganizer = ongoing?.organizer?.id == presentation.currentUser?.id
+    if (!isOrganizer) {
+        LaunchedEffect(interaction.showStopActivityConfirmation) {
+            interaction.cancelStopActivityConfirmation()
+        }
+        return
+    }
+    if (interaction.showStopActivityConfirmation) {
+        ConfirmationDialog(
+            title = stringResource(R.string.feature_map_stop_activity_title),
+            message = stringResource(R.string.feature_map_stop_activity_message),
+            confirmLabel = stringResource(R.string.feature_map_stop_activity),
+            onCancel = interaction::cancelStopActivityConfirmation,
+            onConfirm = {
+                interaction.confirmStopActivity {
+                    interaction.isDirectionOfTravel = false
+                    interaction.stopCameraTracking()
+                    viewModel.leaveActivity()
+                }
+            },
+        )
+    }
 }
 
 @Composable

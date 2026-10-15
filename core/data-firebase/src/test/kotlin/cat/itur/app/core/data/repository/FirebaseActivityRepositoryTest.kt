@@ -27,6 +27,8 @@ import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.Transaction
 import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.functions.HttpsCallableReference
+import com.google.firebase.functions.HttpsCallableResult
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
@@ -38,6 +40,7 @@ import java.util.Date
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -52,6 +55,18 @@ private val ACTIVITY_DTO = IturActivityDTO(
     participantIds = listOf(ORGANIZER_ID.value, PARTICIPANT_ID.value),
     status = "ONGOING",
 )
+
+private fun activityDocument(
+    documentId: String = ACTIVITY_ID.value,
+    dto: IturActivityDTO = ACTIVITY_DTO,
+): DocumentSnapshot = mockk {
+    every { id } returns documentId
+    every { toObject(IturActivityDTO::class.java) } returns dto
+}
+
+private fun activityQuery(vararg snapshots: DocumentSnapshot): QuerySnapshot = mockk {
+    every { documents } returns snapshots.toList()
+}
 
 private class RecordingBackendHealthReporter : BackendHealthReporter {
     val reports = mutableListOf<Pair<String, BackendHealthObservation>>()
@@ -138,23 +153,33 @@ class FirebaseActivityRepositoryTest {
     }
 
     @Test
-    fun `GIVEN canonical signals in Firestore WHEN loading through the production adapter THEN they are applied`() = runBlocking {
+    fun `GIVEN callable-joined member signal WHEN loading backend-shaped state THEN it is applied`() = runBlocking {
         val docRef = mockk<DocumentReference>()
         val signals = mockk<CollectionReference>()
+        val participants = mockk<CollectionReference>()
         val canonicalSignal = mockk<DocumentSnapshot> {
             every { id } returns PARTICIPANT_ID.value
             every { getString("signal") } returns ParticipantSignal.DELAYED.name
+        }
+        val callableJoinedMember = mockk<DocumentSnapshot> {
+            every { id } returns PARTICIPANT_ID.value
         }
         every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
         every { docRef.get() } returns successfulTask(
             mockk {
                 every { exists() } returns true
-                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(
+                    participantIds = listOf(ORGANIZER_ID.value),
+                )
             },
         )
         every { docRef.collection("participantSignals") } returns signals
+        every { docRef.collection("participants") } returns participants
         every { signals.get() } returns successfulTask(
             mockk<QuerySnapshot> { every { documents } returns listOf(canonicalSignal) },
+        )
+        every { participants.get() } returns successfulTask(
+            mockk<QuerySnapshot> { every { documents } returns listOf(callableJoinedMember) },
         )
         val productionAdapterRepository =
             FirebaseActivityRepository(firestore, mockk<FirebaseFunctions>(relaxed = true))
@@ -209,6 +234,14 @@ class FirebaseActivityRepositoryTest {
 
     @Test
     fun `GIVEN trusted departure fails or misses its activity WHEN removing THEN its result is preserved`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { docRef.get() } returns successfulTask(
+            mockk {
+                every { exists() } returns true
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
+            },
+        )
         admissionGateway.leaveResult = DataResult.Error("departure rejected")
 
         assertEquals(
@@ -327,13 +360,11 @@ class FirebaseActivityRepositoryTest {
     // --- getActivity ---
 
     @Test
-    fun `GIVEN an existing document WHEN getting it by ID THEN returns Success with the mapped activity`() = runBlocking {
+    fun `GIVEN a legacy payload ID WHEN getting its document THEN it remains readable`() = runBlocking {
         val docRef = mockk<DocumentReference>()
         every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
-        val snapshot = mockk<DocumentSnapshot> {
-            every { exists() } returns true
-            every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
-        }
+        val snapshot = activityDocument()
+        every { snapshot.exists() } returns true
         every { docRef.get() } returns successfulTask(snapshot)
 
         val result = repository.getActivity(ACTIVITY_ID)
@@ -341,6 +372,19 @@ class FirebaseActivityRepositoryTest {
         assertIs<DataResult.Success<IturActivity>>(result)
         assertEquals(ACTIVITY_ID, result.data.id)
         assertEquals(ORGANIZER_ID, result.data.organizerId)
+    }
+
+    @Test
+    fun `GIVEN no payload ID WHEN getting its document THEN the document ID is restored`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        val snapshot = activityDocument(dto = ACTIVITY_DTO.copy(id = ""))
+        every { snapshot.exists() } returns true
+        every { docRef.get() } returns successfulTask(snapshot)
+
+        val result = repository.getActivity(ACTIVITY_ID)
+
+        assertEquals(ACTIVITY_ID, assertIs<DataResult.Success<IturActivity>>(result).data.id)
     }
 
     @Test
@@ -428,7 +472,7 @@ class FirebaseActivityRepositoryTest {
     fun `GIVEN ByOrganizer filter WHEN getting activities THEN queries only by organizerId`() = runBlocking {
         val query = mockk<Query>()
         every { activitiesCollection.whereEqualTo("organizerId", ORGANIZER_ID.value) } returns query
-        val querySnapshot = mockk<QuerySnapshot> { every { toObjects(IturActivityDTO::class.java) } returns listOf(ACTIVITY_DTO) }
+        val querySnapshot = activityQuery(activityDocument())
         every { query.get() } returns successfulTask(querySnapshot)
 
         val result = repository.getActivities(ActivityFilter.ByOrganizer(ORGANIZER_ID))
@@ -443,7 +487,7 @@ class FirebaseActivityRepositoryTest {
         val ongoingQuery = mockk<Query>()
         every { activitiesCollection.whereEqualTo("organizerId", ORGANIZER_ID.value) } returns byOrganizer
         every { byOrganizer.whereEqualTo("status", "ONGOING") } returns ongoingQuery
-        val querySnapshot = mockk<QuerySnapshot> { every { toObjects(IturActivityDTO::class.java) } returns listOf(ACTIVITY_DTO) }
+        val querySnapshot = activityQuery(activityDocument())
         every { ongoingQuery.get() } returns successfulTask(querySnapshot)
 
         val result = repository.getActivities(ActivityFilter.OngoingByOrganizer(ORGANIZER_ID))
@@ -463,9 +507,7 @@ class FirebaseActivityRepositoryTest {
             )
         } returns byParticipant
         every { byParticipant.whereEqualTo("status", "ONGOING") } returns ongoingQuery
-        val querySnapshot = mockk<QuerySnapshot> {
-            every { toObjects(IturActivityDTO::class.java) } returns listOf(ACTIVITY_DTO)
-        }
+        val querySnapshot = activityQuery(activityDocument())
         every { ongoingQuery.get() } returns successfulTask(querySnapshot)
 
         val result = repository.getActivities(
@@ -477,19 +519,15 @@ class FirebaseActivityRepositoryTest {
     }
 
     @Test
-    fun `GIVEN documents with a blank ID WHEN getting activities THEN they are filtered out`() = runBlocking {
+    fun `GIVEN a malformed document ID WHEN getting activities THEN mapping is rejected`() = runBlocking {
         val query = mockk<Query>()
         every { activitiesCollection.whereEqualTo("organizerId", ORGANIZER_ID.value) } returns query
-        val blankIdDto = ACTIVITY_DTO.copy(id = "")
-        val querySnapshot = mockk<QuerySnapshot> {
-            every { toObjects(IturActivityDTO::class.java) } returns listOf(ACTIVITY_DTO, blankIdDto)
-        }
+        val querySnapshot = activityQuery(activityDocument(documentId = "malformed-id"))
         every { query.get() } returns successfulTask(querySnapshot)
 
         val result = repository.getActivities(ActivityFilter.ByOrganizer(ORGANIZER_ID))
 
-        assertIs<DataResult.Success<List<IturActivity>>>(result)
-        assertEquals(1, result.data.size)
+        assertTrue(assertIs<DataResult.Error>(result).message.contains("Invalid activity identifier"))
     }
 
     @Test
@@ -508,9 +546,7 @@ class FirebaseActivityRepositoryTest {
     fun `GIVEN a listed activity with an unknown status WHEN getting activities THEN conversion failure becomes Error`() = runBlocking {
         val query = mockk<Query>()
         every { activitiesCollection.whereEqualTo("organizerId", ORGANIZER_ID.value) } returns query
-        val querySnapshot = mockk<QuerySnapshot> {
-            every { toObjects(IturActivityDTO::class.java) } returns listOf(ACTIVITY_DTO.copy(status = "RETIRED"))
-        }
+        val querySnapshot = activityQuery(activityDocument(dto = ACTIVITY_DTO.copy(status = "RETIRED")))
         every { query.get() } returns successfulTask(querySnapshot)
 
         val result = repository.getActivities(ActivityFilter.ByOrganizer(ORGANIZER_ID))
@@ -578,7 +614,7 @@ class FirebaseActivityRepositoryTest {
         every { docRef.get() } returns successfulTask(
             mockk<DocumentSnapshot> {
                 every { exists() } returns true
-                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(id = "")
             },
         )
         admissionGateway.startResult = DataResult.Success(ACTIVITY_ID)
@@ -625,7 +661,7 @@ class FirebaseActivityRepositoryTest {
         every { docRef.get() } returns successfulTask(
             mockk {
                 every { exists() } returns true
-                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(id = "")
             },
         )
         admissionGateway.startResult = DataResult.Success(ACTIVITY_ID)
@@ -830,6 +866,77 @@ class FirebaseActivityRepositoryTest {
     }
 
     @Test
+    fun `GIVEN a finished activity WHEN organizer cleans up THEN trusted departure preserves terminal state`() = runBlocking {
+        val docRef = mockk<DocumentReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { docRef.get() } returns successfulTask(
+            mockk {
+                every { exists() } returns true
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(
+                    status = IturActivityStatus.FINISHED.name,
+                    participantIds = listOf(ORGANIZER_ID.value),
+                )
+            },
+        )
+        admissionGateway.leaveResult = DataResult.Success(ACTIVITY_ID)
+
+        val result = repository.removeParticipant(ACTIVITY_ID, ORGANIZER_ID)
+
+        val cleaned = assertIs<DataResult.Success<IturActivity>>(result).data
+        assertEquals(IturActivityStatus.FINISHED, cleaned.status)
+        assertFalse(ORGANIZER_ID in cleaned.participantIds)
+        assertEquals(listOf(ACTIVITY_ID), admissionGateway.leaveCalls)
+        verify(exactly = 0) { transaction.update(any<DocumentReference>(), any<FieldPath>(), any(), *anyVararg()) }
+    }
+
+    @Test
+    fun `GIVEN production departure revokes member reads WHEN removing THEN the successful leave stays successful`() = runBlocking {
+        var departed = false
+        val docRef = mockk<DocumentReference>()
+        val signals = mockk<CollectionReference>()
+        val participants = mockk<CollectionReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { docRef.get() } returns successfulTask(
+            mockk {
+                every { exists() } returns true
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO.copy(
+                    participantIds = listOf(ORGANIZER_ID.value),
+                )
+            },
+        )
+        every { docRef.collection("participantSignals") } returns signals
+        every { docRef.collection("participants") } returns participants
+        every { signals.get() } answers {
+            if (departed) failedTask(postLeavePermissionDenied()) else successfulTask(emptyQuerySnapshot())
+        }
+        every { participants.get() } answers {
+            if (departed) failedTask(postLeavePermissionDenied()) else successfulTask(emptyQuerySnapshot())
+        }
+        val leaveCallable = mockk<HttpsCallableReference> {
+            every { call(mapOf("activityId" to ACTIVITY_ID.value)) } answers {
+                departed = true
+                successfulTask(
+                    HttpsCallableResult::class.java
+                        .getConstructor(Any::class.java)
+                        .newInstance(mapOf("activityId" to ACTIVITY_ID.value)),
+                )
+            }
+        }
+        val functions = mockk<FirebaseFunctions> {
+            every { getHttpsCallable("leaveActivity") } returns leaveCallable
+        }
+        val productionAdapterRepository = FirebaseActivityRepository(firestore, functions)
+
+        val result = productionAdapterRepository.removeParticipant(ACTIVITY_ID, PARTICIPANT_ID)
+
+        assertIs<DataResult.Success<IturActivity>>(result)
+        assertTrue(departed)
+        verify(exactly = 0) { signals.get() }
+        verify(exactly = 0) { participants.get() }
+        verify(exactly = 1) { leaveCallable.call(mapOf("activityId" to ACTIVITY_ID.value)) }
+    }
+
+    @Test
     fun `GIVEN refresh fails after trusted join THEN adding a participant returns Error`() = runBlocking {
         val docRef = mockk<DocumentReference>()
         every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
@@ -954,7 +1061,12 @@ class FirebaseActivityRepositoryTest {
             transactionExecutor,
             admissionGateway,
         ) {
-            mapOf(PARTICIPANT_ID.value to ParticipantSignal.DELAYED.name, otherParticipant.value to null)
+            CanonicalParticipantState(
+                signals = mapOf(
+                    PARTICIPANT_ID.value to ParticipantSignal.DELAYED.name,
+                    otherParticipant.value to null,
+                ),
+            )
         }
 
         val result = hydratedRepository.getActivity(ACTIVITY_ID)
@@ -962,6 +1074,34 @@ class FirebaseActivityRepositoryTest {
         assertIs<DataResult.Success<IturActivity>>(result)
         assertEquals(ParticipantSignal.DELAYED, result.data.participantSignals[PARTICIPANT_ID])
         assertTrue(otherParticipant !in result.data.participantSignals)
+    }
+
+    @Test
+    fun `GIVEN canonical signal state for a non-member WHEN hydrating THEN it is not exposed`() = runBlocking {
+        val departedParticipant = UserId("departedParticipant")
+        val docRef = mockk<DocumentReference>()
+        every { activitiesCollection.document(ACTIVITY_ID.value) } returns docRef
+        every { docRef.get() } returns successfulTask(
+            mockk {
+                every { exists() } returns true
+                every { toObject(IturActivityDTO::class.java) } returns ACTIVITY_DTO
+            },
+        )
+        val hydratedRepository = FirebaseActivityRepository(
+            firestore,
+            mockk<BackendHealthReporter>(relaxed = true),
+            transactionExecutor,
+            admissionGateway,
+        ) {
+            CanonicalParticipantState(
+                signals = mapOf(departedParticipant.value to ParticipantSignal.NEEDS_HELP.name),
+            )
+        }
+
+        val result = hydratedRepository.getActivity(ACTIVITY_ID)
+
+        assertIs<DataResult.Success<IturActivity>>(result)
+        assertTrue(departedParticipant !in result.data.participantSignals)
     }
 
     // --- getBroadcastsSince ---
@@ -1036,3 +1176,12 @@ class FirebaseActivityRepositoryTest {
         assertEquals("offline", exception.message)
     }
 }
+
+private fun emptyQuerySnapshot(): QuerySnapshot = mockk {
+    every { documents } returns emptyList()
+}
+
+private fun postLeavePermissionDenied() = FirebaseFirestoreException(
+    "PERMISSION_DENIED: Missing or insufficient permissions.",
+    FirebaseFirestoreException.Code.PERMISSION_DENIED,
+)

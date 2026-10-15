@@ -10,6 +10,7 @@ import cat.itur.app.core.domain.id.UserId
 import cat.itur.app.core.model.IturActivity
 import cat.itur.app.core.model.IturActivityStatus
 import cat.itur.app.core.model.Location
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlin.math.abs
 import kotlin.test.Test
@@ -98,6 +99,23 @@ class FakeLocationRepositoryTest {
         assertEquals(stored.verticalAccuracyMeters, returned.verticalAccuracyMeters)
         assertEquals(stored.speedAccuracyMetersPerSecond, returned.speedAccuracyMetersPerSecond)
         assertEquals(stored.bearingAccuracyDegrees, returned.bearingAccuracyDegrees)
+    }
+
+    @Test
+    fun `GIVEN an observed activity WHEN locations change THEN snapshots update without another read`() = runBlocking {
+        val repo = locationRepo(activityRepo(ACTIVITY))
+        repo.getForActivity(ACTIVITY_ID)
+        val updated = Location(latitude = 52.0, longitude = 1.0)
+
+        repo.updateForParticipant(PARTICIPANT_ID, ACTIVITY_ID, updated)
+
+        val snapshot = repo.observeForActivity(ACTIVITY_ID).first {
+            it.any { participant -> participant.userId == PARTICIPANT_ID }
+        }
+        assertEquals(updated, snapshot.first { it.userId == PARTICIPANT_ID }.location)
+
+        repo.removeForParticipant(PARTICIPANT_ID, ACTIVITY_ID)
+        assertTrue(repo.observeForActivity(ACTIVITY_ID).first().none { it.userId == PARTICIPANT_ID })
     }
 
     // --- removeForActivity ---

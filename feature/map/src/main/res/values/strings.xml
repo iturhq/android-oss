@@ -44,6 +44,8 @@
     <string name="feature_map_hail_organiser">Hail organiser</string>
     <string name="feature_map_help_stop_activity">Stop the activity for everyone</string>
     <string name="feature_map_help_leave_activity">Leave the activity</string>
+    <string name="feature_map_stop_activity_title">Stop activity?</string>
+    <string name="feature_map_stop_activity_message">Do you want to stop this activity for everyone?</string>
     <string name="feature_map_stop_activity">Stop activity</string>
     <string name="feature_map_exit_activity">Exit activity</string>
     <string name="feature_map_itur_logo">Itur logo</string>

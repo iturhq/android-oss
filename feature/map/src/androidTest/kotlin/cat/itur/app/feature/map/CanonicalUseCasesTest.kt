@@ -148,7 +148,7 @@ class CanonicalUseCasesTest {
             activities.initialLookupComplete.get()
         }
         waitForTag(readyTag ?: initialTag)
-        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
     }
 
     private fun waitForTag(tag: String) {
@@ -307,7 +307,7 @@ class CanonicalUseCasesTest {
         composeRule.onNodeWithTag("start_activity_fab").performClick()
 
         composeRule.onNodeWithText("Activity creation failed").assertIsDisplayed()
-        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
         composeRule.onNodeWithTag("start_activity_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("show_qr_fab").assertDoesNotExist()
     }
@@ -381,12 +381,52 @@ class CanonicalUseCasesTest {
         launch()
         startAsOrganizer()
         val activityId = activities.activity(IturActivityId("createdActivity00001"))?.id
+        val statusBeforeConfirmation = activityId?.let(activities::activity)?.status
 
         composeRule.onNodeWithTag("stop_activity_fab").performClick()
+        composeRule.onNodeWithText("Stop activity?").assertIsDisplayed()
+        assertEquals(statusBeforeConfirmation, activityId?.let(activities::activity)?.status)
+        assertEquals(0, locations.removeCount.get())
+        composeRule.onNodeWithTag("confirm_stop_activity").performClick()
 
         waitForTag("join_activity_fab")
         composeRule.onNodeWithText("You are no longer participating in an activity")
             .assertIsDisplayed()
+        assertEquals(IturActivityStatus.FINISHED, activityId?.let(activities::activity)?.status)
+        assertEquals(1, locations.removeCount.get())
+    }
+
+    @Test
+    fun uc14_organizerCanCancelStopWithoutCleanup() {
+        launch()
+        startAsOrganizer()
+        val activityId = activities.activity(IturActivityId("createdActivity00001"))?.id
+        val statusBeforeConfirmation = activityId?.let(activities::activity)?.status
+
+        composeRule.onNodeWithTag("stop_activity_fab").performClick()
+        composeRule.onNodeWithTag("cancel_stop_activity").performClick()
+
+        composeRule.onNodeWithTag("stop_activity_fab").assertIsDisplayed()
+        assertEquals(statusBeforeConfirmation, activityId?.let(activities::activity)?.status)
+        assertEquals(0, locations.removeCount.get())
+    }
+
+    @Test
+    fun uc14_organizerCanRetryFailedStop() {
+        launch()
+        startAsOrganizer()
+        val activityId = activities.activity(IturActivityId("createdActivity00001"))?.id
+        locations.removeFailure = IllegalStateException("test removal failure")
+
+        composeRule.onNodeWithTag("stop_activity_fab").performClick()
+        composeRule.onNodeWithTag("confirm_stop_activity").performClick()
+
+        composeRule.onNodeWithText("Failed to leave activity $activityId").assertIsDisplayed()
+        composeRule.onNodeWithText("Try again").assertIsDisplayed()
+        locations.removeFailure = null
+        composeRule.onNodeWithText("Try again").performClick()
+
+        waitForTag("join_activity_fab")
         assertEquals(IturActivityStatus.FINISHED, activityId?.let(activities::activity)?.status)
         assertEquals(1, locations.removeCount.get())
     }
@@ -399,6 +439,7 @@ class CanonicalUseCasesTest {
         activities.updateFailure = IllegalStateException("test finish failure")
 
         composeRule.onNodeWithTag("stop_activity_fab").performClick()
+        composeRule.onNodeWithTag("confirm_stop_activity").performClick()
 
         composeRule.onNodeWithText("Failed to leave activity $activityId").assertIsDisplayed()
         composeRule.onNodeWithText("Try again").assertIsDisplayed()
@@ -608,21 +649,23 @@ class CanonicalUseCasesTest {
 
     @Test
     fun broadcastReadFailureIsSilentAndLaterPollDeliversTheAlert() {
-        activities.addBroadcast(
-            TestFixtures.ONGOING_ACTIVITY_ID,
-            Broadcast("retry", "The route has changed", Date()),
-        )
-        activities.broadcastFailure = IllegalStateException("temporarily offline")
         launch(
             scanCode = TestFixtures.ONGOING_ACTIVITY_ID.url,
             broadcastPollIntervalMillis = 25L,
         )
         joinAsParticipant()
-        composeRule.waitUntil { activities.broadcastReadCount.get() > 0 }
-        composeRule.onNodeWithText("Safety status could not be updated.").assertDoesNotExist()
+
+        activities.addBroadcast(
+            TestFixtures.ONGOING_ACTIVITY_ID,
+            Broadcast("retry", "The route has changed", Date()),
+        )
+        val readsBeforeFailure = activities.broadcastReadCount.get()
+        activities.broadcastFailure = IllegalStateException("temporarily offline")
+        composeRule.waitUntil { activities.broadcastReadCount.get() > readsBeforeFailure }
 
         activities.broadcastFailure = null
         waitForText("Alert: The route has changed")
+        composeRule.onNodeWithText("Safety status could not be updated.").assertDoesNotExist()
     }
 
     @Test
@@ -730,7 +773,7 @@ class CanonicalUseCasesTest {
 
         waitForText("The ongoing activity could not be resumed.")
         composeRule.onNodeWithText("The ongoing activity could not be resumed.").assertIsDisplayed()
-        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
         composeRule.onNodeWithText("Try again").performClick()
 
         waitForTag("show_qr_fab")
@@ -763,15 +806,15 @@ class CanonicalUseCasesTest {
         activities.createGate = createGate
         composeRule.onNodeWithTag("start_activity_fab").performClick()
         waitForText("Preparing activity...")
-        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
 
         createGate.complete(Unit)
         waitForTag("show_qr_fab")
-        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
 
         composeRule.onNodeWithTag("stop_activity_fab").performClick()
         waitForTag("join_activity_fab")
-        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
     }
 
     @Test
@@ -781,14 +824,17 @@ class CanonicalUseCasesTest {
         launch(
             initialTag = "hail_organiser_fab",
             recencyThresholds = LocationRecencyThresholds(
-                agingAfterMillis = 3_000L,
-                staleAfterMillis = 5_000L,
+                // API 29 may take several seconds to initialise MapLibre before the
+                // first semantics assertion. Keep the fixture current long enough
+                // to observe that state, then exercise the real clock transition.
+                agingAfterMillis = 15_000L,
+                staleAfterMillis = 20_000L,
             ),
         )
 
         composeRule.onNodeWithContentDescription("location is current", substring = true)
             .assertExists()
-        composeRule.waitUntil(timeoutMillis = 8_000L) {
+        composeRule.waitUntil(timeoutMillis = 25_000L) {
             composeRule.onAllNodesWithContentDescription(
                 "location is stale",
                 substring = true,

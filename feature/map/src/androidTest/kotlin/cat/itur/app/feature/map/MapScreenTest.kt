@@ -18,6 +18,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso.pressBack
@@ -177,6 +179,41 @@ class MapScreenTest {
     }
 
     @Test
+    fun idleControlsStayInsideTheSystemBarSafeArea() {
+        composeRule.waitForIdle()
+        val root = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        val safeInsets = requireNotNull(
+            ViewCompat.getRootWindowInsets(composeRule.activity.window.decorView),
+        ).getInsets(
+            WindowInsetsCompat.Type.systemBars() or
+                WindowInsetsCompat.Type.displayCutout(),
+        )
+        val topRightZone = boundsOf("map_zone_tr")
+        val rightZone = boundsOf("map_zone_r")
+
+        assertTrue(topRightZone.top >= root.top + safeInsets.top)
+        assertTrue(topRightZone.right <= root.right - safeInsets.right)
+        assertTrue(rightZone.right <= root.right - safeInsets.right)
+        assertTrue(rightZone.bottom <= root.bottom - safeInsets.bottom)
+    }
+
+    @Test
+    fun mapSurfaceStartsBelowTheStatusBar() {
+        composeRule.waitForIdle()
+        val root = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        val safeInsets = requireNotNull(
+            ViewCompat.getRootWindowInsets(composeRule.activity.window.decorView),
+        ).getInsets(
+            WindowInsetsCompat.Type.statusBars() or
+                WindowInsetsCompat.Type.displayCutout(),
+        )
+        val map = boundsOf("map_surface")
+
+        assertTrue(map.top >= root.top + safeInsets.top)
+        assertTrue(map.bottom >= root.bottom - 1f)
+    }
+
+    @Test
     fun ongoingControlsOccupyTopRightAndSeparateBottomLanes() {
         startAsOrganizer()
 
@@ -208,7 +245,7 @@ class MapScreenTest {
     fun ongoingGroupFitInsetsClearTheRenderedBottomLanes() {
         startAsOrganizer()
 
-        val map = boundsOf("persistent_map_surface")
+        val map = boundsOf("map_surface")
         val leftLane = union(boundsOf("recenter_fab"), boundsOf("zoom_group_fab"))
         val rightLane = union(boundsOf("show_qr_fab"), boundsOf("stop_activity_fab"))
         val insets = cameraFitInsets(
@@ -281,11 +318,36 @@ class MapScreenTest {
         startAsOrganizer()
 
         composeRule.onNodeWithTag("stop_activity_fab").performClick()
+        composeRule.onNodeWithText("Stop activity?").assertIsDisplayed()
+        composeRule.onNodeWithTag("confirm_stop_activity").performClick()
 
         composeRule.onNodeWithTag("join_activity_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("map_orientation_fab").assertDoesNotExist()
         composeRule.onNodeWithText("You are no longer participating in an activity")
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun cancellingStopConfirmationKeepsOrganizerInActivity() {
+        startAsOrganizer()
+
+        composeRule.onNodeWithTag("stop_activity_fab").performClick()
+        composeRule.onNodeWithTag("cancel_stop_activity").performClick()
+
+        composeRule.onNodeWithText("Stop activity?").assertDoesNotExist()
+        composeRule.onNodeWithTag("stop_activity_fab").assertIsDisplayed()
+    }
+
+    @Test
+    fun backDismissesStopConfirmationAndKeepsOrganizerInActivity() {
+        startAsOrganizer()
+
+        composeRule.onNodeWithTag("stop_activity_fab").performClick()
+        composeRule.onNodeWithText("Stop activity?").assertIsDisplayed()
+        pressBack()
+
+        composeRule.onNodeWithText("Stop activity?").assertDoesNotExist()
+        composeRule.onNodeWithTag("stop_activity_fab").assertIsDisplayed()
     }
 
     @Test
