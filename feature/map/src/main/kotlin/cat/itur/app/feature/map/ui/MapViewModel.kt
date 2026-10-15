@@ -21,6 +21,7 @@ import cat.itur.app.core.data.health.BackendService
 import cat.itur.app.core.data.repository.ActivityFilter
 import cat.itur.app.core.data.repository.ActivityRepository
 import cat.itur.app.core.data.repository.DataResult
+import cat.itur.app.core.data.repository.LocationObservationScope
 import cat.itur.app.core.data.repository.LocationReportOutcome
 import cat.itur.app.core.data.repository.LocationRepository
 import cat.itur.app.core.data.repository.ParticipantSignalRepository
@@ -45,19 +46,29 @@ import cat.itur.app.feature.map.notifications.BroadcastNotifier
 import cat.itur.app.feature.map.ui.MapUiState.Ongoing
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
 import java.util.Date
 import javax.inject.Inject
 @HiltViewModel
+@Suppress("LongParameterList")
 class MapViewModel @Inject
 constructor(
     private val activityRepository: ActivityRepository,
+    participantSignalRepository: ParticipantSignalRepository,
     private val userRepository: UserRepository,
     private val locationsRepository: LocationRepository,
     private val locationClient: LocationClient,
@@ -100,9 +111,24 @@ constructor(
 
     private val _backendAvailability = MutableStateFlow(BackendAvailabilityUiState())
     val backendAvailability = _backendAvailability.asStateFlow()
+    private val participantSignals = ParticipantSignalController(
+        repository = participantSignalRepository,
+        scope = viewModelScope,
+        callbacks = ParticipantSignalCallbacks(
+            currentContext = ::participantSignalContext,
+            onActivityUpdated = ::updateOngoingActivity,
+            onFailure = { activityId, failure ->
+                Log.e("MapViewModel", "Failed to update safety signal for activity $activityId", failure)
+                reportBackendFailure(failure)
+            },
+        ),
+    )
+    val participantSignalState = participantSignals.state
+    val participantSignalMessage = participantSignals.message
     val backendHealthServices = backendHealthCoordinator.services
     val backendHealthRetryCountdown = backendHealthCoordinator.retryCountdown
-    private var participantLocationMonitoringJob: Job? = null
+    private var participantLocationMonitoring: ParticipantLocationMonitoring? = null
+    private var latestLocationSnapshot: List<ParticipantLocation> = emptyList()
     private var initialRestorePending = true
     private var initialRestoreRunning = false
     private val locationReports = LocationReportController(
@@ -233,26 +259,36 @@ constructor(
         backendHealthCoordinator.stop()
     }
 
-    /**
-     * Refreshes participant markers independently of this device's own GPS callback while the
-     * map screen is visible. The optional interval keeps the cadence deterministic in tests.
-     */
+    /** Keeps participant membership and transport observation current while the map is visible. */
     fun startParticipantLocationMonitoring(
         refreshIntervalMillis: Long = PARTICIPANT_LOCATION_REFRESH_INTERVAL_MILLIS,
     ) {
-        if (participantLocationMonitoringJob?.isActive == true) return
-        participantLocationMonitoringJob = viewModelScope.launch {
-            while (true) {
-                delay(refreshIntervalMillis)
-                refreshParticipantLocations()
-            }
-        }
+        if (participantLocationMonitoring?.isActive == true) return
+        participantLocationMonitoring?.cancel()
+        participantLocationMonitoring = viewModelScope.launchParticipantLocationMonitoring(
+            _ongoingActivityId,
+            locationsRepository,
+            refreshIntervalMillis,
+            ParticipantLocationMonitoringCallbacks(
+                onFailure = { cause ->
+                    Log.e("MapViewModel", "Participant location listener failed", cause)
+                    reportBackendFailure(cause)
+                },
+                onSnapshot = { activityId, locations ->
+                    if (_ongoingActivityId.value == activityId) {
+                        latestLocationSnapshot = locations
+                        publishParticipantLocations(activityId)
+                    }
+                },
+                refreshMembership = ::refreshParticipantMembership,
+            ),
+        )
     }
 
-    /** Stops participant-marker polling while the map screen is not visible. */
+    /** Stops participant observation and membership reconciliation while the map is not visible. */
     fun stopParticipantLocationMonitoring() {
-        participantLocationMonitoringJob?.cancel()
-        participantLocationMonitoringJob = null
+        participantLocationMonitoring?.cancel()
+        participantLocationMonitoring = null
     }
 
     /**
@@ -509,7 +545,9 @@ constructor(
     fun triggerIdleState(message: String? = null) {
         locationReports.invalidate()
         _ongoingActivityId.value = null
+        latestLocationSnapshot = emptyList()
         _participantLocations.value = emptyList()
+        participantSignals.clear()
         _uiState.value = MapUiState.Idle(message)
         lastBroadcastSeen = null
         _latestBroadcast.value = null
@@ -557,13 +595,14 @@ constructor(
 
     private suspend fun triggerOngoingState(activity: IturActivity) {
         if (_ongoingActivityId.value != activity.id) locationReports.invalidate()
-        val locations = activity.activeLocations(
-            locationsRepository.getForActivity(activity.id),
-        )
         // Keep a record of activity's organiser ID.
         _organizerId.value = activity.organizerId
         // Select the joined activity as the current one.
         _ongoingActivityId.value = activity.id
+        locationsRepository.reconcileObservation(activity.locationObservationScope())
+        val locations = activity.activeLocations(locationsRepository.getForActivity(activity.id))
+        latestLocationSnapshot = locations
+        participantSignals.restore(activity, currentUser.value?.id)
         // Show the ongoing activity state.
         _participantLocations.value = locations
         val organizer = runCatching {
@@ -616,14 +655,13 @@ constructor(
         }
     }
 
-    private suspend fun refreshParticipantLocations() {
+    private suspend fun refreshParticipantMembership() {
         val activityId = _ongoingActivityId.value ?: return
         try {
             val activity = activityRepository.getActivity(activityId).dataOrNullOrThrow() ?: return
-            val locations = activity.activeLocations(
-                locationsRepository.getForActivity(activityId),
-            )
+            locationsRepository.reconcileObservation(activity.locationObservationScope())
             if (_ongoingActivityId.value == activityId) {
+                val locations = activity.activeLocations(latestLocationSnapshot)
                 _participantLocations.value = locations
                 val current = _uiState.value as? Ongoing
                 if (current?.activity?.id == activityId) {
@@ -643,11 +681,12 @@ constructor(
         }
     }
 
-    private fun IturActivity.activeLocations(
-        locations: List<ParticipantLocation>,
-    ): List<ParticipantLocation> {
-        val activeUserIds = participantIds.toSet() + organizerId
-        return locations.filter { it.userId in activeUserIds }
+    private fun publishParticipantLocations(activityId: IturActivityId) {
+        val current = _uiState.value as? Ongoing ?: return
+        if (current.activity.id != activityId) return
+        val locations = current.activity.activeLocations(latestLocationSnapshot)
+        _participantLocations.value = locations
+        _uiState.value = current.copy(locations = locations)
     }
 
     private fun handleLocationUpdateFailure(
@@ -684,13 +723,12 @@ constructor(
                 report.measurement,
             )
             report.measurement.complete(LocationReportOutcome.SUCCESS)
-            refreshParticipantLocations()
         } catch (e: CancellationException) {
             report.measurement.complete(LocationReportOutcome.CANCELLED)
             throw e
         } catch (e: Exception) {
-            report.measurement.complete(LocationReportOutcome.FAILED)
             handleLocationUpdateFailure(e, report, previousState)
+            report.measurement.complete(LocationReportOutcome.FAILED)
         }
     }
 
@@ -713,36 +751,25 @@ constructor(
      * the backend remains authoritative for membership and terminal-state checks.
      */
     fun setParticipantSignal(signal: ParticipantSignal?) {
-        val activityId = _ongoingActivityId.value ?: return
+        participantSignals.update(signal)
+    }
+
+    fun acknowledgeParticipantSignalMessage() {
+        participantSignals.acknowledgeMessage()
+    }
+
+    private fun participantSignalContext(): ParticipantSignalContext? {
+        val activityId = _ongoingActivityId.value
         val userId = currentUser.value?.id
-        if (userId == null || _organizerId.value == userId) return
-        val previousState = _uiState.value
-        viewModelScope.launch {
-            try {
-                val signals = activityRepository as? ParticipantSignalRepository
-                    ?: error("Activity repository does not support safety signals")
-                val result = if (signal == null) {
-                    signals.clearParticipantSignal(activityId, userId)
-                } else {
-                    signals.setParticipantSignal(activityId, userId, signal)
-                }
-                requireSuccessfulBackendWrite(result)
-                val updated = (result as DataResult.Success).data
-                // A leave/end may win the race while the write is in flight. Do not restore a
-                // stale ongoing UI from its response.
-                if (_ongoingActivityId.value == activityId) updateOngoingActivity(updated)
-            } catch (e: Exception) {
-                Log.e("MapViewModel", "Failed to update safety signal for activity $activityId", e)
-                reportBackendFailure(e)
-                _uiState.value = MapUiState.RecoverableError(
-                    message = "Safety status could not be updated.",
-                    onRetry = {
-                        _uiState.value = previousState
-                        setParticipantSignal(signal)
-                    },
-                    onCancel = { _uiState.value = previousState },
-                )
-            }
+        val ongoing = _uiState.value as? Ongoing
+        return if (activityId != null && userId != null && ongoing?.activity?.id == activityId) {
+            ParticipantSignalContext(
+                activityId = activityId,
+                userId = userId,
+                isOrganizer = ongoing.organizer.id == userId,
+            )
+        } else {
+            null
         }
     }
 
@@ -798,6 +825,19 @@ constructor(
     }
 }
 
+private fun IturActivity.activeLocations(
+    locations: List<ParticipantLocation>,
+): List<ParticipantLocation> {
+    val activeUserIds = participantIds.toSet() + organizerId
+    return locations.filter { it.userId in activeUserIds }
+}
+
+private fun IturActivity.locationObservationScope() = LocationObservationScope(
+    activityId = id,
+    organizerId = organizerId,
+    participantIds = participantIds,
+)
+
 sealed interface MapUiState {
     data object Loading : MapUiState
 
@@ -851,5 +891,56 @@ data class BackendAvailabilityUiState(
 
 private class BackendInitializationException(message: String) : Exception(message)
 private class BackendOperationException(message: String) : Exception(message)
+
+private data class ParticipantLocationMonitoringCallbacks(
+    val onFailure: (Throwable) -> Unit,
+    val onSnapshot: (IturActivityId, List<ParticipantLocation>) -> Unit,
+    val refreshMembership: suspend () -> Unit,
+)
+
+private data class ParticipantLocationMonitoring(
+    val cadence: Job,
+    val observation: Job,
+) {
+    val isActive: Boolean
+        get() = cadence.isActive && observation.isActive
+
+    fun cancel() {
+        cadence.cancel()
+        observation.cancel()
+    }
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+private fun CoroutineScope.launchParticipantLocationMonitoring(
+    activityIds: Flow<IturActivityId?>,
+    locationsRepository: LocationRepository,
+    refreshIntervalMillis: Long,
+    callbacks: ParticipantLocationMonitoringCallbacks,
+): ParticipantLocationMonitoring {
+    val observation = launch {
+        activityIds.flatMapLatest { activityId ->
+            if (activityId == null) {
+                emptyFlow()
+            } else {
+                locationsRepository.observeForActivity(activityId)
+                    .map { activityId to it }
+                    .retryWhen { cause, _ ->
+                        if (cause is CancellationException) throw cause
+                        callbacks.onFailure(cause)
+                        delay(refreshIntervalMillis)
+                        true
+                    }
+            }
+        }.collect { (activityId, locations) -> callbacks.onSnapshot(activityId, locations) }
+    }
+    val cadence = launch {
+        while (true) {
+            delay(refreshIntervalMillis)
+            callbacks.refreshMembership()
+        }
+    }
+    return ParticipantLocationMonitoring(cadence, observation)
+}
 
 private const val PARTICIPANT_LOCATION_REFRESH_INTERVAL_MILLIS = 15_000L

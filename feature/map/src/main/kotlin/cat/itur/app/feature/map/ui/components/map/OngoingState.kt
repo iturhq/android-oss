@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
@@ -34,6 +35,7 @@ import cat.itur.app.feature.map.ui.components.help.helpAnchor
 internal data class OngoingState(
     val isOrganizer: Boolean,
     val selfSignal: ParticipantSignal? = null,
+    val participantSignalUpdateInFlight: Boolean = false,
     val selfLocationAvailable: Boolean = true,
     val activityActionsEnabled: Boolean = true,
     val isDirectionOfTravel: Boolean = false,
@@ -170,7 +172,8 @@ private fun OngoingActivityFABs(
     } else {
         ParticipantSafetyFABs(
             signal = presentation.selfSignal,
-            enabled = presentation.activityActionsEnabled,
+            enabled = presentation.activityActionsEnabled &&
+                !presentation.participantSignalUpdateInFlight,
             onSignalRequested = actions.onParticipantSignalRequested,
         )
     }
@@ -205,54 +208,68 @@ private fun ParticipantSafetyFABs(
     enabled: Boolean,
     onSignalRequested: (ParticipantSignal?) -> Unit,
 ) {
-    SafetySignalFAB(
-        tag = "safety_delayed_fab",
-        contentDescription = "I'm stopping; go ahead",
-        color = Color(SafetySignalColors.DELAYED),
-        enabled = enabled && signal == null,
-        onClick = { onSignalRequested(ParticipantSignal.DELAYED) },
-    )
-    SafetySignalFAB(
-        tag = "hail_organiser_fab",
-        contentDescription = "I need help; converge on me",
-        color = Color(SafetySignalColors.NEEDS_HELP),
-        enabled = enabled && signal != ParticipantSignal.NEEDS_HELP,
-        onClick = { onSignalRequested(ParticipantSignal.NEEDS_HELP) },
-    )
     if (signal != null) {
         SafetySignalFAB(
-            tag = "safety_ok_fab",
-            contentDescription = "I'm okay",
-            color = Color(SafetySignalColors.OK),
+            presentation = SafetySignalFabPresentation(
+                tag = "safety_ok_fab",
+                contentDescription = "I'm okay",
+                icon = IturIcons.Okay,
+                color = Color(SafetySignalColors.OK),
+            ),
             enabled = enabled,
             onClick = { onSignalRequested(null) },
         )
     }
+    SafetySignalFAB(
+        presentation = SafetySignalFabPresentation(
+            tag = "safety_delayed_fab",
+            contentDescription = "I'm stopping; go ahead",
+            icon = IturIcons.Delayed,
+            color = Color(SafetySignalColors.DELAYED),
+        ),
+        enabled = enabled && signal == null,
+        onClick = { onSignalRequested(ParticipantSignal.DELAYED) },
+    )
+    SafetySignalFAB(
+        presentation = SafetySignalFabPresentation(
+            tag = "hail_organiser_fab",
+            contentDescription = "I need help; converge on me",
+            icon = IturIcons.Warning,
+            color = Color(SafetySignalColors.NEEDS_HELP),
+        ),
+        enabled = enabled && signal != ParticipantSignal.NEEDS_HELP,
+        onClick = { onSignalRequested(ParticipantSignal.NEEDS_HELP) },
+    )
 }
 
 @Composable
 private fun SafetySignalFAB(
-    tag: String,
-    contentDescription: String,
-    color: Color,
+    presentation: SafetySignalFabPresentation,
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
     FloatingActionButton(
-        onClick = onClick,
+        onClick = { if (enabled) onClick() },
         modifier = Modifier
-            .testTag(tag)
+            .testTag(presentation.tag)
             .helpAnchor(
-                tag,
-                contentDescription,
-                safetySignalHelpDetail(tag),
+                presentation.tag,
+                presentation.contentDescription,
+                safetySignalHelpDetail(presentation.tag),
             )
             .serviceAvailability(enabled),
-        containerColor = color,
+        containerColor = presentation.color,
     ) {
-        Icon(IturIcons.Warning, contentDescription = contentDescription)
+        Icon(presentation.icon, contentDescription = presentation.contentDescription)
     }
 }
+
+private data class SafetySignalFabPresentation(
+    val tag: String,
+    val contentDescription: String,
+    val icon: ImageVector,
+    val color: Color,
+)
 
 private fun safetySignalHelpDetail(tag: String): String = when (tag) {
     "safety_delayed_fab" -> "Tells the organiser and participants that you are stopping and they may continue ahead."

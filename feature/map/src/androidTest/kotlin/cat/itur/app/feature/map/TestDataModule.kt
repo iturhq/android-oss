@@ -8,6 +8,7 @@ package cat.itur.app.feature.map
 import cat.itur.app.core.data.health.BackendHealthCheck
 import cat.itur.app.core.data.repository.ActivityRepository
 import cat.itur.app.core.data.repository.LocationRepository
+import cat.itur.app.core.data.repository.ParticipantSignalRepository
 import cat.itur.app.core.data.repository.UserRepository
 import dagger.Module
 import dagger.Provides
@@ -43,6 +44,12 @@ object TestDataModule {
     fun provideActivityRepository(
         repository: ScenarioActivityRepository,
     ): ActivityRepository = repository
+
+    @Provides
+    @Singleton
+    fun provideParticipantSignalRepository(
+        repository: ScenarioActivityRepository,
+    ): ParticipantSignalRepository = repository
 
     @Provides
     @Singleton

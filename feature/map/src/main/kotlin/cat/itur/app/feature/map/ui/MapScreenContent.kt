@@ -10,10 +10,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Scaffold
@@ -100,8 +103,14 @@ private fun MapReadyContent(
     presentation: MapPresentation,
     interaction: MapInteractionState,
 ) {
+    val mapSurfaceModifier = environment.modifier
+        .fillMaxSize()
+        .windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top))
+        .onGloballyPositioned { interaction.mapBounds = it.boundsInRoot() }
+        .testTag("map_surface")
+
     if (environment.isInspection) {
-        NoMapView(modifier = environment.modifier.testTag("persistent_map_surface"))
+        NoMapView(modifier = mapSurfaceModifier)
     } else {
         MapLibreView(
             input = MapLibreViewInput(
@@ -119,10 +128,7 @@ private fun MapReadyContent(
                 isDirectionOfTravel = presentation.ongoingActivityId != null &&
                     interaction.isDirectionOfTravel,
             ),
-            modifier = environment.modifier
-                .fillMaxSize()
-                .onGloballyPositioned { interaction.mapBounds = it.boundsInRoot() }
-                .testTag("persistent_map_surface"),
+            modifier = mapSurfaceModifier,
             callbacks = MapLibreViewCallbacks(
                 onMapReady = { interaction.mapLibreMap = it },
                 onViewportHeightChanged = { interaction.mapViewportHeightPixels = it },
@@ -267,7 +273,8 @@ private fun OngoingControls(
         ),
         presentation = OngoingState(
             isOrganizer = isOrganizer,
-            selfSignal = presentation.currentUser?.id?.let(ongoingUiState.activity.participantSignals::get),
+            selfSignal = presentation.participantSignalState.confirmed,
+            participantSignalUpdateInFlight = presentation.participantSignalState.inFlight != null,
             selfLocationAvailable = interaction.locationPermissionGranted,
             activityActionsEnabled = presentation.activityActionsEnabled,
             isDirectionOfTravel = interaction.isDirectionOfTravel,

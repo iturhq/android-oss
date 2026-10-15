@@ -27,7 +27,7 @@ import org.junit.runner.RunWith
 class ParticipantLocationRefreshTest {
 
     @Test
-    fun organizerAndParticipantSessionsProjectRawLocationsAcrossTwoRefreshes() {
+    fun organizerAndParticipantSessionsObserveLocationsAfterSingleBootstrapReads() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val activities = ScenarioActivityRepository()
         val locations = ScenarioLocationRepository(activities)
@@ -65,9 +65,11 @@ class ParticipantLocationRefreshTest {
             participantSession.startParticipantLocationMonitoring(refreshIntervalMillis = 100L)
         }
 
-        awaitCondition("Both sessions did not complete two refreshes") {
-            locations.readCount.get() >= 6
+        awaitCondition("Both sessions did not receive their initial snapshots") {
+            organizerSession.participantLocations.value.isNotEmpty() &&
+                participantSession.participantLocations.value.isNotEmpty()
         }
+        assertEquals("Each session should bootstrap exactly once", 2, locations.readCount.get())
         val initialExpectedIds = setOf(
             TestFixtures.ORGANIZER_ID,
             TestFixtures.PARTICIPANT_1_ID,
@@ -112,6 +114,7 @@ class ParticipantLocationRefreshTest {
         )
         assertTrue(unrelatedId !in organizerSession.participantLocations.value.map { it.userId })
         assertTrue(unrelatedId !in participantSession.participantLocations.value.map { it.userId })
+        assertEquals("Reactive updates must not trigger another full read", 2, locations.readCount.get())
         assertEquals("No session should need to emit a GPS fix", 0, locations.updateCount.get())
 
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
@@ -138,6 +141,7 @@ class ParticipantLocationRefreshTest {
         locationClient: FakeLocationClient,
     ) = MapViewModel(
         activityRepository = activities,
+        participantSignalRepository = activities,
         userRepository = users,
         locationsRepository = locations,
         locationClient = locationClient,

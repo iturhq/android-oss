@@ -70,7 +70,7 @@ class BackendUnavailableMapSurfaceTest {
             composeRule.onAllNodesWithTag("join_activity_fab")
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithTag("persistent_map_surface").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
         composeRule.onNodeWithTag("join_activity_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("sign_in_fab").assertIsDisplayed()
     }

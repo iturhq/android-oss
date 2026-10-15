@@ -16,6 +16,7 @@ import cat.itur.app.core.data.repository.DataResult
 import cat.itur.app.core.data.repository.FakeActivityRepository
 import cat.itur.app.core.data.repository.FakeLocationRepository
 import cat.itur.app.core.data.repository.FakeUserRepository
+import cat.itur.app.core.data.repository.LocationObservationScope
 import cat.itur.app.core.data.repository.LocationReportMeasurement
 import cat.itur.app.core.data.repository.LocationReportOutcome
 import cat.itur.app.core.data.repository.LocationReportStage
@@ -49,6 +50,11 @@ import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -87,6 +93,12 @@ private val PARTICIPANT_ACTIVITY = TestFixtures.ongoingActivity.copy(
 // regenerated from scratch after removal (which lands near a different, unrelated fallback).
 private const val LOCATION_UNCHANGED_THRESHOLD_DEGREES = 0.001
 
+private fun IturActivity.locationObservationScope() = LocationObservationScope(
+    activityId = id,
+    organizerId = organizerId,
+    participantIds = participantIds,
+)
+
 @RunWith(JUnit4::class)
 class MapViewModelTest {
 
@@ -119,8 +131,12 @@ class MapViewModelTest {
         userRepo: UserRepository = userRepo(),
         healthChecks: Set<BackendHealthCheck> = emptySet(),
         locationRepo: LocationRepository = locationRepo(activityRepo),
+        participantSignalRepo: ParticipantSignalRepository =
+            (activityRepo as? FakeActivityRepository)?.participantSignalRepository
+                ?: mockk(relaxed = true),
     ) = MapViewModel(
         activityRepository = activityRepo,
+        participantSignalRepository = participantSignalRepo,
         userRepository = userRepo,
         locationsRepository = locationRepo,
         locationClient = locationClient,
@@ -491,13 +507,15 @@ class MapViewModelTest {
     // --- leaveActivity ---
 
     @Test
-    fun `GIVEN no local GPS fix WHEN the participant refresh interval elapses THEN markers refresh`() = runTest {
+    fun `GIVEN no local GPS fix WHEN a participant snapshot arrives THEN markers refresh immediately`() = runTest {
         val activityRepo = activityRepo(TestFixtures.ongoingActivity)
         val initialLocations = TestFixtures.ongoingActivityLocations
         val refreshedLocations = initialLocations.dropLast(1)
+        val locationSnapshots = MutableStateFlow(initialLocations)
         val locationRepo = mockk<LocationRepository>()
-        coEvery { locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns
-            initialLocations andThen refreshedLocations
+        coEvery { locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns initialLocations
+        every { locationRepo.observeForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns locationSnapshots
+        coEvery { locationRepo.reconcileObservation(any()) } returns Unit
         val userRepo = userRepo().also { it.signIn(context) }
         val vm = viewModel(
             activityRepo = activityRepo,
@@ -511,9 +529,14 @@ class MapViewModelTest {
 
         vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
         try {
+            runCurrent()
+            locationSnapshots.value = refreshedLocations
+            runCurrent()
+            assertEquals(refreshedLocations, vm.participantLocations.value)
+
             advanceTimeBy(999L)
             runCurrent()
-            assertEquals(initialLocations, vm.participantLocations.value)
+            assertEquals(refreshedLocations, vm.participantLocations.value)
 
             advanceTimeBy(2L)
             runCurrent()
@@ -524,6 +547,9 @@ class MapViewModelTest {
                     TestFixtures.ONGOING_ACTIVITY_ID,
                     any(),
                 )
+            }
+            coVerify(exactly = 1) {
+                locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID)
             }
         } finally {
             vm.stopParticipantLocationMonitoring()
@@ -579,6 +605,15 @@ class MapViewModelTest {
             val ongoing = assertIs<MapUiState.Ongoing>(vm.uiState.value)
             assertEquals(vm.participantLocations.value, ongoing.locations)
             assertEquals(listOf(retainedParticipantId), ongoing.participantIds)
+            assertEquals(
+                listOf(
+                    activity.locationObservationScope(),
+                    activity.locationObservationScope(),
+                    activity.copy(participantIds = listOf(retainedParticipantId)).locationObservationScope(),
+                ),
+                locationRepo.reconciledScopes,
+            )
+            assertEquals(1, locationRepo.readCount.get())
         } finally {
             vm.stopParticipantLocationMonitoring()
         }
@@ -589,6 +624,9 @@ class MapViewModelTest {
         val initialLocations = TestFixtures.ongoingActivityLocations
         val locationRepo = mockk<LocationRepository>()
         coEvery { locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns initialLocations
+        every { locationRepo.observeForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns
+            MutableStateFlow(initialLocations)
+        coEvery { locationRepo.reconcileObservation(any()) } returns Unit
         val vm = viewModel(
             activityRepo = activityRepo(TestFixtures.ongoingActivity),
             locationRepo = locationRepo,
@@ -601,9 +639,10 @@ class MapViewModelTest {
             advanceTimeBy(1_001L)
             runCurrent()
 
-            coVerify(exactly = 2) {
+            coVerify(exactly = 1) {
                 locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID)
             }
+            coVerify(exactly = 2) { locationRepo.reconcileObservation(any()) }
         } finally {
             vm.stopParticipantLocationMonitoring()
         }
@@ -614,6 +653,9 @@ class MapViewModelTest {
         val locationRepo = mockk<LocationRepository>()
         coEvery { locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns
             TestFixtures.ongoingActivityLocations
+        every { locationRepo.observeForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns
+            MutableStateFlow(TestFixtures.ongoingActivityLocations)
+        coEvery { locationRepo.reconcileObservation(any()) } returns Unit
         val vm = viewModel(
             activityRepo = activityRepo(TestFixtures.ongoingActivity),
             locationRepo = locationRepo,
@@ -628,6 +670,7 @@ class MapViewModelTest {
         coVerify(exactly = 1) {
             locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID)
         }
+        coVerify(exactly = 1) { locationRepo.reconcileObservation(any()) }
     }
 
     @Test
@@ -652,14 +695,13 @@ class MapViewModelTest {
         val staleLocations = initialLocations.dropLast(1)
         val refreshStarted = CompletableDeferred<Unit>()
         val releaseRefresh = CompletableDeferred<Unit>()
-        val locationRepo = ControlledParticipantLocationRepository { _, readIndex ->
-            if (readIndex == 0) {
-                initialLocations
-            } else {
-                refreshStarted.complete(Unit)
-                releaseRefresh.await()
-                staleLocations
-            }
+        val locationRepo = mockk<LocationRepository>()
+        coEvery { locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns initialLocations
+        coEvery { locationRepo.reconcileObservation(any()) } returns Unit
+        every { locationRepo.observeForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns flow {
+            refreshStarted.complete(Unit)
+            releaseRefresh.await()
+            emit(staleLocations)
         }
         val vm = viewModel(
             activityRepo = activityRepo(TestFixtures.ongoingActivity),
@@ -668,7 +710,6 @@ class MapViewModelTest {
         vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
         vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
         try {
-            advanceTimeBy(1_001L)
             runCurrent()
             refreshStarted.await()
 
@@ -683,12 +724,48 @@ class MapViewModelTest {
     }
 
     @Test
+    fun `GIVEN observation switches activities WHEN the old source emits THEN stale markers are not restored`() = runTest {
+        val activityA = TestFixtures.ongoingActivity
+        val activityB = activityA.copy(id = IturActivityId("otherActivity0000001"))
+        val locationsA = TestFixtures.ongoingActivityLocations
+        val locationsB = locationsA.map { it.copy(activityId = activityB.id) }
+        val oldSnapshots = MutableSharedFlow<List<ParticipantLocation>>(extraBufferCapacity = 1)
+        val currentSnapshots = MutableStateFlow(locationsB)
+        val locationRepo = mockk<LocationRepository>()
+        coEvery { locationRepo.reconcileObservation(any()) } returns Unit
+        coEvery { locationRepo.getForActivity(activityA.id) } returns locationsA
+        coEvery { locationRepo.getForActivity(activityB.id) } returns locationsB
+        every { locationRepo.observeForActivity(activityA.id) } returns oldSnapshots
+        every { locationRepo.observeForActivity(activityB.id) } returns currentSnapshots
+        val vm = viewModel(
+            activityRepo = activityRepo(activityA, activityB),
+            locationRepo = locationRepo,
+        )
+
+        vm.triggerOngoingState(activityA.id, context)
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        runCurrent()
+        vm.triggerOngoingState(activityB.id, context)
+        runCurrent()
+
+        oldSnapshots.tryEmit(locationsA.dropLast(1))
+        runCurrent()
+
+        assertEquals(activityB.id, assertIs<MapUiState.Ongoing>(vm.uiState.value).activity.id)
+        assertEquals(locationsB, vm.participantLocations.value)
+        coVerify(exactly = 1) { locationRepo.getForActivity(activityA.id) }
+        coVerify(exactly = 1) { locationRepo.getForActivity(activityB.id) }
+        vm.stopParticipantLocationMonitoring()
+    }
+
+    @Test
     fun `GIVEN an accepted GPS callback WHEN reporting succeeds THEN timing spans queue normalization and repository`() = runTest {
         val measurement = RecordingLocationReportMeasurement()
         val updateCompleted = CompletableDeferred<Unit>()
         val locationRepo = mockk<LocationRepository>()
         every { locationRepo.newReportMeasurement() } returns measurement
         coEvery { locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns emptyList()
+        coEvery { locationRepo.reconcileObservation(any()) } returns Unit
         coEvery {
             locationRepo.updateForParticipant(
                 TestFixtures.ORGANIZER_ID,
@@ -738,6 +815,9 @@ class MapViewModelTest {
                 measurement,
             )
         }
+        coVerify(exactly = 1) {
+            locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID)
+        }
     }
 
     @Test
@@ -746,6 +826,7 @@ class MapViewModelTest {
         val locationRepo = mockk<LocationRepository>()
         every { locationRepo.newReportMeasurement() } returns measurement
         coEvery { locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns emptyList()
+        coEvery { locationRepo.reconcileObservation(any()) } returns Unit
         coEvery {
             locationRepo.updateForParticipant(
                 TestFixtures.ORGANIZER_ID,
@@ -820,6 +901,123 @@ class MapViewModelTest {
         assertEquals(LocationReportOutcome.SUCCESS, allMeasurements[0].outcome)
         assertEquals(LocationReportOutcome.SUPERSEDED, allMeasurements[1].outcome)
         assertEquals(LocationReportOutcome.SUCCESS, allMeasurements[2].outcome)
+    }
+
+    @Test
+    fun `GIVEN a failed location report WHEN a newer fix is pending THEN the writer continues`() = runTest {
+        val allMeasurements = List(2) { RecordingLocationReportMeasurement() }
+        val measurements = ArrayDeque(allMeasurements)
+        val firstWriteEntered = CompletableDeferred<Unit>()
+        val releaseFirstWrite = CompletableDeferred<Unit>()
+        val activeWrites = AtomicInteger()
+        val maximumActiveWrites = AtomicInteger()
+        val attemptedLongitudes = ConcurrentLinkedQueue<Double>()
+        val locationRepo = ControlledLocationRepository(measurements) {
+            val active = activeWrites.incrementAndGet()
+            maximumActiveWrites.updateAndGet { maximum -> maxOf(maximum, active) }
+            try {
+                attemptedLongitudes += it.longitude
+                if (attemptedLongitudes.size == 1) {
+                    firstWriteEntered.complete(Unit)
+                    releaseFirstWrite.await()
+                    error("first report failed")
+                }
+            } finally {
+                activeWrites.decrementAndGet()
+            }
+        }
+        val callback = slot<(android.location.Location) -> Unit>()
+        every { locationClient.requestUpdates(any(), capture(callback)) } just Runs
+        val userRepo = userRepo().also { it.signIn(context) }
+        val vm = viewModel(
+            activityRepo = activityRepo(TestFixtures.ongoingActivity),
+            userRepo = userRepo,
+            locationRepo = locationRepo,
+        )
+        vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+        vm.onLocationPermissionChanged(granted = true)
+
+        callback.captured(locationFix(2.16))
+        withContext(Dispatchers.Default) { withTimeout(5_000L) { firstWriteEntered.await() } }
+        callback.captured(locationFix(2.18))
+        releaseFirstWrite.complete(Unit)
+        withContext(Dispatchers.Default) { withTimeout(5_000L) { allMeasurements[1].completed.await() } }
+
+        assertEquals(listOf(2.16, 2.18), attemptedLongitudes.toList())
+        assertEquals(1, maximumActiveWrites.get())
+        assertEquals(LocationReportOutcome.FAILED, allMeasurements[0].outcome)
+        assertEquals(LocationReportOutcome.SUCCESS, allMeasurements[1].outcome)
+    }
+
+    @Test
+    fun `GIVEN a failed location report WHEN its old session retry runs THEN it is cancelled`() = runTest {
+        val allMeasurements = List(2) { RecordingLocationReportMeasurement() }
+        val measurements = ArrayDeque(allMeasurements)
+        val locationRepo = ControlledLocationRepository(measurements) {
+            error("report failed")
+        }
+        val callback = slot<(android.location.Location) -> Unit>()
+        every { locationClient.requestUpdates(any(), capture(callback)) } just Runs
+        val userRepo = userRepo().also { it.signIn(context) }
+        val vm = viewModel(
+            activityRepo = activityRepo(TestFixtures.ongoingActivity),
+            userRepo = userRepo,
+            locationRepo = locationRepo,
+        )
+        vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+        vm.onLocationPermissionChanged(granted = true)
+
+        callback.captured(locationFix(2.16))
+        withContext(Dispatchers.Default) { withTimeout(5_000L) { allMeasurements[0].completed.await() } }
+        val failedState = withContext(Dispatchers.Default) {
+            withTimeout(5_000L) {
+                vm.uiState.filterIsInstance<MapUiState.RecoverableError>().first()
+            }
+        }
+        vm.triggerIdleState()
+
+        failedState.onRetry()
+        withContext(Dispatchers.Default) { withTimeout(5_000L) { allMeasurements[1].completed.await() } }
+
+        assertEquals(1, locationRepo.updateCount.get())
+        assertEquals(LocationReportOutcome.FAILED, allMeasurements[0].outcome)
+        assertEquals(LocationReportOutcome.CANCELLED, allMeasurements[1].outcome)
+    }
+
+    @Test
+    fun `GIVEN a failed location report WHEN a newer fix succeeds THEN the old retry is superseded`() = runTest {
+        val allMeasurements = List(3) { RecordingLocationReportMeasurement() }
+        val measurements = ArrayDeque(allMeasurements)
+        val attemptedLongitudes = ConcurrentLinkedQueue<Double>()
+        val locationRepo = ControlledLocationRepository(measurements) {
+            attemptedLongitudes += it.longitude
+            if (attemptedLongitudes.size == 1) error("first report failed")
+        }
+        val callback = slot<(android.location.Location) -> Unit>()
+        every { locationClient.requestUpdates(any(), capture(callback)) } just Runs
+        val userRepo = userRepo().also { it.signIn(context) }
+        val vm = viewModel(
+            activityRepo = activityRepo(TestFixtures.ongoingActivity),
+            userRepo = userRepo,
+            locationRepo = locationRepo,
+        )
+        vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+        vm.onLocationPermissionChanged(granted = true)
+
+        callback.captured(locationFix(2.16))
+        withContext(Dispatchers.Default) { withTimeout(5_000L) { allMeasurements[0].completed.await() } }
+        val failedState = assertIs<MapUiState.RecoverableError>(vm.uiState.value)
+        callback.captured(locationFix(2.18))
+        withContext(Dispatchers.Default) { withTimeout(5_000L) { allMeasurements[1].completed.await() } }
+
+        failedState.onRetry()
+        withContext(Dispatchers.Default) { withTimeout(5_000L) { allMeasurements[2].completed.await() } }
+
+        assertEquals(listOf(2.16, 2.18), attemptedLongitudes.toList())
+        assertEquals(2, locationRepo.updateCount.get())
+        assertEquals(LocationReportOutcome.FAILED, allMeasurements[0].outcome)
+        assertEquals(LocationReportOutcome.SUCCESS, allMeasurements[1].outcome)
+        assertEquals(LocationReportOutcome.SUPERSEDED, allMeasurements[2].outcome)
     }
 
     @Test
@@ -1008,7 +1206,7 @@ class MapViewModelTest {
         }
     }
 
-    // --- requestAttention ---
+    // --- participant signals ---
 
     @Test
     fun `GIVEN no ongoing activity WHEN requesting attention THEN uiState remains Idle`() {
@@ -1026,6 +1224,230 @@ class MapViewModelTest {
             vm.startActivity(context)
             vm.requestAttention()
         }
+    }
+
+    @Test
+    fun `participant can report delayed escalate to help and clear confirmed state`() = runTest {
+        val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
+        val vm = viewModel(activityRepo = activityRepo)
+        vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+        assertEquals(ParticipantSignal.DELAYED, vm.participantSignalState.value.confirmed)
+
+        vm.setParticipantSignal(ParticipantSignal.NEEDS_HELP)
+        runCurrent()
+        assertEquals(ParticipantSignal.NEEDS_HELP, vm.participantSignalState.value.confirmed)
+
+        vm.setParticipantSignal(null)
+        runCurrent()
+        assertEquals(ParticipantSignalUiState(), vm.participantSignalState.value)
+    }
+
+    @Test
+    fun `persisted participant signal is restored when activity is recreated`() = runTest {
+        val currentUserId = UserId("1")
+        val stored = PARTICIPANT_ACTIVITY.copy(
+            participantIds = listOf(currentUserId),
+            participantSignals = mapOf(currentUserId to ParticipantSignal.DELAYED),
+        )
+        val vm = viewModel(activityRepo = activityRepo(stored))
+
+        vm.triggerOngoingState(stored.id, context)
+
+        assertEquals(ParticipantSignal.DELAYED, vm.participantSignalState.value.confirmed)
+    }
+
+    @Test
+    fun `duplicate delayed taps issue one write while the first is in flight`() = runTest {
+        val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
+        val signalRepo = mockk<ParticipantSignalRepository>()
+        val completion = CompletableDeferred<DataResult<IturActivity>>()
+        coEvery {
+            signalRepo.setParticipantSignal(
+                PARTICIPANT_ACTIVITY.id,
+                UserId("1"),
+                ParticipantSignal.DELAYED,
+            )
+        } coAnswers { completion.await() }
+        val vm = viewModel(activityRepo = activityRepo, participantSignalRepo = signalRepo)
+        vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+
+        coVerify(exactly = 1) {
+            signalRepo.setParticipantSignal(
+                PARTICIPANT_ACTIVITY.id,
+                UserId("1"),
+                ParticipantSignal.DELAYED,
+            )
+        }
+        assertEquals(
+            ParticipantSignalAction.REPORT_DELAYED,
+            vm.participantSignalState.value.inFlight,
+        )
+        completion.complete(
+            DataResult.Success(
+                PARTICIPANT_ACTIVITY.copy(
+                    participantIds = listOf(UserId("1")),
+                    participantSignals = mapOf(UserId("1") to ParticipantSignal.DELAYED),
+                ),
+            ),
+        )
+        runCurrent()
+        assertEquals(ParticipantSignal.DELAYED, vm.participantSignalState.value.confirmed)
+    }
+
+    @Test
+    fun `failed signal write restores controls and permits retry without leaving ongoing state`() = runTest {
+        val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
+        val signalRepo = mockk<ParticipantSignalRepository>()
+        coEvery {
+            signalRepo.setParticipantSignal(
+                PARTICIPANT_ACTIVITY.id,
+                UserId("1"),
+                ParticipantSignal.DELAYED,
+            )
+        } returnsMany listOf(
+            DataResult.Error("offline"),
+            DataResult.Success(
+                PARTICIPANT_ACTIVITY.copy(
+                    participantIds = listOf(UserId("1")),
+                    participantSignals = mapOf(UserId("1") to ParticipantSignal.DELAYED),
+                ),
+            ),
+        )
+        val vm = viewModel(activityRepo = activityRepo, participantSignalRepo = signalRepo)
+        vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+        assertEquals(ParticipantSignalUiState(), vm.participantSignalState.value)
+        assertTrue(vm.participantSignalMessage.value!!.contains("try again", ignoreCase = true))
+        assertIs<MapUiState.Ongoing>(vm.uiState.value)
+
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+        assertEquals(ParticipantSignal.DELAYED, vm.participantSignalState.value.confirmed)
+        coVerify(exactly = 2) {
+            signalRepo.setParticipantSignal(
+                PARTICIPANT_ACTIVITY.id,
+                UserId("1"),
+                ParticipantSignal.DELAYED,
+            )
+        }
+    }
+
+    @Test
+    fun `thrown signal write failure restores controls and permits retry`() = runTest {
+        val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
+        val signalRepo = mockk<ParticipantSignalRepository>()
+        var attempt = 0
+        coEvery {
+            signalRepo.setParticipantSignal(
+                PARTICIPANT_ACTIVITY.id,
+                UserId("1"),
+                ParticipantSignal.DELAYED,
+            )
+        } coAnswers {
+            attempt += 1
+            if (attempt == 1) {
+                error("offline")
+            }
+            DataResult.Success(
+                PARTICIPANT_ACTIVITY.copy(
+                    participantIds = listOf(UserId("1")),
+                    participantSignals = mapOf(UserId("1") to ParticipantSignal.DELAYED),
+                ),
+            )
+        }
+        val vm = viewModel(activityRepo = activityRepo, participantSignalRepo = signalRepo)
+        vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+        assertEquals(ParticipantSignalUiState(), vm.participantSignalState.value)
+        assertTrue(vm.participantSignalMessage.value!!.contains("try again", ignoreCase = true))
+        assertIs<MapUiState.Ongoing>(vm.uiState.value)
+
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+        assertEquals(ParticipantSignal.DELAYED, vm.participantSignalState.value.confirmed)
+        coVerify(exactly = 2) {
+            signalRepo.setParticipantSignal(
+                PARTICIPANT_ACTIVITY.id,
+                UserId("1"),
+                ParticipantSignal.DELAYED,
+            )
+        }
+    }
+
+    @Test
+    fun `organizer cannot issue participant signal writes`() = runTest {
+        val activityRepo = activityRepo()
+        val signalRepo = RecordingParticipantSignalRepository()
+        val vm = viewModel(activityRepo = activityRepo, participantSignalRepo = signalRepo)
+        vm.startActivity(context)
+
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        vm.setParticipantSignal(ParticipantSignal.NEEDS_HELP)
+        runCurrent()
+
+        assertEquals(0, signalRepo.writeCount)
+    }
+
+    @Test
+    fun `stale signal response cannot restore a departed activity`() = runTest {
+        val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
+        val signalRepo = mockk<ParticipantSignalRepository>()
+        val completion = CompletableDeferred<DataResult<IturActivity>>()
+        coEvery {
+            signalRepo.setParticipantSignal(
+                PARTICIPANT_ACTIVITY.id,
+                UserId("1"),
+                ParticipantSignal.DELAYED,
+            )
+        } coAnswers { completion.await() }
+        val vm = viewModel(activityRepo = activityRepo, participantSignalRepo = signalRepo)
+        vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+
+        vm.triggerIdleState()
+        completion.complete(
+            DataResult.Success(
+                PARTICIPANT_ACTIVITY.copy(
+                    participantSignals = mapOf(UserId("1") to ParticipantSignal.DELAYED),
+                ),
+            ),
+        )
+        runCurrent()
+
+        assertIs<MapUiState.Idle>(vm.uiState.value)
+        assertNull(vm.ongoingActivityId.value)
+        assertEquals(ParticipantSignalUiState(), vm.participantSignalState.value)
+    }
+
+    @Test
+    fun `red signal rejects downgrade and only permits clear`() = runTest {
+        val currentUserId = UserId("1")
+        val stored = PARTICIPANT_ACTIVITY.copy(
+            participantIds = listOf(currentUserId),
+            participantSignals = mapOf(currentUserId to ParticipantSignal.NEEDS_HELP),
+        )
+        val activityRepo = activityRepo(stored)
+        val signalRepo = RecordingParticipantSignalRepository()
+        val vm = viewModel(activityRepo = activityRepo, participantSignalRepo = signalRepo)
+        vm.triggerOngoingState(stored.id, context)
+
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+
+        assertEquals(0, signalRepo.writeCount)
+        assertEquals(ParticipantSignal.NEEDS_HELP, vm.participantSignalState.value.confirmed)
     }
 
     // --- pollBroadcastsOnce (UC-ACTIVITY-007) ---
@@ -1361,6 +1783,7 @@ class MapViewModelTest {
             activityRepo = activityRepo,
             userRepo = userRepo,
             healthChecks = setOf(firestore),
+            participantSignalRepo = activityRepo as ParticipantSignalRepository,
         )
         vm.joinActivity(TestFixtures.ONGOING_ACTIVITY_ID, context)
         assertIs<MapUiState.Ongoing>(vm.uiState.value)
@@ -1369,7 +1792,8 @@ class MapViewModelTest {
         runCurrent()
 
         assertEquals(listOf(firestore.service), vm.backendAvailability.value.failingServices)
-        assertIs<MapUiState.RecoverableError>(vm.uiState.value)
+        assertIs<MapUiState.Ongoing>(vm.uiState.value)
+        assertNotNull(vm.participantSignalMessage.value)
     }
 
     @Test
@@ -1477,6 +1901,27 @@ class MapViewModelTest {
     }
 }
 
+private class RecordingParticipantSignalRepository : ParticipantSignalRepository {
+    var writeCount = 0
+
+    override suspend fun setParticipantSignal(
+        activityId: IturActivityId,
+        userId: UserId,
+        signal: ParticipantSignal,
+    ): DataResult<IturActivity> {
+        writeCount++
+        return DataResult.Error("Unexpected signal write")
+    }
+
+    override suspend fun clearParticipantSignal(
+        activityId: IturActivityId,
+        userId: UserId,
+    ): DataResult<IturActivity> {
+        writeCount++
+        return DataResult.Error("Unexpected signal clear")
+    }
+}
+
 private class RecordingLocationReportMeasurement : LocationReportMeasurement {
     private val mutableEvents = mutableListOf<String>()
     val completed = CompletableDeferred<Unit>()
@@ -1530,8 +1975,13 @@ private class ControlledParticipantLocationRepository(
     private val onRead: suspend (IturActivityId, Int) -> List<cat.itur.app.core.model.ParticipantLocation>,
 ) : LocationRepository {
     val readCount = AtomicInteger()
+    val reconciledScopes = mutableListOf<LocationObservationScope>()
 
     override suspend fun getForActivity(activityId: IturActivityId) = onRead(activityId, readCount.getAndIncrement())
+
+    override suspend fun reconcileObservation(scope: LocationObservationScope) {
+        reconciledScopes += scope
+    }
 
     override suspend fun updateForParticipant(
         userId: UserId,
