@@ -116,6 +116,7 @@ private fun MapReadyContent(
             input = MapLibreViewInput(
                 styleUrl = viewModel.mapStyleConfig.styleUrl,
                 isActivityOngoing = presentation.ongoingActivityId != null,
+                activityId = presentation.ongoingActivityId,
                 locationPermissionGranted = interaction.locationPermissionGranted,
                 organizerId = presentation.organizerId,
                 currentUserId = presentation.currentUser?.id,

@@ -24,6 +24,7 @@ class LocationRecencyTest {
         val description = MapLibreViewInput(
             styleUrl = "https://example.invalid/style.json",
             isActivityOngoing = true,
+            activityId = participant.activityId,
             locationPermissionGranted = true,
             currentUserId = participant.userId,
             organizerId = null,
