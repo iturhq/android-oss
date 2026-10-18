@@ -162,6 +162,7 @@ private data class MapStyleCallbacks(
  * An implementation of the map view provided by MapLibre.
  */
 @Composable
+@Suppress("LongMethod")
 fun MapLibreView(
     input: MapLibreViewInput,
     modifier: Modifier = Modifier,

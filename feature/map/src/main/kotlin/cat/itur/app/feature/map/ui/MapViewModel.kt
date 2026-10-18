@@ -66,7 +66,7 @@ import kotlinx.coroutines.launch
 import java.util.Date
 import javax.inject.Inject
 @HiltViewModel
-@Suppress("LongParameterList")
+@Suppress("LargeClass", "LongParameterList")
 class MapViewModel @Inject
 constructor(
     private val activityRepository: ActivityRepository,
