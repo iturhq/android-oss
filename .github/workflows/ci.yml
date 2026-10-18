@@ -136,8 +136,16 @@ jobs:
             -noaudio -no-boot-anim -camera-back none
           script: >-
             bash -o pipefail -c
-            './gradlew :feature:map:connectedDebugAndroidTest
+            './gradlew deviceTestCoverage
             --console=plain --stacktrace 2>&1 | tee emulator-test.log'
+
+      - name: Upload device coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          disable_search: true
+          files: core/datastore/build/reports/coverage/androidTest/debug/connected/report.xml,feature/map/build/reports/coverage/androidTest/debug/connected/report.xml
+          fail_ci_if_error: true
 
       - name: Upload emulator diagnostics on failure
         if: failure()
