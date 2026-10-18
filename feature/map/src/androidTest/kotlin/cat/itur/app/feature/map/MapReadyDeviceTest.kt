@@ -7,6 +7,8 @@ package cat.itur.app.feature.map
 
 import android.Manifest
 import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -14,6 +16,9 @@ import androidx.test.rule.GrantPermissionRule
 import cat.itur.app.core.domain.id.IturActivityId
 import cat.itur.app.core.domain.id.UserId
 import cat.itur.app.core.model.Location
+import cat.itur.app.core.model.GpxLine
+import cat.itur.app.core.model.GpxPoint
+import cat.itur.app.core.model.GpxTrack
 import cat.itur.app.core.model.ParticipantLocation
 import cat.itur.app.core.ui.theme.IturTheme
 import cat.itur.app.feature.map.ui.components.map.MapLibreView
@@ -36,6 +41,9 @@ import android.location.Location as AndroidLocation
 // of its public API, so duplicated here rather than exported just for this test.
 private const val ORGANIZER_SOURCE = "organizer-source"
 private const val PARTICIPANT_SOURCE = "participants-source"
+private const val GPX_TRACK_SOURCE = "gpx-track-source"
+private const val GPX_TRACK_LAYER = "gpx-track-layer"
+private const val PARTICIPANT_LAYER = "participants-layer"
 
 /**
  * Renders [MapLibreView] in isolation -- no full [cat.itur.app.feature.map.ui.MapScreen], no
@@ -147,6 +155,59 @@ class MapReadyDeviceTest {
     @Test
     fun mapReadyAndMarkersLoadAt125Participants() {
         assertMapReadyAndMarkersLoad(participantCount = 125)
+    }
+
+    @Test
+    fun gpxOverlaySurvivesStyleReloadAndStaysBelowParticipantMarkers() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            MapLibre.getInstance(
+                ApplicationProvider.getApplicationContext<Context>(),
+                "",
+                WellKnownTileServer.MapLibre,
+            )
+        }
+        val track = GpxTrack(
+            listOf(GpxLine(listOf(GpxPoint(41.38, 2.17), GpxPoint(41.39, 2.18)))),
+        )
+        var styleUrl by androidx.compose.runtime.mutableStateOf(mapStyleUrl())
+        var readyMap: MapLibreMap? = null
+        composeRule.setContent {
+            IturTheme {
+                MapLibreView(
+                    input = MapLibreViewInput(
+                        styleUrl = styleUrl,
+                        isActivityOngoing = false,
+                        activityId = activityId,
+                        locationPermissionGranted = true,
+                        currentUserId = null,
+                        organizerId = organizerId,
+                        participantLocations = participants(2),
+                        gpxTrack = track,
+                    ),
+                    callbacks = MapLibreViewCallbacks(onMapReady = { readyMap = it }),
+                )
+            }
+        }
+        composeRule.waitUntil(timeoutMillis = 30.seconds.inWholeMilliseconds) { readyMap != null }
+        val map = requireNotNull(readyMap)
+
+        fun overlayIsReady(): Boolean {
+            var ready = false
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                val style = map.style
+                val trackFeatures = style?.getSourceAs<GeoJsonSource>(GPX_TRACK_SOURCE)
+                    ?.querySourceFeatures(null).orEmpty()
+                val layers = style?.layers.orEmpty()
+                ready = trackFeatures.size == 1 &&
+                    layers.indexOfFirst { it.id == GPX_TRACK_LAYER } <
+                    layers.indexOfFirst { it.id == PARTICIPANT_LAYER }
+            }
+            return ready
+        }
+
+        composeRule.waitUntil(timeoutMillis = 15.seconds.inWholeMilliseconds) { overlayIsReady() }
+        composeRule.runOnIdle { styleUrl = "https://demotiles.maplibre.org/style.json?reload=1" }
+        composeRule.waitUntil(timeoutMillis = 30.seconds.inWholeMilliseconds) { overlayIsReady() }
     }
 
     @Test

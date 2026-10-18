@@ -364,7 +364,7 @@ private object MapStyleInitializer {
         styleUrl: String,
         callbacks: MapStyleCallbacks,
     ) {
-        LaunchedEffect(Unit) {
+        LaunchedEffect(styleUrl) {
             mapView.getMapAsync { map ->
                 callbacks.onMapAvailable(map)
                 map.setStyle(styleUrl) { style ->
