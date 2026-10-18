@@ -144,7 +144,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           disable_search: true
-          files: core/datastore/build/reports/coverage/androidTest/debug/connected/report.xml,feature/map/build/reports/coverage/androidTest/debug/connected/report.xml
+          files: app/build/reports/coverage/androidTest/local/debug/connected/report.xml,core/datastore/build/reports/coverage/androidTest/debug/connected/report.xml,core/ui/build/reports/coverage/androidTest/debug/connected/report.xml,feature/map/build/reports/coverage/androidTest/debug/connected/report.xml
           fail_ci_if_error: true
 
       - name: Upload emulator diagnostics on failure
