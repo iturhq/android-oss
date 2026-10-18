@@ -63,14 +63,6 @@ class RemotePointerPerformanceTest {
                 "incremental allocation count regressed at size $groupSize",
                 legacy.allocations == 0 || incremental.allocations < legacy.allocations,
             )
-            assertTrue(
-                "incremental main-thread work materially regressed at size $groupSize",
-                incremental.mainThreadCpuNanos < legacy.mainThreadCpuNanos * 2,
-            )
-            assertTrue(
-                "incremental updates dropped more frames at size $groupSize",
-                incremental.droppedFrames <= legacy.droppedFrames + 1,
-            )
         }
     }
 

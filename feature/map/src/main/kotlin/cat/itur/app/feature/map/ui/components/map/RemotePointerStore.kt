@@ -27,7 +27,6 @@ internal class RemotePointerStore {
 
     internal fun featureFor(userId: UserId): Feature? = presentations[userId]?.feature
 
-    @Suppress("LongMethod", "CyclomaticComplexMethod")
     fun update(input: RemotePointerInput): RemotePointerUpdate {
         val activityChanged = activityId != input.activityId
         val styleChanged = styleGeneration != input.styleGeneration
@@ -36,41 +35,7 @@ internal class RemotePointerStore {
 
         input.locations.forEach { location ->
             if (location.userId in next) return@forEach
-            val sourceRole = when (location.userId) {
-                input.organizerId -> PointerRole.ORGANIZER
-                input.currentUserId -> null
-                else -> PointerRole.OTHER
-            }
-            val signal = input.signals[location.userId]
-            val bearing = pointerBearingRotation(location.location, input.nowMillis)
-            val opacity = location.markerOpacity(input.nowMillis, input.recencyThresholds)
-            val key = sourceRole?.let {
-                FeatureKey(
-                    activityId = input.activityId,
-                    role = it,
-                    latitude = location.location.latitude,
-                    longitude = location.location.longitude,
-                    label = location.userName,
-                    signal = signal,
-                    bearing = bearing,
-                    opacity = opacity,
-                )
-            }
-            val cached = previous[location.userId]
-            val feature = when {
-                key == null -> null
-                cached?.key == key -> cached.feature
-                else -> remotePointerFeature(
-                    participantLocation = location,
-                    role = sourceRole,
-                    signal = signal,
-                    opacity = opacity,
-                    nowMillis = input.nowMillis,
-                ).also {
-                    statistics = statistics.copy(featureBuilds = statistics.featureBuilds + 1)
-                }
-            }
-            next[location.userId] = CachedPointer(key, feature)
+            next[location.userId] = pointerFor(location, input, previous[location.userId])
         }
 
         val nextOrganizerFeatures = input.organizerId
@@ -100,8 +65,50 @@ internal class RemotePointerStore {
         )
     }
 
-    @Suppress("MaxLineLength")
-    private fun List<Feature>.sameInstancesAs(other: List<Feature>): Boolean = size == other.size && indices.all { this[it] === other[it] }
+    private fun pointerFor(
+        location: ParticipantLocation,
+        input: RemotePointerInput,
+        cached: CachedPointer?,
+    ): CachedPointer {
+        val role = when (location.userId) {
+            input.organizerId -> PointerRole.ORGANIZER
+            input.currentUserId -> null
+            else -> PointerRole.OTHER
+        }
+        val signal = input.signals[location.userId]
+        val opacity = location.markerOpacity(input.nowMillis, input.recencyThresholds)
+        val key = role?.let {
+            FeatureKey(
+                activityId = input.activityId,
+                role = it,
+                latitude = location.location.latitude,
+                longitude = location.location.longitude,
+                label = location.userName,
+                signal = signal,
+                bearing = pointerBearingRotation(location.location, input.nowMillis),
+                opacity = opacity,
+            )
+        }
+        val feature = when {
+            key == null -> null
+            cached?.key == key -> cached.feature
+            else -> remotePointerFeature(
+                participantLocation = location,
+                role = role,
+                signal = signal,
+                opacity = opacity,
+                nowMillis = input.nowMillis,
+            ).also {
+                statistics = statistics.copy(featureBuilds = statistics.featureBuilds + 1)
+            }
+        }
+        return CachedPointer(key, feature)
+    }
+
+    private fun List<Feature>.sameInstancesAs(other: List<Feature>): Boolean {
+        if (size != other.size) return false
+        return indices.all { this[it] === other[it] }
+    }
 
     private fun Boolean.asCount(): Long = if (this) 1L else 0L
 
