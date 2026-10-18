@@ -35,9 +35,17 @@ class MapUtilsDeviceTest {
 
         assertTrue(walking in MIN_SELF_FRAMING_DISTANCE_METERS..MAX_SELF_FRAMING_DISTANCE_METERS)
         assertTrue(walking < running && running < cycling)
-        assertEquals(150.0, selfFramingDistanceMeters(listOf(location(speed = 2f), location(speed = 6f))))
-        assertEquals(MIN_SELF_FRAMING_DISTANCE_METERS, selfFramingDistanceMeters(emptyList()))
-        assertEquals(MAX_SELF_FRAMING_DISTANCE_METERS, selfFramingDistanceMeters(listOf(location(speed = 100f))))
+        assertEquals(
+            150.0,
+            selfFramingDistanceMeters(listOf(location(speed = 2f), location(speed = 6f))),
+            0.001,
+        )
+        assertEquals(MIN_SELF_FRAMING_DISTANCE_METERS, selfFramingDistanceMeters(emptyList()), 0.001)
+        assertEquals(
+            MAX_SELF_FRAMING_DISTANCE_METERS,
+            selfFramingDistanceMeters(listOf(location(speed = 100f))),
+            0.001,
+        )
     }
 
     @Test
@@ -52,6 +60,7 @@ class MapUtilsDeviceTest {
         assertEquals(
             selfFramingZoom(41.0, 1_000, 100.0, isDirectionOfTravel = false),
             selfFramingZoom(41.0, 0, 100.0, isDirectionOfTravel = false),
+            0.001,
         )
     }
 
