@@ -16,14 +16,16 @@ coverage:
   status:
     project:
       default:
-        # Fail if overall coverage drops more than 2% below the baseline.
-        target: auto
-        threshold: 2%
+        # Require the complete, explicit CI upload set to stay at the final gate.
+        target: 90%
+        threshold: 0%
+        if_not_found: failure
     patch:
       default:
-        # New code introduced in a PR must be at least 60% covered.
-        target: 60%
-        threshold: 5%
+        # Keep changed production behaviour at the same no-tolerance standard.
+        target: 90%
+        threshold: 0%
+        if_not_found: failure
 
 comment:
   layout: "reach,diff,flags,files"

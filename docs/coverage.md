@@ -27,6 +27,23 @@ produce an executable coverage report. They remain visible here rather than
 silently shrinking the reporting scope; adding tests to either module requires
 adding its report to the guarded list and to the Codecov upload list together.
 
+## CI policy and review boundary
+
+`codecov.yml` enforces separate blocking project and patch statuses at 90% with
+zero tolerance. `reach` remains in the Codecov comment layout, so its branch
+coverage signal stays visible beside the required line-coverage statuses.
+Both CI uploads use explicit, version-controlled report paths: the nine JVM
+reports above and the four Android-test reports for `app`, `core:datastore`,
+`core:ui`, and `feature:map` below. A missing report fails the corresponding
+Codecov status rather than silently passing.
+
+The only ignored paths are the version-controlled list in `codecov.yml`:
+test-only `core:data-fake`, debug-only sources, and generated annotation
+processor/Hilt output. No handwritten production source is excluded. Any
+coverage below 100% is therefore reviewable in Codecov as reachable production
+behaviour or as an Android/runtime path covered by the device report; it is not
+hidden by a task-specific exclusion.
+
 ## Android-backed datastore coverage
 
 `AndroidKeystoreEmailCipher` uses the Android Keystore and therefore cannot be
@@ -48,5 +65,7 @@ and the instrumentation result XML is retained beneath
 The debug test APK uses multidex because its Android-test dependency graph
 exceeds the single-dex method limit when coverage instrumentation is enabled.
 This device report is evidence for Android-runtime adapters; it is deliberately
-separate from the reproducible JVM-only `unitTestCoverage` aggregate and its
-Codecov inputs.
+separate from the reproducible JVM-only `unitTestCoverage` aggregate. CI uploads
+its XML together with the `app`, `core:ui`, and `feature:map` Android-test
+reports, so Android-only coverage is part of the same explicit Codecov input
+set.
