@@ -13,6 +13,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import cat.itur.app.core.data.TestFixtures
 import cat.itur.app.core.domain.id.UserId
 import cat.itur.app.core.model.Location
+import cat.itur.app.core.model.ParticipantSignal
 import cat.itur.app.feature.map.config.LocationUpdateConfig
 import cat.itur.app.feature.map.config.MapStyleConfig
 import cat.itur.app.feature.map.notifications.BroadcastNotifier
@@ -25,6 +26,46 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class ParticipantLocationRefreshTest {
+
+    @Test
+    fun observerSessionSeesDelayedHelpAndOkayWithoutEitherGpsFix() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val activities = ScenarioActivityRepository()
+        val locations = ScenarioLocationRepository(activities)
+        val organizerUsers = ScenarioUserRepository().apply { current = registered }
+        val participantUsers = ScenarioUserRepository().apply { current = participant }
+        lateinit var observer: MapViewModel
+        lateinit var sender: MapViewModel
+
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            observer = session(context, activities, organizerUsers, locations, FakeLocationClient())
+            sender = session(context, activities, participantUsers, locations, FakeLocationClient())
+            runBlocking {
+                observer.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+                sender.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+            }
+            observer.startParticipantLocationMonitoring(refreshIntervalMillis = 100L)
+            sender.setParticipantSignal(ParticipantSignal.DELAYED)
+        }
+        awaitSignal(observer, TestFixtures.PARTICIPANT_2_ID, ParticipantSignal.DELAYED)
+
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            sender.setParticipantSignal(ParticipantSignal.NEEDS_HELP)
+        }
+        awaitSignal(observer, TestFixtures.PARTICIPANT_2_ID, ParticipantSignal.NEEDS_HELP)
+
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            sender.setParticipantSignal(null)
+        }
+        awaitSignal(observer, TestFixtures.PARTICIPANT_2_ID, null)
+        assertEquals("No session should need to emit a GPS fix", 0, locations.updateCount.get())
+
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            observer.stopParticipantLocationMonitoring()
+            observer.stopLocationUpdates()
+            sender.stopLocationUpdates()
+        }
+    }
 
     @Test
     fun organizerAndParticipantSessionsObserveLocationsAfterSingleBootstrapReads() {
@@ -133,6 +174,12 @@ class ParticipantLocationRefreshTest {
         assertTrue(message, condition())
     }
 
+    private fun awaitSignal(session: MapViewModel, userId: UserId, expected: ParticipantSignal?) {
+        awaitCondition("Observer did not receive signal $expected for ${userId.value}") {
+            session.participantSignalMap.value[userId] == expected
+        }
+    }
+
     private fun session(
         context: Context,
         activities: ScenarioActivityRepository,
@@ -141,6 +188,7 @@ class ParticipantLocationRefreshTest {
         locationClient: FakeLocationClient,
     ) = MapViewModel(
         activityRepository = activities,
+        participantSignalRepository = activities,
         userRepository = users,
         locationsRepository = locations,
         locationClient = locationClient,

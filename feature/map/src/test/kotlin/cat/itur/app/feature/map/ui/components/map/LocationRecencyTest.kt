@@ -9,12 +9,36 @@ import cat.itur.app.core.domain.id.IturActivityId
 import cat.itur.app.core.domain.id.UserId
 import cat.itur.app.core.model.Location
 import cat.itur.app.core.model.ParticipantLocation
+import cat.itur.app.core.model.ParticipantSignal
 import java.util.Date
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class LocationRecencyTest {
+    @Test
+    fun `accessibility text announces name role and participant signal`() {
+        val now = 50_000L
+        val participant = location(now)
+
+        val description = MapLibreViewInput(
+            styleUrl = "https://example.invalid/style.json",
+            isActivityOngoing = true,
+            activityId = participant.activityId,
+            locationPermissionGranted = true,
+            currentUserId = participant.userId,
+            organizerId = null,
+            participantLocations = listOf(participant),
+            participantSignals = mapOf(participant.userId to ParticipantSignal.NEEDS_HELP),
+        ).accessibilityDescription(
+            nowMillis = now,
+        )
+
+        assertTrue(description.contains(participant.userName))
+        assertTrue(description.contains("self"))
+        assertTrue(description.contains("needs-help"))
+    }
+
     private val now = 100_000L
 
     @Test

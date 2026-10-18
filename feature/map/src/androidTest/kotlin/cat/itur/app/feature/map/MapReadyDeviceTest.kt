@@ -96,6 +96,7 @@ class MapReadyDeviceTest {
                     input = MapLibreViewInput(
                         styleUrl = mapStyleUrl(),
                         isActivityOngoing = false,
+                        activityId = participants(1).single().activityId,
                         locationPermissionGranted = true,
                         currentUserId = null,
                         organizerId = organizerId,
@@ -173,6 +174,7 @@ class MapReadyDeviceTest {
                     input = MapLibreViewInput(
                         styleUrl = mapStyleUrl(),
                         isActivityOngoing = true,
+                        activityId = participants(1).single().activityId,
                         locationPermissionGranted = true,
                         currentUserId = organizerId,
                         organizerId = organizerId,

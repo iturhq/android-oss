@@ -28,6 +28,7 @@ import cat.itur.app.core.domain.id.IturActivityId
 import cat.itur.app.core.domain.id.UserId
 import cat.itur.app.core.domain.model.User
 import cat.itur.app.core.model.ParticipantLocation
+import cat.itur.app.core.model.ParticipantSignal
 import cat.itur.app.feature.map.ui.components.help.HelpAnchorRegistry
 import cat.itur.app.feature.map.ui.components.help.LocalHelpAnchorRegistry
 import org.maplibre.android.maps.MapLibreMap
@@ -46,9 +47,12 @@ internal data class MapPresentation(
     val ongoingActivityId: IturActivityId?,
     val organizerId: UserId?,
     val participantLocations: List<ParticipantLocation>,
+    val participantSignals: Map<UserId, ParticipantSignal>,
     val lastLocation: Location?,
     val latestBroadcastMessage: String?,
     val signInPresentation: SignInFailurePresentation?,
+    val participantSignalState: ParticipantSignalUiState,
+    val participantSignalMessage: String?,
     val authenticationActionsEnabled: Boolean,
     val activityActionsEnabled: Boolean,
 )
@@ -165,9 +169,12 @@ private fun CollectMapPresentation(viewModel: MapViewModel): MapPresentation {
     val ongoingActivityId by viewModel.ongoingActivityId.collectAsState()
     val organizerId by viewModel.organizerId.collectAsState()
     val participantLocations by viewModel.participantLocations.collectAsState()
+    val participantSignals by viewModel.participantSignalMap.collectAsState()
     val lastLocation by viewModel.lastLocation.observeAsState()
     val latestBroadcast by viewModel.latestBroadcast.collectAsState()
     val signInPresentation by viewModel.signInPresentation.collectAsState()
+    val participantSignalState by viewModel.participantSignalState.collectAsState()
+    val participantSignalMessage by viewModel.participantSignalMessage.collectAsState()
     val failingServices = backendAvailability.failingServices.mapTo(mutableSetOf()) { it.id }
 
     return MapPresentation(
@@ -176,9 +183,12 @@ private fun CollectMapPresentation(viewModel: MapViewModel): MapPresentation {
         ongoingActivityId = ongoingActivityId,
         organizerId = organizerId,
         participantLocations = participantLocations,
+        participantSignals = participantSignals,
         lastLocation = lastLocation,
         latestBroadcastMessage = latestBroadcast?.message,
         signInPresentation = signInPresentation,
+        participantSignalState = participantSignalState,
+        participantSignalMessage = participantSignalMessage,
         authenticationActionsEnabled = BackendServiceIds.FIREBASE_AUTH !in failingServices,
         activityActionsEnabled = BackendServiceIds.FIREBASE_FIRESTORE !in failingServices,
     )
