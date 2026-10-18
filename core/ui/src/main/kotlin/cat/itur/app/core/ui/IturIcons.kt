@@ -10,9 +10,11 @@ import androidx.compose.material.icons.automirrored.rounded.Help
 import androidx.compose.material.icons.automirrored.rounded.Login
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Groups2
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Navigation
+import androidx.compose.material.icons.rounded.PauseCircle
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.QrCode
 import androidx.compose.material.icons.rounded.Stop
@@ -35,5 +37,7 @@ object IturIcons {
     val Help = Icons.AutoMirrored.Rounded.Help
 
     val Warning = Icons.Rounded.Warning
+    val Delayed = Icons.Rounded.PauseCircle
+    val Okay = Icons.Rounded.CheckCircle
     val Info = Icons.Rounded.Info
 }

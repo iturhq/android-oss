@@ -15,6 +15,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -30,6 +31,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import cat.itur.app.core.domain.id.IturActivityId
 import cat.itur.app.core.domain.id.UserId
 import cat.itur.app.core.model.ParticipantLocation
 import cat.itur.app.core.model.ParticipantSignal
@@ -85,6 +87,7 @@ internal enum class LocationRecency {
 data class MapLibreViewInput(
     val styleUrl: String,
     val isActivityOngoing: Boolean,
+    val activityId: IturActivityId?,
     val locationPermissionGranted: Boolean,
     val currentUserId: UserId?,
     val organizerId: UserId?,
@@ -107,6 +110,7 @@ private data class MapLocationTrackingState(
     val isDirectionOfTravel: Boolean,
     val locationPermissionGranted: Boolean,
     val currentLocation: Location?,
+    val selfSignal: ParticipantSignal?,
     val styleLoaded: Boolean,
     val map: MapLibreMap?,
     val viewportHeight: Int,
@@ -122,6 +126,7 @@ private data class MapLocationTrackingState(
             isDirectionOfTravel = input.isDirectionOfTravel,
             locationPermissionGranted = input.locationPermissionGranted,
             currentLocation = input.currentLocation,
+            selfSignal = input.currentUserId?.let(input.participantSignals::get),
             styleLoaded = styleLoaded,
             map = map,
             viewportHeight = viewportHeight,
@@ -131,6 +136,7 @@ private data class MapLocationTrackingState(
 
 private data class MapMarkerState(
     val styleLoaded: Boolean,
+    val styleGeneration: Long,
     val map: MapLibreMap?,
     val nowMillis: Long,
     val recencyThresholds: LocationRecencyThresholds,
@@ -158,13 +164,11 @@ fun MapLibreView(
     val mapView = remember { MapViewHost.create(context) }
     var mapLibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
     var styleLoaded by remember { mutableStateOf(false) }
+    var styleGeneration by remember { mutableLongStateOf(0L) }
     var locationComponent by remember { mutableStateOf<LocationComponent?>(null) }
     var mapViewportHeight by remember { mutableStateOf(0) }
-    val accessibilityDescription = input.participantLocations
-        .filter { it.userId != input.currentUserId }
-        .joinToString(", ", prefix = "Participant locations. ") {
-            it.accessibleAge(nowMillis, recencyThresholds)
-        }
+    val remotePointerStore = remember { RemotePointerStore() }
+    val accessibilityDescription = input.accessibilityDescription(nowMillis, recencyThresholds)
     MapViewHost.UpdateRecencyClock { nowMillis = it }
 
     MapRenderingCallbacks(mapView, callbacks.onStyleLoadFailed, callbacks.onStyleLoadSucceeded)
@@ -182,7 +186,10 @@ fun MapLibreView(
         styleUrl = input.styleUrl,
         callbacks = MapStyleCallbacks(
             onMapAvailable = { mapLibreMap = it },
-            onStyleLoaded = { styleLoaded = true },
+            onStyleLoaded = {
+                styleGeneration++
+                styleLoaded = true
+            },
             onMapReady = callbacks.onMapReady,
         ),
     )
@@ -190,12 +197,14 @@ fun MapLibreView(
         input = input,
         state = MapMarkerState(
             styleLoaded = styleLoaded,
+            styleGeneration = styleGeneration,
             map = mapLibreMap,
             nowMillis = nowMillis,
             recencyThresholds = recencyThresholds,
         ),
         mapView = mapView,
         accessibilityDescription = accessibilityDescription,
+        store = remotePointerStore,
     )
 
     MapViewHost.Content(
@@ -282,6 +291,7 @@ private fun MapLocationComponentEffect(
         state.isDirectionOfTravel,
         state.locationPermissionGranted,
         state.currentLocation,
+        state.selfSignal,
         state.styleLoaded,
         state.map,
         state.viewportHeight,
@@ -299,6 +309,18 @@ private fun MapLocationComponentEffect(
             }
             component.isLocationComponentEnabled = state.isActivityOngoing
             if (state.isActivityOngoing) state.currentLocation?.let(component::forceLocationUpdate)
+            val selfPointer = pointerPresentation(
+                role = PointerRole.SELF,
+                signal = state.selfSignal,
+                directional = true,
+            )
+            component.applyStyle(
+                LocationComponentOptions.builder(context)
+                    .foregroundDrawable(selfPointer.drawable)
+                    .foregroundDrawableStale(selfPointer.drawable)
+                    .pulseEnabled(true)
+                    .build(),
+            )
             component.setCameraMode(
                 if (state.isActivityOngoing && state.isDirectionOfTravel) {
                     CameraMode.TRACKING_GPS
@@ -347,7 +369,7 @@ private object MapStyleInitializer {
     }
 
     private fun addMapMarkers(style: Style, context: Context) {
-        PointerRole.entries.forEach { role ->
+        listOf(PointerRole.ORGANIZER, PointerRole.OTHER).forEach { role ->
             listOf(null, ParticipantSignal.DELAYED, ParticipantSignal.NEEDS_HELP).forEach { signal ->
                 listOf(true, false).forEach { directional ->
                     val pointer = pointerPresentation(role, signal, directional)
@@ -401,60 +423,50 @@ private object MapMarkers {
         state: MapMarkerState,
         mapView: MapView,
         accessibilityDescription: String,
+        store: RemotePointerStore,
     ) {
         LaunchedEffect(
+            input.activityId,
+            input.currentUserId,
+            input.organizerId,
             input.participantLocations,
             input.participantSignals,
             state.styleLoaded,
+            state.styleGeneration,
             state.map,
             state.nowMillis,
             state.recencyThresholds,
         ) {
+            val update = store.update(
+                RemotePointerInput(
+                    activityId = input.activityId,
+                    currentUserId = input.currentUserId,
+                    organizerId = input.organizerId,
+                    locations = input.participantLocations,
+                    signals = input.participantSignals,
+                    styleGeneration = state.styleGeneration,
+                    nowMillis = state.nowMillis,
+                    recencyThresholds = state.recencyThresholds,
+                ),
+            )
             state.map?.style?.takeIf { state.styleLoaded }?.let { style ->
-                if (updateOrganizerMarker(style, input, state)) {
-                    updateParticipantMarkers(style, input, state)
-                }
+                style.applyRemotePointerUpdate(update)
             }
             mapView.contentDescription = accessibilityDescription
         }
     }
 
-    private fun updateOrganizerMarker(style: Style, input: MapLibreViewInput, state: MapMarkerState): Boolean {
-        val source = style.getSourceAs<GeoJsonSource>(ORGANIZER_SOURCE) ?: return false
-        Log.d("MapLibreView", "Updating organiser feature collection")
-        input.participantLocations.firstOrNull { it.userId == input.organizerId }?.let { organizerLocation ->
-            source.setGeoJson(
-                FeatureCollection.fromFeature(
-                    remotePointerFeature(
-                        participantLocation = organizerLocation,
-                        role = PointerRole.ORGANIZER,
-                        signal = input.participantSignals[organizerLocation.userId],
-                        opacity = organizerLocation.markerOpacity(state.nowMillis, state.recencyThresholds),
-                        nowMillis = state.nowMillis,
-                    ),
-                ),
+    private fun Style.applyRemotePointerUpdate(update: RemotePointerUpdate) {
+        update.organizerFeatures?.let { features ->
+            Log.d("MapLibreView", "Updating organiser feature collection")
+            getSourceAs<GeoJsonSource>(ORGANIZER_SOURCE)?.setGeoJson(
+                FeatureCollection.fromFeatures(features),
             )
         }
-        return true
-    }
-
-    private fun updateParticipantMarkers(style: Style, input: MapLibreViewInput, state: MapMarkerState) {
-        style.getSourceAs<GeoJsonSource>(PARTICIPANT_SOURCE)?.let { source ->
+        update.participantFeatures?.let { features ->
             Log.d("MapLibreView", "Updating participant feature collection")
-            source.setGeoJson(
-                FeatureCollection.fromFeatures(
-                    input.participantLocations
-                        .filter { it.userId != input.organizerId && it.userId != input.currentUserId }
-                        .map { location ->
-                            remotePointerFeature(
-                                participantLocation = location,
-                                role = PointerRole.OTHER,
-                                signal = input.participantSignals[location.userId],
-                                opacity = location.markerOpacity(state.nowMillis, state.recencyThresholds),
-                                nowMillis = state.nowMillis,
-                            )
-                        },
-                ),
+            getSourceAs<GeoJsonSource>(PARTICIPANT_SOURCE)?.setGeoJson(
+                FeatureCollection.fromFeatures(features),
             )
         }
     }
@@ -523,7 +535,7 @@ internal fun ParticipantLocation.accessibleAge(
     }
 }
 
-private fun ParticipantLocation.markerOpacity(
+internal fun ParticipantLocation.markerOpacity(
     nowMillis: Long,
     thresholds: LocationRecencyThresholds,
 ): Float = when (recency(nowMillis, thresholds)) {

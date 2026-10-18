@@ -88,6 +88,13 @@ private val PARTICIPANT_ACTIVITY = TestFixtures.ongoingActivity.copy(
     participantIds = emptyList(),
 )
 
+private fun emptyLocations(id: IturActivityId): LocationRepository = mockk<LocationRepository>().also { repository ->
+    coEvery { repository.getForActivity(id) } returns emptyList()
+    every { repository.observeForActivity(id) } returns
+        MutableStateFlow(emptyList())
+    coEvery { repository.reconcileObservation(any()) } returns Unit
+}
+
 // A generous threshold (~111m) for distinguishing an unchanged stored location (which only
 // moves by FakeLocationRepository's small "GPS noise" jitter, a few meters) from a location
 // regenerated from scratch after removal (which lands near a different, unrelated fallback).
@@ -131,8 +138,12 @@ class MapViewModelTest {
         userRepo: UserRepository = userRepo(),
         healthChecks: Set<BackendHealthCheck> = emptySet(),
         locationRepo: LocationRepository = locationRepo(activityRepo),
+        participantSignalRepo: ParticipantSignalRepository =
+            (activityRepo as? FakeActivityRepository)?.participantSignalRepository
+                ?: mockk(relaxed = true),
     ) = MapViewModel(
         activityRepository = activityRepo,
+        participantSignalRepository = participantSignalRepo,
         userRepository = userRepo,
         locationsRepository = locationRepo,
         locationClient = locationClient,
@@ -504,7 +515,10 @@ class MapViewModelTest {
 
     @Test
     fun `GIVEN no local GPS fix WHEN a participant snapshot arrives THEN markers refresh immediately`() = runTest {
-        val activityRepo = activityRepo(TestFixtures.ongoingActivity)
+        val seededActivity = TestFixtures.ongoingActivity.copy(
+            participantSignals = mapOf(TestFixtures.PARTICIPANT_2_ID to ParticipantSignal.DELAYED),
+        )
+        val activityRepo = activityRepo(seededActivity)
         val initialLocations = TestFixtures.ongoingActivityLocations
         val refreshedLocations = initialLocations.dropLast(1)
         val locationSnapshots = MutableStateFlow(initialLocations)
@@ -522,6 +536,13 @@ class MapViewModelTest {
         runCurrent()
         vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
         assertEquals(initialLocations, vm.participantLocations.value)
+        assertEquals(seededActivity.participantSignals, vm.participantSignalMap.value)
+
+        activityRepo.participantSignalRepository.setParticipantSignal(
+            TestFixtures.ONGOING_ACTIVITY_ID,
+            TestFixtures.PARTICIPANT_2_ID,
+            ParticipantSignal.NEEDS_HELP,
+        )
 
         vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
         try {
@@ -537,6 +558,10 @@ class MapViewModelTest {
             advanceTimeBy(2L)
             runCurrent()
             assertEquals(refreshedLocations, vm.participantLocations.value)
+            assertEquals(
+                mapOf(TestFixtures.PARTICIPANT_2_ID to ParticipantSignal.NEEDS_HELP),
+                vm.participantSignalMap.value,
+            )
             coVerify(exactly = 0) {
                 locationRepo.updateForParticipant(
                     TestFixtures.ORGANIZER_ID,
@@ -616,6 +641,41 @@ class MapViewModelTest {
     }
 
     @Test
+    fun `GIVEN stale signals WHEN membership refreshes THEN only current participants remain`() = runTest {
+        val retainedParticipantId = TestFixtures.PARTICIPANT_1_ID
+        val departingParticipantId = TestFixtures.PARTICIPANT_2_ID
+        val unrelatedId = UserId("unrelated-user")
+        val activity = TestFixtures.ongoingActivity.copy(
+            participantIds = listOf(retainedParticipantId, departingParticipantId),
+            participantSignals = mapOf(
+                retainedParticipantId to ParticipantSignal.DELAYED,
+                departingParticipantId to ParticipantSignal.NEEDS_HELP,
+                unrelatedId to ParticipantSignal.NEEDS_HELP,
+            ),
+        )
+        val activityRepo = activityRepo(activity)
+        val locationRepo = ControlledParticipantLocationRepository { _, _ -> emptyList() }
+        val vm = viewModel(activityRepo = activityRepo, locationRepo = locationRepo)
+
+        vm.triggerOngoingState(activity.id, context)
+        assertEquals(
+            setOf(retainedParticipantId, departingParticipantId),
+            vm.participantSignalMap.value.keys,
+        )
+
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        try {
+            activityRepo.removeParticipant(activity.id, departingParticipantId)
+            advanceTimeBy(1_001L)
+            runCurrent()
+
+            assertEquals(setOf(retainedParticipantId), vm.participantSignalMap.value.keys)
+        } finally {
+            vm.stopParticipantLocationMonitoring()
+        }
+    }
+
+    @Test
     fun `GIVEN participant monitoring is already active WHEN started again THEN only one refresh loop runs`() = runTest {
         val initialLocations = TestFixtures.ongoingActivityLocations
         val locationRepo = mockk<LocationRepository>()
@@ -686,7 +746,7 @@ class MapViewModelTest {
     }
 
     @Test
-    fun `GIVEN a participant refresh is in flight WHEN activity becomes idle THEN stale locations are not restored`() = runTest {
+    fun `GIVEN a participant refresh is in flight WHEN activity becomes idle THEN stale map state is not restored`() = runTest {
         val initialLocations = TestFixtures.ongoingActivityLocations
         val staleLocations = initialLocations.dropLast(1)
         val refreshStarted = CompletableDeferred<Unit>()
@@ -700,7 +760,13 @@ class MapViewModelTest {
             emit(staleLocations)
         }
         val vm = viewModel(
-            activityRepo = activityRepo(TestFixtures.ongoingActivity),
+            activityRepo = activityRepo(
+                TestFixtures.ongoingActivity.copy(
+                    participantSignals = mapOf(
+                        TestFixtures.PARTICIPANT_2_ID to ParticipantSignal.DELAYED,
+                    ),
+                ),
+            ),
             locationRepo = locationRepo,
         )
         vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
@@ -714,9 +780,117 @@ class MapViewModelTest {
             runCurrent()
 
             assertTrue(vm.participantLocations.value.isEmpty())
+            assertTrue(vm.participantSignalMap.value.isEmpty())
+            assertNull(vm.organizerId.value)
         } finally {
             vm.stopParticipantLocationMonitoring()
         }
+    }
+
+    @Test
+    fun `GIVEN signal refresh fails WHEN cadence elapses THEN last confirmed signals remain`() = runTest {
+        val seeded = TestFixtures.ongoingActivity.copy(
+            participantSignals = mapOf(TestFixtures.PARTICIPANT_2_ID to ParticipantSignal.DELAYED),
+        )
+        val activityRepo = mockk<ActivityRepository>(relaxed = true)
+        coEvery { activityRepo.getActivity(seeded.id) } returns
+            DataResult.Success(seeded) andThen DataResult.Error("offline")
+        val locationRepo = mockk<LocationRepository>()
+        coEvery { locationRepo.getForActivity(seeded.id) } returns TestFixtures.ongoingActivityLocations
+        every { locationRepo.observeForActivity(seeded.id) } returns
+            MutableStateFlow(TestFixtures.ongoingActivityLocations)
+        coEvery { locationRepo.reconcileObservation(any()) } returns Unit
+        val vm = viewModel(activityRepo = activityRepo, locationRepo = locationRepo)
+        vm.triggerOngoingState(seeded.id, context)
+
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        advanceTimeBy(1_001L)
+        runCurrent()
+        vm.stopParticipantLocationMonitoring()
+
+        assertEquals(seeded.participantSignals, vm.participantSignalMap.value)
+    }
+
+    @Test
+    fun `GIVEN old activity refresh is in flight WHEN activity switches THEN old signals cannot leak`() = runTest {
+        val activityA = TestFixtures.ongoingActivity.copy(
+            participantSignals = mapOf(TestFixtures.PARTICIPANT_2_ID to ParticipantSignal.DELAYED),
+        )
+        val activityB = activityA.copy(
+            id = IturActivityId("switchActivity000001"),
+            participantSignals = mapOf(TestFixtures.PARTICIPANT_2_ID to ParticipantSignal.NEEDS_HELP),
+        )
+        val refreshStarted = CompletableDeferred<Unit>()
+        val releaseRefresh = CompletableDeferred<Unit>()
+        var readsA = 0
+        val activityRepo = mockk<ActivityRepository>(relaxed = true)
+        coEvery { activityRepo.getActivity(activityA.id) } coAnswers {
+            if (readsA++ == 0) {
+                DataResult.Success(activityA)
+            } else {
+                refreshStarted.complete(Unit)
+                releaseRefresh.await()
+                DataResult.Success(activityA)
+            }
+        }
+        coEvery { activityRepo.getActivity(activityB.id) } returns DataResult.Success(activityB)
+        val locationRepo = mockk<LocationRepository>()
+        coEvery { locationRepo.getForActivity(activityA.id) } returns TestFixtures.ongoingActivityLocations
+        coEvery { locationRepo.getForActivity(activityB.id) } returns TestFixtures.ongoingActivityLocations
+        every { locationRepo.observeForActivity(activityA.id) } returns
+            MutableStateFlow(TestFixtures.ongoingActivityLocations)
+        every { locationRepo.observeForActivity(activityB.id) } returns
+            MutableStateFlow(TestFixtures.ongoingActivityLocations)
+        coEvery { locationRepo.reconcileObservation(any()) } returns Unit
+        val vm = viewModel(activityRepo = activityRepo, locationRepo = locationRepo)
+        vm.triggerOngoingState(activityA.id, context)
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        advanceTimeBy(1_001L)
+        runCurrent()
+        refreshStarted.await()
+
+        vm.triggerOngoingState(activityB.id, context)
+        releaseRefresh.complete(Unit)
+        runCurrent()
+        vm.stopParticipantLocationMonitoring()
+
+        assertEquals(activityB.id, vm.ongoingActivityId.value)
+        assertEquals(activityB.participantSignals, vm.participantSignalMap.value)
+    }
+
+    @Test
+    fun `GIVEN signal refresh is suspended WHEN monitoring stops THEN refresh is cancelled`() = runTest {
+        var cancellationObserved = false
+        var reads = 0
+        val activityRepo = mockk<ActivityRepository>(relaxed = true)
+        coEvery { activityRepo.getActivity(TestFixtures.ONGOING_ACTIVITY_ID) } coAnswers {
+            if (reads++ == 0) {
+                DataResult.Success(TestFixtures.ongoingActivity)
+            } else {
+                try {
+                    kotlinx.coroutines.awaitCancellation()
+                } finally {
+                    cancellationObserved = true
+                }
+            }
+        }
+        val locationRepo = mockk<LocationRepository>()
+        coEvery { locationRepo.getForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns
+            TestFixtures.ongoingActivityLocations
+        every { locationRepo.observeForActivity(TestFixtures.ONGOING_ACTIVITY_ID) } returns
+            MutableStateFlow(TestFixtures.ongoingActivityLocations)
+        coEvery { locationRepo.reconcileObservation(any()) } returns Unit
+        val vm = viewModel(activityRepo = activityRepo, locationRepo = locationRepo)
+        vm.triggerOngoingState(TestFixtures.ONGOING_ACTIVITY_ID, context)
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        advanceTimeBy(1_001L)
+        runCurrent()
+
+        vm.stopParticipantLocationMonitoring()
+        runCurrent()
+
+        assertTrue(cancellationObserved)
+        assertEquals(TestFixtures.ongoingActivity.participantSignals, vm.participantSignalMap.value)
     }
 
     @Test
@@ -1202,7 +1376,7 @@ class MapViewModelTest {
         }
     }
 
-    // --- requestAttention ---
+    // --- participant signals ---
 
     @Test
     fun `GIVEN no ongoing activity WHEN requesting attention THEN uiState remains Idle`() {
@@ -1220,6 +1394,320 @@ class MapViewModelTest {
             vm.startActivity(context)
             vm.requestAttention()
         }
+    }
+
+    @Test
+    fun `participant can report delayed escalate to help and clear confirmed state`() = runTest {
+        val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
+        val vm = viewModel(activityRepo = activityRepo)
+        vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+        assertEquals(ParticipantSignal.DELAYED, vm.participantSignalState.value.confirmed)
+
+        vm.setParticipantSignal(ParticipantSignal.NEEDS_HELP)
+        runCurrent()
+        assertEquals(ParticipantSignal.NEEDS_HELP, vm.participantSignalState.value.confirmed)
+
+        vm.setParticipantSignal(null)
+        runCurrent()
+        assertEquals(ParticipantSignalUiState(), vm.participantSignalState.value)
+    }
+
+    @Test
+    fun `persisted participant signal is restored when activity is recreated`() = runTest {
+        val currentUserId = UserId("1")
+        val stored = PARTICIPANT_ACTIVITY.copy(
+            participantIds = listOf(currentUserId),
+            participantSignals = mapOf(currentUserId to ParticipantSignal.DELAYED),
+        )
+        val vm = viewModel(activityRepo = activityRepo(stored))
+
+        vm.triggerOngoingState(stored.id, context)
+
+        assertEquals(ParticipantSignal.DELAYED, vm.participantSignalState.value.confirmed)
+    }
+
+    @Test
+    fun `duplicate delayed taps issue one write while the first is in flight`() = runTest {
+        val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
+        val signalRepo = mockk<ParticipantSignalRepository>()
+        val completion = CompletableDeferred<DataResult<IturActivity>>()
+        coEvery {
+            signalRepo.setParticipantSignal(
+                PARTICIPANT_ACTIVITY.id,
+                UserId("1"),
+                ParticipantSignal.DELAYED,
+            )
+        } coAnswers { completion.await() }
+        val vm = viewModel(activityRepo = activityRepo, participantSignalRepo = signalRepo)
+        vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+
+        coVerify(exactly = 1) {
+            signalRepo.setParticipantSignal(
+                PARTICIPANT_ACTIVITY.id,
+                UserId("1"),
+                ParticipantSignal.DELAYED,
+            )
+        }
+        assertEquals(
+            ParticipantSignalAction.REPORT_DELAYED,
+            vm.participantSignalState.value.inFlight,
+        )
+        completion.complete(
+            DataResult.Success(
+                PARTICIPANT_ACTIVITY.copy(
+                    participantIds = listOf(UserId("1")),
+                    participantSignals = mapOf(UserId("1") to ParticipantSignal.DELAYED),
+                ),
+            ),
+        )
+        runCurrent()
+        assertEquals(ParticipantSignal.DELAYED, vm.participantSignalState.value.confirmed)
+    }
+
+    @Test
+    fun `cadence refresh cannot reset an in-flight write or revert its result`() = runTest {
+        val currentUserId = UserId("1")
+        val initial = PARTICIPANT_ACTIVITY.copy(participantIds = listOf(currentUserId))
+        val updated = initial.copy(
+            participantSignals = mapOf(currentUserId to ParticipantSignal.DELAYED),
+        )
+        val refreshStarted = CompletableDeferred<Unit>()
+        val releaseRefresh = CompletableDeferred<Unit>()
+        var activityReads = 0
+        val activityRepo = mockk<ActivityRepository>(relaxed = true)
+        coEvery { activityRepo.getActivity(initial.id) } coAnswers {
+            if (activityReads++ == 0) {
+                DataResult.Success(initial)
+            } else {
+                refreshStarted.complete(Unit)
+                releaseRefresh.await()
+                DataResult.Success(initial)
+            }
+        }
+        val locationRepo = emptyLocations(initial.id)
+        val signalRepo = mockk<ParticipantSignalRepository>()
+        val writeCompletion = CompletableDeferred<DataResult<IturActivity>>()
+        coEvery {
+            signalRepo.setParticipantSignal(initial.id, currentUserId, ParticipantSignal.DELAYED)
+        } coAnswers { writeCompletion.await() }
+        val vm = viewModel(
+            activityRepo = activityRepo,
+            locationRepo = locationRepo,
+            participantSignalRepo = signalRepo,
+        )
+        vm.triggerOngoingState(initial.id, context)
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        try {
+            advanceTimeBy(1_001L)
+            runCurrent()
+            refreshStarted.await()
+            assertEquals(
+                ParticipantSignalAction.REPORT_DELAYED,
+                vm.participantSignalState.value.inFlight,
+            )
+
+            writeCompletion.complete(DataResult.Success(updated))
+            runCurrent()
+            releaseRefresh.complete(Unit)
+            runCurrent()
+
+            assertEquals(ParticipantSignal.DELAYED, vm.participantSignalState.value.confirmed)
+            assertEquals(ParticipantSignal.DELAYED, vm.participantSignalMap.value[currentUserId])
+            vm.setParticipantSignal(ParticipantSignal.DELAYED)
+            runCurrent()
+            coVerify(exactly = 1) {
+                signalRepo.setParticipantSignal(initial.id, currentUserId, ParticipantSignal.DELAYED)
+            }
+        } finally {
+            releaseRefresh.complete(Unit)
+            vm.stopParticipantLocationMonitoring()
+        }
+    }
+
+    @Test
+    fun `cadence refresh preserves a signal write failure message`() = runTest {
+        val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
+        val signalRepo = mockk<ParticipantSignalRepository>()
+        coEvery {
+            signalRepo.setParticipantSignal(
+                PARTICIPANT_ACTIVITY.id,
+                UserId("1"),
+                ParticipantSignal.DELAYED,
+            )
+        } returns DataResult.Error("offline")
+        val vm = viewModel(activityRepo = activityRepo, participantSignalRepo = signalRepo)
+        vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+        val message = vm.participantSignalMessage.value
+
+        vm.startParticipantLocationMonitoring(refreshIntervalMillis = 1_000L)
+        try {
+            advanceTimeBy(1_001L)
+            runCurrent()
+
+            assertEquals(message, vm.participantSignalMessage.value)
+        } finally {
+            vm.stopParticipantLocationMonitoring()
+        }
+    }
+
+    @Test
+    fun `failed signal write restores controls and permits retry without leaving ongoing state`() = runTest {
+        val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
+        val signalRepo = mockk<ParticipantSignalRepository>()
+        coEvery {
+            signalRepo.setParticipantSignal(
+                PARTICIPANT_ACTIVITY.id,
+                UserId("1"),
+                ParticipantSignal.DELAYED,
+            )
+        } returnsMany listOf(
+            DataResult.Error("offline"),
+            DataResult.Success(
+                PARTICIPANT_ACTIVITY.copy(
+                    participantIds = listOf(UserId("1")),
+                    participantSignals = mapOf(UserId("1") to ParticipantSignal.DELAYED),
+                ),
+            ),
+        )
+        val vm = viewModel(activityRepo = activityRepo, participantSignalRepo = signalRepo)
+        vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+        assertEquals(ParticipantSignalUiState(), vm.participantSignalState.value)
+        assertTrue(vm.participantSignalMessage.value!!.contains("try again", ignoreCase = true))
+        assertIs<MapUiState.Ongoing>(vm.uiState.value)
+
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+        assertEquals(ParticipantSignal.DELAYED, vm.participantSignalState.value.confirmed)
+        coVerify(exactly = 2) {
+            signalRepo.setParticipantSignal(
+                PARTICIPANT_ACTIVITY.id,
+                UserId("1"),
+                ParticipantSignal.DELAYED,
+            )
+        }
+    }
+
+    @Test
+    fun `thrown signal write failure restores controls and permits retry`() = runTest {
+        val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
+        val signalRepo = mockk<ParticipantSignalRepository>()
+        var attempt = 0
+        coEvery {
+            signalRepo.setParticipantSignal(
+                PARTICIPANT_ACTIVITY.id,
+                UserId("1"),
+                ParticipantSignal.DELAYED,
+            )
+        } coAnswers {
+            attempt += 1
+            if (attempt == 1) {
+                error("offline")
+            }
+            DataResult.Success(
+                PARTICIPANT_ACTIVITY.copy(
+                    participantIds = listOf(UserId("1")),
+                    participantSignals = mapOf(UserId("1") to ParticipantSignal.DELAYED),
+                ),
+            )
+        }
+        val vm = viewModel(activityRepo = activityRepo, participantSignalRepo = signalRepo)
+        vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+        assertEquals(ParticipantSignalUiState(), vm.participantSignalState.value)
+        assertTrue(vm.participantSignalMessage.value!!.contains("try again", ignoreCase = true))
+        assertIs<MapUiState.Ongoing>(vm.uiState.value)
+
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+        assertEquals(ParticipantSignal.DELAYED, vm.participantSignalState.value.confirmed)
+        coVerify(exactly = 2) {
+            signalRepo.setParticipantSignal(
+                PARTICIPANT_ACTIVITY.id,
+                UserId("1"),
+                ParticipantSignal.DELAYED,
+            )
+        }
+    }
+
+    @Test
+    fun `organizer cannot issue participant signal writes`() = runTest {
+        val activityRepo = activityRepo()
+        val signalRepo = RecordingParticipantSignalRepository()
+        val vm = viewModel(activityRepo = activityRepo, participantSignalRepo = signalRepo)
+        vm.startActivity(context)
+
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        vm.setParticipantSignal(ParticipantSignal.NEEDS_HELP)
+        runCurrent()
+
+        assertEquals(0, signalRepo.writeCount)
+    }
+
+    @Test
+    fun `stale signal response cannot restore a departed activity`() = runTest {
+        val activityRepo = activityRepo(PARTICIPANT_ACTIVITY)
+        val signalRepo = mockk<ParticipantSignalRepository>()
+        val completion = CompletableDeferred<DataResult<IturActivity>>()
+        coEvery {
+            signalRepo.setParticipantSignal(
+                PARTICIPANT_ACTIVITY.id,
+                UserId("1"),
+                ParticipantSignal.DELAYED,
+            )
+        } coAnswers { completion.await() }
+        val vm = viewModel(activityRepo = activityRepo, participantSignalRepo = signalRepo)
+        vm.joinActivity(PARTICIPANT_ACTIVITY.id, context)
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+
+        vm.triggerIdleState()
+        completion.complete(
+            DataResult.Success(
+                PARTICIPANT_ACTIVITY.copy(
+                    participantSignals = mapOf(UserId("1") to ParticipantSignal.DELAYED),
+                ),
+            ),
+        )
+        runCurrent()
+
+        assertIs<MapUiState.Idle>(vm.uiState.value)
+        assertNull(vm.ongoingActivityId.value)
+        assertEquals(ParticipantSignalUiState(), vm.participantSignalState.value)
+    }
+
+    @Test
+    fun `red signal rejects downgrade and only permits clear`() = runTest {
+        val currentUserId = UserId("1")
+        val stored = PARTICIPANT_ACTIVITY.copy(
+            participantIds = listOf(currentUserId),
+            participantSignals = mapOf(currentUserId to ParticipantSignal.NEEDS_HELP),
+        )
+        val activityRepo = activityRepo(stored)
+        val signalRepo = RecordingParticipantSignalRepository()
+        val vm = viewModel(activityRepo = activityRepo, participantSignalRepo = signalRepo)
+        vm.triggerOngoingState(stored.id, context)
+
+        vm.setParticipantSignal(ParticipantSignal.DELAYED)
+        runCurrent()
+
+        assertEquals(0, signalRepo.writeCount)
+        assertEquals(ParticipantSignal.NEEDS_HELP, vm.participantSignalState.value.confirmed)
     }
 
     // --- pollBroadcastsOnce (UC-ACTIVITY-007) ---
@@ -1555,6 +2043,7 @@ class MapViewModelTest {
             activityRepo = activityRepo,
             userRepo = userRepo,
             healthChecks = setOf(firestore),
+            participantSignalRepo = activityRepo as ParticipantSignalRepository,
         )
         vm.joinActivity(TestFixtures.ONGOING_ACTIVITY_ID, context)
         assertIs<MapUiState.Ongoing>(vm.uiState.value)
@@ -1563,7 +2052,8 @@ class MapViewModelTest {
         runCurrent()
 
         assertEquals(listOf(firestore.service), vm.backendAvailability.value.failingServices)
-        assertIs<MapUiState.RecoverableError>(vm.uiState.value)
+        assertIs<MapUiState.Ongoing>(vm.uiState.value)
+        assertNotNull(vm.participantSignalMessage.value)
     }
 
     @Test
@@ -1668,6 +2158,27 @@ class MapViewModelTest {
             val state = assertIs<MapUiState.Error>(vm.uiState.value)
             assertEquals("quota exceeded", state.message)
         }
+    }
+}
+
+private class RecordingParticipantSignalRepository : ParticipantSignalRepository {
+    var writeCount = 0
+
+    override suspend fun setParticipantSignal(
+        activityId: IturActivityId,
+        userId: UserId,
+        signal: ParticipantSignal,
+    ): DataResult<IturActivity> {
+        writeCount++
+        return DataResult.Error("Unexpected signal write")
+    }
+
+    override suspend fun clearParticipantSignal(
+        activityId: IturActivityId,
+        userId: UserId,
+    ): DataResult<IturActivity> {
+        writeCount++
+        return DataResult.Error("Unexpected signal clear")
     }
 }
 

@@ -116,15 +116,13 @@ private fun MapReadyContent(
             input = MapLibreViewInput(
                 styleUrl = viewModel.mapStyleConfig.styleUrl,
                 isActivityOngoing = presentation.ongoingActivityId != null,
+                activityId = presentation.ongoingActivityId,
                 locationPermissionGranted = interaction.locationPermissionGranted,
                 organizerId = presentation.organizerId,
                 currentUserId = presentation.currentUser?.id,
                 currentLocation = presentation.lastLocation,
                 participantLocations = presentation.participantLocations,
-                participantSignals = (presentation.uiState as? MapUiState.Ongoing)
-                    ?.activity
-                    ?.participantSignals
-                    .orEmpty(),
+                participantSignals = presentation.participantSignals,
                 isDirectionOfTravel = presentation.ongoingActivityId != null &&
                     interaction.isDirectionOfTravel,
             ),
@@ -273,7 +271,8 @@ private fun OngoingControls(
         ),
         presentation = OngoingState(
             isOrganizer = isOrganizer,
-            selfSignal = presentation.currentUser?.id?.let(ongoingUiState.activity.participantSignals::get),
+            selfSignal = presentation.participantSignalState.confirmed,
+            participantSignalUpdateInFlight = presentation.participantSignalState.inFlight != null,
             selfLocationAvailable = interaction.locationPermissionGranted,
             activityActionsEnabled = presentation.activityActionsEnabled,
             isDirectionOfTravel = interaction.isDirectionOfTravel,

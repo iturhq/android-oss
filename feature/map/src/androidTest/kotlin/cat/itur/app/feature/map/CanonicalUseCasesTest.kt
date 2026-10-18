@@ -16,6 +16,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -588,7 +589,7 @@ class CanonicalUseCasesTest {
         activities.signalFailure = IllegalStateException("offline")
 
         composeRule.onNodeWithTag("safety_delayed_fab").performClick()
-        waitForText("Safety status could not be updated.")
+        waitForText("Your safety status could not be updated. Please try again. offline")
         assertEquals(
             null,
             activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)
@@ -596,7 +597,7 @@ class CanonicalUseCasesTest {
                 ?.get(users.anonymous.id),
         )
         activities.signalFailure = null
-        composeRule.onNodeWithText("Try again").performClick()
+        composeRule.onNodeWithTag("safety_delayed_fab").assertIsEnabled().performClick()
         composeRule.waitUntil {
             activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)
                 ?.participantSignals
@@ -618,7 +619,10 @@ class CanonicalUseCasesTest {
         )
 
         composeRule.onNodeWithTag("safety_delayed_fab").performClick()
-        waitForText("Safety status could not be updated.")
+        waitForText(
+            "Your safety status could not be updated. Please try again. " +
+                "Only a current participant can change their safety signal",
+        )
         assertEquals(
             null,
             activities.activity(TestFixtures.ONGOING_ACTIVITY_ID)
@@ -649,16 +653,15 @@ class CanonicalUseCasesTest {
             TestFixtures.ONGOING_ACTIVITY_ID,
             Broadcast("retry", "The route has changed", Date()),
         )
-        activities.broadcastFailure = IllegalStateException("temporarily offline")
+        activities.broadcastFailuresRemaining = 1
         launch(
             scanCode = TestFixtures.ONGOING_ACTIVITY_ID.url,
             broadcastPollIntervalMillis = 25L,
         )
         joinAsParticipant()
-        composeRule.waitUntil { activities.broadcastReadCount.get() > 0 }
+        composeRule.waitUntil { activities.broadcastReadCount.get() >= 2 }
         composeRule.onNodeWithText("Safety status could not be updated.").assertDoesNotExist()
 
-        activities.broadcastFailure = null
         waitForText("Alert: The route has changed")
     }
 
@@ -807,6 +810,7 @@ class CanonicalUseCasesTest {
         composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
 
         composeRule.onNodeWithTag("stop_activity_fab").performClick()
+        composeRule.onNodeWithTag("confirm_stop_activity").performClick()
         waitForTag("join_activity_fab")
         composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
     }
@@ -818,14 +822,17 @@ class CanonicalUseCasesTest {
         launch(
             initialTag = "hail_organiser_fab",
             recencyThresholds = LocationRecencyThresholds(
-                agingAfterMillis = 3_000L,
-                staleAfterMillis = 5_000L,
+                // API 29 may take several seconds to initialise MapLibre before the
+                // first semantics assertion. Keep the fixture current long enough
+                // to observe that state, then exercise the real clock transition.
+                agingAfterMillis = 15_000L,
+                staleAfterMillis = 20_000L,
             ),
         )
 
         composeRule.onNodeWithContentDescription("location is current", substring = true)
             .assertExists()
-        composeRule.waitUntil(timeoutMillis = 8_000L) {
+        composeRule.waitUntil(timeoutMillis = 25_000L) {
             composeRule.onAllNodesWithContentDescription(
                 "location is stale",
                 substring = true,
