@@ -2159,6 +2159,119 @@ class MapViewModelTest {
             assertEquals("quota exceeded", state.message)
         }
     }
+
+    @Test
+    fun `GIVEN activity creation returns not found WHEN starting THEN the missing activity is shown`() = runTest {
+        val activityRepo = mockk<ActivityRepository>()
+        coEvery { activityRepo.getActivities(any()) } returns DataResult.Success(emptyList())
+        coEvery { activityRepo.getActiveActivityId(any()) } returns DataResult.Success(null)
+        coEvery { activityRepo.createActivity(TestFixtures.ORGANIZER_ID) } returns
+            DataResult.NotFound("created-activity")
+
+        val vm = viewModel(activityRepo = activityRepo)
+        vm.startActivity(context)
+        runCurrent()
+
+        assertEquals("Activity created-activity not found", assertIs<MapUiState.Error>(vm.uiState.value).message)
+    }
+
+    @Test
+    fun `GIVEN activity creation throws WHEN starting THEN the failure is shown`() = runTest {
+        val activityRepo = mockk<ActivityRepository>()
+        coEvery { activityRepo.getActivities(any()) } returns DataResult.Success(emptyList())
+        coEvery { activityRepo.getActiveActivityId(any()) } returns DataResult.Success(null)
+        coEvery { activityRepo.createActivity(TestFixtures.ORGANIZER_ID) } throws
+            IllegalStateException("create failed")
+
+        val vm = viewModel(activityRepo = activityRepo)
+        vm.startActivity(context)
+        runCurrent()
+
+        assertEquals("create failed", assertIs<MapUiState.Error>(vm.uiState.value).message)
+    }
+
+    @Test
+    fun `GIVEN sign-in fails WHEN dismissing its presentation THEN it clears`() = runTest {
+        val vm = viewModel(
+            userRepo = ScriptedSignInUserRepository(
+                SignInResult.Failure(SignInFailureReason.UNEXPECTED),
+            ),
+        )
+        vm.signIn(context)
+        assertNotNull(vm.signInPresentation.value).onDismiss()
+        assertNull(vm.signInPresentation.value)
+    }
+
+    @Test
+    fun `GIVEN sign-out fails WHEN signing out THEN backend failure is retained`() = runTest {
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        coEvery { userRepo.getCurrentUser() } returns User.RegisteredUser(UserId("1"), "User", "u@example.com")
+        coEvery { userRepo.signOut() } throws IllegalStateException("sign-out failed")
+        val vm = viewModel(userRepo = userRepo)
+        runCurrent()
+
+        vm.signOut()
+        runCurrent()
+
+        assertIs<MapUiState.Idle>(vm.uiState.value)
+    }
+
+    @Test
+    fun `GIVEN joining throws WHEN joining an activity THEN an error state is shown`() = runTest {
+        val activityRepo = mockk<ActivityRepository>()
+        coEvery { activityRepo.getActivities(any()) } returns DataResult.Success(emptyList())
+        coEvery { activityRepo.getActiveActivityId(any()) } returns DataResult.Success(null)
+        coEvery {
+            activityRepo.addParticipant(TestFixtures.ONGOING_ACTIVITY_ID, UserId("2"))
+        } throws IllegalStateException("join failed")
+        val vm = viewModel(activityRepo = activityRepo)
+        vm.signIn(context)
+
+        vm.joinActivity(TestFixtures.ONGOING_ACTIVITY_ID, context)
+        runCurrent()
+
+        assertEquals(
+            "Failed to join activity ${TestFixtures.ONGOING_ACTIVITY_ID}",
+            assertIs<MapUiState.Error>(vm.uiState.value).message,
+        )
+    }
+
+    @Test
+    fun `backend monitoring and map style success use the shared coordinator`() = runTest {
+        val vm = viewModel()
+
+        vm.reportMapStyleLoadSucceeded()
+        vm.startBackendMonitoring()
+        vm.stopBackendMonitoring()
+        vm.refreshBackendHealth()
+
+        assertEquals(BackendAvailabilityUiState(), vm.backendAvailability.value)
+    }
+
+    @Test
+    fun `GIVEN activity finish is not found WHEN leaving THEN a recoverable error is exposed`() = runTest {
+        val activityRepo = mockk<ActivityRepository>()
+        coEvery { activityRepo.getActivities(any()) } returns DataResult.Success(emptyList())
+        coEvery { activityRepo.getActiveActivityId(any()) } returns DataResult.Success(null)
+        coEvery { activityRepo.createActivity(TestFixtures.ORGANIZER_ID) } returns
+            DataResult.Success(TestFixtures.ongoingActivity)
+        coEvery {
+            activityRepo.updateActivityStatus(TestFixtures.ONGOING_ACTIVITY_ID, IturActivityStatus.FINISHED)
+        } returns
+            DataResult.NotFound("finished-activity")
+        coEvery {
+            activityRepo.removeParticipant(TestFixtures.ONGOING_ACTIVITY_ID, TestFixtures.ORGANIZER_ID)
+        } returns
+            DataResult.Success(TestFixtures.ongoingActivity)
+
+        val vm = viewModel(activityRepo = activityRepo)
+        vm.startActivity(context)
+        runCurrent()
+        vm.leaveActivity()
+        runCurrent()
+
+        assertIs<MapUiState.RecoverableError>(vm.uiState.value)
+    }
 }
 
 private class RecordingParticipantSignalRepository : ParticipantSignalRepository {

@@ -5,9 +5,11 @@
 
 package cat.itur.app.feature.map.ui
 
+import android.location.Location
 import androidx.compose.ui.geometry.Rect
 import cat.itur.app.core.data.TestFixtures
 import io.mockk.mockk
+import io.mockk.verify
 import org.junit.Test
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
@@ -64,4 +66,50 @@ class CameraFitInsetsTest {
             )
         }
     }
+
+    @Test
+    fun `empty group skips camera work and a single point uses a fixed zoom`() {
+        val map = mockk<MapLibreMap>(relaxed = true)
+        var fitCalls = 0
+
+        zoomOnGroup(map, emptyList(), null, CameraFitInsets(0, 0, 0, 0)) { _, _, _ -> fitCalls++ }
+        zoomOnGroup(
+            map,
+            emptyList(),
+            TestFixtures.ongoingActivityLocations.first().location.toAndroidLocation(),
+            CameraFitInsets(0, 0, 0, 0),
+        )
+
+        assertEquals(0, fitCalls)
+    }
+
+    @Test
+    fun `group fitting tolerates a map bounds failure`() {
+        zoomOnGroup(
+            map = mockk<MapLibreMap>(),
+            participantLocations = TestFixtures.ongoingActivityLocations,
+            currentLocation = null,
+            insets = CameraFitInsets(0, 0, 0, 0),
+            fitBounds = { _, _, _ -> error("map unavailable") },
+        )
+    }
+
+    @Test
+    fun `user zoom handles empty history and direction of travel`() {
+        val map = mockk<MapLibreMap>(relaxed = true)
+        val location = Location("test").apply {
+            latitude = 41.0
+            longitude = 2.0
+            time = 1_000L
+            bearing = 0f
+        }
+
+        zoomOnUser(map, location, recentLocations = emptyList(), isDirectionOfTravel = true)
+        verify(exactly = 1) { map.animateCamera(any()) }
+    }
+}
+
+private fun cat.itur.app.core.model.Location.toAndroidLocation() = Location("test").apply {
+    latitude = this@toAndroidLocation.latitude
+    longitude = this@toAndroidLocation.longitude
 }
