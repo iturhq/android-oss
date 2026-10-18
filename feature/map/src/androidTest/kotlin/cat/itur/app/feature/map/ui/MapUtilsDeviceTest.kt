@@ -5,9 +5,9 @@
 
 package cat.itur.app.feature.map.ui
 
-import org.junit.Test
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Test
 
 /** Exercises the pure camera-framing policy in the same device coverage run as its map callers. */
 class MapUtilsDeviceTest {
