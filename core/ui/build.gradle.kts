@@ -10,6 +10,12 @@ plugins {
 android {
     namespace = "cat.itur.app.core.ui"
     compileSdk = 36
+
+    defaultConfig {
+        // Compose test dependencies exceed the single-dex method limit with coverage enabled.
+        multiDexEnabled = true
+    }
+
     buildTypes {
         debug {
             enableUnitTestCoverage = true
