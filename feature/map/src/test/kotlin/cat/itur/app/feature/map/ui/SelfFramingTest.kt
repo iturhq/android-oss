@@ -64,6 +64,55 @@ class SelfFramingTest {
         assertTrue(target.latitude > current.latitude)
     }
 
+    @Test
+    fun `framing uses reported speeds when timestamped movement is unavailable`() {
+        val locations = listOf(
+            location(latitude = 41.0, longitude = 2.0, time = 0, speed = 2f),
+            location(latitude = 41.0, longitude = 2.0, time = 0, speed = 6f),
+        )
+
+        assertEquals(150.0, selfFramingDistanceMeters(locations))
+    }
+
+    @Test
+    fun `framing clamps both extreme speeds and invalid viewport sizes`() {
+        val stopped = selfFramingDistanceMeters(emptyList())
+        val fast = selfFramingDistanceMeters(
+            listOf(location(latitude = 41.0, longitude = 2.0, time = 0, speed = 100f)),
+        )
+
+        assertEquals(MIN_SELF_FRAMING_DISTANCE_METERS, stopped)
+        assertEquals(MAX_SELF_FRAMING_DISTANCE_METERS, fast)
+        assertEquals(
+            selfFramingZoom(41.0, 1_000, 100.0, isDirectionOfTravel = false),
+            selfFramingZoom(41.0, 0, 100.0, isDirectionOfTravel = false),
+        )
+    }
+
+    @Test
+    fun `history ignores duplicate samples and discards stale reports`() {
+        val sample = location(latitude = 41.0, longitude = 2.0, time = 1_000)
+        val fresh = location(latitude = 41.0, longitude = 2.1, time = 12_000)
+
+        assertEquals(listOf(sample), appendRecentLocation(listOf(sample), sample))
+        assertEquals(listOf(fresh), appendRecentLocation(listOf(sample), fresh))
+    }
+
+    @Test
+    fun `north up keeps the pointer centered while inferred travel bearing moves it`() {
+        val previous = location(latitude = 41.0, longitude = 2.0, time = 1_000)
+        val current = location(latitude = 41.01, longitude = 2.0, time = 2_000)
+
+        assertEquals(
+            MapPoint(current.latitude, current.longitude),
+            selfFramingTarget(current, listOf(previous, current), 100.0, isDirectionOfTravel = false),
+        )
+        assertTrue(
+            selfFramingTarget(current, listOf(previous, current), 100.0, isDirectionOfTravel = true).latitude >
+                current.latitude,
+        )
+    }
+
     private fun movingLocations(distanceDegrees: Double): List<RecentLocation> = listOf(
         location(latitude = 41.0, longitude = 2.0, time = 0),
         location(latitude = 41.0, longitude = 2.0 + distanceDegrees, time = 5_000),
@@ -75,11 +124,12 @@ class SelfFramingTest {
         longitude: Double,
         time: Long,
         bearing: Float? = null,
+        speed: Float? = null,
     ): RecentLocation = RecentLocation(
         latitude = latitude,
         longitude = longitude,
         timeMillis = time,
-        speedMetersPerSecond = null,
+        speedMetersPerSecond = speed,
         bearingDegrees = bearing,
     )
 }
