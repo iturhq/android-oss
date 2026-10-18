@@ -78,7 +78,9 @@ val expectedUnitCoverageReports = listOf(
 )
 
 val expectedDeviceCoverageReports = listOf(
+    "app (local)" to "app/build/reports/coverage/androidTest/local/debug/connected/report.xml",
     "core:datastore" to "core/datastore/build/reports/coverage/androidTest/debug/connected/report.xml",
+    "core:ui" to "core/ui/build/reports/coverage/androidTest/debug/connected/report.xml",
     "feature:map" to "feature/map/build/reports/coverage/androidTest/debug/connected/report.xml",
 )
 
@@ -197,7 +199,9 @@ tasks.register("deviceTestCoverage") {
     group = "verification"
     description = "Runs Android device coverage reports for every instrumented coverage module."
     dependsOn(
+        ":app:createLocalDebugCoverageReport",
         ":core:datastore:createDebugCoverageReport",
+        ":core:ui:createDebugCoverageReport",
         ":feature:map:createDebugCoverageReport",
     )
     finalizedBy(verifyDeviceCoverageReports)

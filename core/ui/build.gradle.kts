@@ -13,6 +13,7 @@ android {
     buildTypes {
         debug {
             enableUnitTestCoverage = true
+            enableAndroidTestCoverage = true
         }
     }
     buildFeatures {
@@ -32,4 +33,9 @@ dependencies {
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.junit.junit)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.ui.test.junit4)
+
+    debugImplementation(libs.androidx.ui.test.manifest)
 }

@@ -62,6 +62,7 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             isDebuggable = true
+            enableAndroidTestCoverage = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
