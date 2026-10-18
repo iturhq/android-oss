@@ -5,10 +5,10 @@
 
 package cat.itur.app.core.model
 
+import org.w3c.dom.Element
 import java.io.InputStream
 import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
-import org.w3c.dom.Element
 
 const val MAX_GPX_BYTES = 5 * 1024 * 1024
 const val MAX_GPX_POINTS = 100_000
@@ -23,38 +23,63 @@ enum class GpxParseFailure { TOO_LARGE, TOO_MANY_POINTS, MALFORMED, UNSAFE_XML, 
 /** Conservative GPX 1.0/1.1 reader. Waypoints are deliberately ignored. */
 object GpxParser {
     fun parse(input: InputStream): GpxParseResult = try {
-        val bytes = input.readBounded() ?: return GpxParseResult.Failure(GpxParseFailure.TOO_LARGE)
-        if (bytes.decodeToString().contains("<!DOCTYPE", ignoreCase = true) ||
-            bytes.decodeToString().contains("<?xml-stylesheet", ignoreCase = true)
-        ) return GpxParseResult.Failure(GpxParseFailure.UNSAFE_XML)
-        val document = DocumentBuilderFactory.newInstance().secureBuilder().parse(bytes.inputStream())
-        val root = document.documentElement ?: return GpxParseResult.Failure(GpxParseFailure.MALFORMED)
-        if (root.localName != "gpx" || root.namespaceURI !in setOf(GPX_10, GPX_11)) {
-            return GpxParseResult.Failure(GpxParseFailure.MALFORMED)
-        }
-        var pointCount = 0
+        parseBytes(input.readBounded())
+    } catch (_: Exception) {
+        malformed()
+    }
+
+    private fun parseBytes(bytes: ByteArray?): GpxParseResult = when (bytes) {
+        null -> tooLarge()
+        else -> if (bytes.containsUnsafeXml()) unsafeXml() else parseDocument(bytes)
+    }
+
+    private fun parseDocument(bytes: ByteArray): GpxParseResult = try {
+        val root = DocumentBuilderFactory.newInstance().secureBuilder()
+            .parse(bytes.inputStream())
+            .documentElement
+            ?: return malformed()
+        if (!root.isGpxRoot()) return malformed()
+        parseLines(root)
+    } catch (_: Exception) {
+        malformed()
+    }
+
+    private fun parseLines(root: Element): GpxParseResult {
+        var pointsSeen = 0
         val lines = mutableListOf<GpxLine>()
-        root.children().forEach { child ->
-            val pointSets = when (child.localName) {
-                "trk" -> child.children("trkseg").map { it.points("trkpt") }
-                "rte" -> listOf(child.points("rtept"))
-                else -> emptyList()
-            }
-            pointSets.forEach { result ->
-                val points = when (result) {
-                    is PointResult.Failure -> return GpxParseResult.Failure(result.reason)
-                    is PointResult.Success -> result.points
-                }
-                pointCount += points.size
-                if (pointCount > MAX_GPX_POINTS) return GpxParseResult.Failure(GpxParseFailure.TOO_MANY_POINTS)
+        for (child in root.children()) {
+            for (result in child.pointSets()) {
+                val points = result.pointsOrNull() ?: return invalidCoordinate()
+                pointsSeen += points.size
+                if (pointsSeen > MAX_GPX_POINTS) return tooManyPoints()
                 if (points.isNotEmpty()) lines += GpxLine(points)
             }
         }
-        GpxParseResult.Success(GpxTrack(lines))
-    } catch (_: org.xml.sax.SAXException) {
-        GpxParseResult.Failure(GpxParseFailure.MALFORMED)
-    } catch (_: Exception) {
-        GpxParseResult.Failure(GpxParseFailure.MALFORMED)
+        return GpxParseResult.Success(GpxTrack(lines))
+    }
+
+    private fun malformed() = GpxParseResult.Failure(GpxParseFailure.MALFORMED)
+
+    private fun tooLarge() = GpxParseResult.Failure(GpxParseFailure.TOO_LARGE)
+
+    private fun unsafeXml() = GpxParseResult.Failure(GpxParseFailure.UNSAFE_XML)
+
+    private fun invalidCoordinate() = GpxParseResult.Failure(GpxParseFailure.INVALID_COORDINATE)
+
+    private fun tooManyPoints() = GpxParseResult.Failure(GpxParseFailure.TOO_MANY_POINTS)
+
+    private fun ByteArray.containsUnsafeXml(): Boolean {
+        val xml = decodeToString()
+        return xml.contains("<!DOCTYPE", ignoreCase = true) ||
+            xml.contains("<?xml-stylesheet", ignoreCase = true)
+    }
+
+    private fun Element.isGpxRoot() = localName == "gpx" && namespaceURI in setOf(GPX_10, GPX_11)
+
+    private fun Element.pointSets(): List<PointResult> = when (localName) {
+        "trk" -> children("trkseg").map { it.points("trkpt") }
+        "rte" -> listOf(points("rtept"))
+        else -> emptyList()
     }
 
     private fun InputStream.readBounded(): ByteArray? {
@@ -84,20 +109,42 @@ object GpxParser {
         }
     }
 
-    private fun Element.points(name: String): PointResult = children(name).map { point ->
-        val latitude = point.getAttribute("lat").toDoubleOrNull()
-        val longitude = point.getAttribute("lon").toDoubleOrNull()
-        if (latitude == null || longitude == null || !latitude.isFinite() || !longitude.isFinite() ||
-            latitude !in -90.0..90.0 || longitude !in -180.0..180.0
-        ) return PointResult.Failure(GpxParseFailure.INVALID_COORDINATE)
-        GpxPoint(latitude, longitude)
-    }.let(PointResult::Success)
+    private fun Element.points(name: String): PointResult {
+        val points = mutableListOf<GpxPoint>()
+        for (element in children(name)) {
+            val point = element.coordinates() ?: return PointResult.InvalidCoordinate
+            points += point
+        }
+        return PointResult.Points(points)
+    }
+
+    private fun Element.coordinates(): GpxPoint? {
+        val latitude = getAttribute("lat").toDoubleOrNull()
+        val longitude = getAttribute("lon").toDoubleOrNull()
+        if (!latitude.isValidLatitude() || !longitude.isValidLongitude()) return null
+        return GpxPoint(latitude ?: return null, longitude ?: return null)
+    }
+
+    private fun Double?.isValidLatitude() = this != null && isFinite() && this in MIN_LATITUDE..MAX_LATITUDE
+
+    private fun Double?.isValidLongitude() = this != null && isFinite() && this in MIN_LONGITUDE..MAX_LONGITUDE
 
     private sealed interface PointResult {
-        data class Success(val points: List<GpxPoint>) : PointResult
-        data class Failure(val reason: GpxParseFailure) : PointResult
+        fun pointsOrNull(): List<GpxPoint>?
+
+        data class Points(val points: List<GpxPoint>) : PointResult {
+            override fun pointsOrNull() = points
+        }
+
+        data object InvalidCoordinate : PointResult {
+            override fun pointsOrNull(): List<GpxPoint>? = null
+        }
     }
 
     private const val GPX_10 = "http://www.topografix.com/GPX/1/0"
     private const val GPX_11 = "http://www.topografix.com/GPX/1/1"
+    private const val MIN_LATITUDE = -90.0
+    private const val MAX_LATITUDE = 90.0
+    private const val MIN_LONGITUDE = -180.0
+    private const val MAX_LONGITUDE = 180.0
 }

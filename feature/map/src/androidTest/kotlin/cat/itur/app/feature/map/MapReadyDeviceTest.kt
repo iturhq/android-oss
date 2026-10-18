@@ -15,10 +15,10 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
 import cat.itur.app.core.domain.id.IturActivityId
 import cat.itur.app.core.domain.id.UserId
-import cat.itur.app.core.model.Location
 import cat.itur.app.core.model.GpxLine
 import cat.itur.app.core.model.GpxPoint
 import cat.itur.app.core.model.GpxTrack
+import cat.itur.app.core.model.Location
 import cat.itur.app.core.model.ParticipantLocation
 import cat.itur.app.core.ui.theme.IturTheme
 import cat.itur.app.feature.map.ui.components.map.MapLibreView

@@ -33,9 +33,9 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import cat.itur.app.core.domain.id.IturActivityId
 import cat.itur.app.core.domain.id.UserId
+import cat.itur.app.core.model.GpxTrack
 import cat.itur.app.core.model.ParticipantLocation
 import cat.itur.app.core.model.ParticipantSignal
-import cat.itur.app.core.model.GpxTrack
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import org.maplibre.android.location.LocationComponent
@@ -48,13 +48,13 @@ import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory.iconImage
 import org.maplibre.android.style.layers.PropertyFactory.iconOpacity
 import org.maplibre.android.style.layers.PropertyFactory.iconRotate
 import org.maplibre.android.style.layers.PropertyFactory.iconRotationAlignment
 import org.maplibre.android.style.layers.PropertyFactory.lineColor
 import org.maplibre.android.style.layers.PropertyFactory.lineWidth
-import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
@@ -68,6 +68,7 @@ private const val PARTICIPANT_LAYER = "participants-layer"
 private const val PARTICIPANT_SOURCE = "participants-source"
 private const val GPX_TRACK_SOURCE = "gpx-track-source"
 private const val GPX_TRACK_LAYER = "gpx-track-layer"
+private const val GPX_TRACK_LINE_WIDTH = 4f
 private const val RECENCY_REFRESH_INTERVAL_MILLIS = 1_000L
 private const val MILLIS_PER_SECOND = 1_000L
 private const val CURRENT_MARKER_OPACITY = 1f
@@ -384,7 +385,7 @@ private object MapStyleInitializer {
         style.addLayer(
             LineLayer(GPX_TRACK_LAYER, GPX_TRACK_SOURCE).withProperties(
                 lineColor("#D81B60"),
-                lineWidth(4f),
+                lineWidth(GPX_TRACK_LINE_WIDTH),
             ),
         )
     }

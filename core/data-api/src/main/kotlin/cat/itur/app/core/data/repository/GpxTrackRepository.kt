@@ -19,5 +19,7 @@ interface GpxTrackRepository {
 open class InMemoryGpxTrackRepository : GpxTrackRepository {
     private val state = MutableStateFlow<GpxTrack?>(null)
     override val track: StateFlow<GpxTrack?> = state.asStateFlow()
-    override suspend fun setTrack(track: GpxTrack?) { state.value = track }
+    override suspend fun setTrack(track: GpxTrack?) {
+        state.value = track
+    }
 }

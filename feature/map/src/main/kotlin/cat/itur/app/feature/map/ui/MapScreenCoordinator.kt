@@ -27,9 +27,9 @@ import cat.itur.app.core.data.health.BackendServiceIds
 import cat.itur.app.core.domain.id.IturActivityId
 import cat.itur.app.core.domain.id.UserId
 import cat.itur.app.core.domain.model.User
+import cat.itur.app.core.model.GpxTrack
 import cat.itur.app.core.model.ParticipantLocation
 import cat.itur.app.core.model.ParticipantSignal
-import cat.itur.app.core.model.GpxTrack
 import cat.itur.app.feature.map.ui.components.help.HelpAnchorRegistry
 import cat.itur.app.feature.map.ui.components.help.LocalHelpAnchorRegistry
 import org.maplibre.android.maps.MapLibreMap

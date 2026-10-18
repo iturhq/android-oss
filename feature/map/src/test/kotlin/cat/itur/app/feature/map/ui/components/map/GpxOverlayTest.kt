@@ -1,11 +1,16 @@
+/*
+ * Itur © 2025 by Max Noé <code@itur.cat>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 package cat.itur.app.feature.map.ui.components.map
 
 import cat.itur.app.core.model.GpxLine
 import cat.itur.app.core.model.GpxPoint
 import cat.itur.app.core.model.GpxTrack
+import org.maplibre.geojson.LineString
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import org.maplibre.geojson.LineString
 
 class GpxOverlayTest {
     @Test

@@ -37,7 +37,6 @@ import cat.itur.app.core.domain.model.User.AnonymousUser
 import cat.itur.app.core.location.LocationClient
 import cat.itur.app.core.model.Broadcast
 import cat.itur.app.core.model.IturActivity
-import cat.itur.app.core.model.GpxTrack
 import cat.itur.app.core.model.IturActivityStatus
 import cat.itur.app.core.model.ParticipantLocation
 import cat.itur.app.core.model.ParticipantSignal
