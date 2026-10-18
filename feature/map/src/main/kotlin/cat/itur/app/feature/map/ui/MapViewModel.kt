@@ -21,6 +21,8 @@ import cat.itur.app.core.data.health.BackendService
 import cat.itur.app.core.data.repository.ActivityFilter
 import cat.itur.app.core.data.repository.ActivityRepository
 import cat.itur.app.core.data.repository.DataResult
+import cat.itur.app.core.data.repository.GpxTrackRepository
+import cat.itur.app.core.data.repository.InMemoryGpxTrackRepository
 import cat.itur.app.core.data.repository.LocationObservationScope
 import cat.itur.app.core.data.repository.LocationReportOutcome
 import cat.itur.app.core.data.repository.LocationRepository
@@ -35,6 +37,7 @@ import cat.itur.app.core.domain.model.User.AnonymousUser
 import cat.itur.app.core.location.LocationClient
 import cat.itur.app.core.model.Broadcast
 import cat.itur.app.core.model.IturActivity
+import cat.itur.app.core.model.GpxTrack
 import cat.itur.app.core.model.IturActivityStatus
 import cat.itur.app.core.model.ParticipantLocation
 import cat.itur.app.core.model.ParticipantSignal
@@ -71,6 +74,7 @@ constructor(
     participantSignalRepository: ParticipantSignalRepository,
     private val userRepository: UserRepository,
     private val locationsRepository: LocationRepository,
+    gpxTrackRepository: GpxTrackRepository = InMemoryGpxTrackRepository(),
     private val locationClient: LocationClient,
     private val broadcastNotifier: BroadcastNotifier,
     val mapStyleConfig: MapStyleConfig,
@@ -102,6 +106,7 @@ constructor(
     // A MapLibre feature collection representing the participants' locations.
     private val _participantLocations = MutableStateFlow<List<ParticipantLocation>>(emptyList())
     val participantLocations = _participantLocations.asStateFlow()
+    val gpxTrack = gpxTrackRepository.track
 
     // The last know location, as collected by the location service.
     private val _lastLocation = MutableLiveData<Location?>()

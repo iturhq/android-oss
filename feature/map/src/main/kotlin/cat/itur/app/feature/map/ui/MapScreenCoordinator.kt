@@ -29,6 +29,7 @@ import cat.itur.app.core.domain.id.UserId
 import cat.itur.app.core.domain.model.User
 import cat.itur.app.core.model.ParticipantLocation
 import cat.itur.app.core.model.ParticipantSignal
+import cat.itur.app.core.model.GpxTrack
 import cat.itur.app.feature.map.ui.components.help.HelpAnchorRegistry
 import cat.itur.app.feature.map.ui.components.help.LocalHelpAnchorRegistry
 import org.maplibre.android.maps.MapLibreMap
@@ -48,6 +49,7 @@ internal data class MapPresentation(
     val organizerId: UserId?,
     val participantLocations: List<ParticipantLocation>,
     val participantSignals: Map<UserId, ParticipantSignal>,
+    val gpxTrack: GpxTrack?,
     val lastLocation: Location?,
     val latestBroadcastMessage: String?,
     val signInPresentation: SignInFailurePresentation?,
@@ -170,6 +172,7 @@ private fun CollectMapPresentation(viewModel: MapViewModel): MapPresentation {
     val organizerId by viewModel.organizerId.collectAsState()
     val participantLocations by viewModel.participantLocations.collectAsState()
     val participantSignals by viewModel.participantSignalMap.collectAsState()
+    val gpxTrack by viewModel.gpxTrack.collectAsState()
     val lastLocation by viewModel.lastLocation.observeAsState()
     val latestBroadcast by viewModel.latestBroadcast.collectAsState()
     val signInPresentation by viewModel.signInPresentation.collectAsState()
@@ -184,6 +187,7 @@ private fun CollectMapPresentation(viewModel: MapViewModel): MapPresentation {
         organizerId = organizerId,
         participantLocations = participantLocations,
         participantSignals = participantSignals,
+        gpxTrack = gpxTrack,
         lastLocation = lastLocation,
         latestBroadcastMessage = latestBroadcast?.message,
         signInPresentation = signInPresentation,
