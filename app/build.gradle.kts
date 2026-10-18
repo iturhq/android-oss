@@ -120,10 +120,13 @@ dependencies {
     // Third-party license attribution screen (AOSS-386B).
     implementation(libs.play.services.oss.licenses)
 
-    // Observability is linked only by the production-backed variants.
+    // Production variants initialize observability; local still carries the perf runtime
+    // because the plugin instruments shared code used by its debug APK.
     "prodImplementation"(platform(libs.firebase.bom))
     "prodImplementation"(libs.firebase.crashlytics.ktx)
     "prodImplementation"(libs.firebase.perf.ktx)
+    "localImplementation"(platform(libs.firebase.bom))
+    "localImplementation"(libs.firebase.perf.ktx)
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlin.test.junit)
