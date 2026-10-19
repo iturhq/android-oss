@@ -21,6 +21,8 @@ import cat.itur.app.core.data.health.BackendService
 import cat.itur.app.core.data.repository.ActivityFilter
 import cat.itur.app.core.data.repository.ActivityRepository
 import cat.itur.app.core.data.repository.DataResult
+import cat.itur.app.core.data.repository.GpxTrackRepository
+import cat.itur.app.core.data.repository.InMemoryGpxTrackRepository
 import cat.itur.app.core.data.repository.LocationObservationScope
 import cat.itur.app.core.data.repository.LocationReportOutcome
 import cat.itur.app.core.data.repository.LocationRepository
@@ -64,13 +66,14 @@ import kotlinx.coroutines.launch
 import java.util.Date
 import javax.inject.Inject
 @HiltViewModel
-@Suppress("LongParameterList")
+@Suppress("LargeClass", "LongParameterList")
 class MapViewModel @Inject
 constructor(
     private val activityRepository: ActivityRepository,
     participantSignalRepository: ParticipantSignalRepository,
     private val userRepository: UserRepository,
     private val locationsRepository: LocationRepository,
+    gpxTrackRepository: GpxTrackRepository = InMemoryGpxTrackRepository(),
     private val locationClient: LocationClient,
     private val broadcastNotifier: BroadcastNotifier,
     val mapStyleConfig: MapStyleConfig,
@@ -102,6 +105,7 @@ constructor(
     // A MapLibre feature collection representing the participants' locations.
     private val _participantLocations = MutableStateFlow<List<ParticipantLocation>>(emptyList())
     val participantLocations = _participantLocations.asStateFlow()
+    val gpxTrack = gpxTrackRepository.track
 
     // The last know location, as collected by the location service.
     private val _lastLocation = MutableLiveData<Location?>()

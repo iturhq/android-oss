@@ -123,6 +123,7 @@ private fun MapReadyContent(
                 currentLocation = presentation.lastLocation,
                 participantLocations = presentation.participantLocations,
                 participantSignals = presentation.participantSignals,
+                gpxTrack = presentation.gpxTrack,
                 isDirectionOfTravel = presentation.ongoingActivityId != null &&
                     interaction.isDirectionOfTravel,
             ),

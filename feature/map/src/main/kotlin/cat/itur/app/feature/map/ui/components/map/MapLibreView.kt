@@ -33,6 +33,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import cat.itur.app.core.domain.id.IturActivityId
 import cat.itur.app.core.domain.id.UserId
+import cat.itur.app.core.model.GpxTrack
 import cat.itur.app.core.model.ParticipantLocation
 import cat.itur.app.core.model.ParticipantSignal
 import kotlinx.coroutines.delay
@@ -47,19 +48,27 @@ import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory.iconImage
 import org.maplibre.android.style.layers.PropertyFactory.iconOpacity
 import org.maplibre.android.style.layers.PropertyFactory.iconRotate
 import org.maplibre.android.style.layers.PropertyFactory.iconRotationAlignment
+import org.maplibre.android.style.layers.PropertyFactory.lineColor
+import org.maplibre.android.style.layers.PropertyFactory.lineWidth
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.LineString
+import org.maplibre.geojson.Point
 
 private const val ORGANIZER_LAYER = "organizer-layer"
 private const val ORGANIZER_SOURCE = "organizer-source"
 private const val PARTICIPANT_LAYER = "participants-layer"
 private const val PARTICIPANT_SOURCE = "participants-source"
+private const val GPX_TRACK_SOURCE = "gpx-track-source"
+private const val GPX_TRACK_LAYER = "gpx-track-layer"
+private const val GPX_TRACK_LINE_WIDTH = 4f
 private const val RECENCY_REFRESH_INTERVAL_MILLIS = 1_000L
 private const val MILLIS_PER_SECOND = 1_000L
 private const val CURRENT_MARKER_OPACITY = 1f
@@ -94,6 +103,7 @@ data class MapLibreViewInput(
     val currentLocation: Location? = null,
     val participantLocations: List<ParticipantLocation>,
     val participantSignals: Map<UserId, ParticipantSignal> = emptyMap(),
+    val gpxTrack: GpxTrack? = null,
     val isDirectionOfTravel: Boolean = false,
 )
 
@@ -152,6 +162,7 @@ private data class MapStyleCallbacks(
  * An implementation of the map view provided by MapLibre.
  */
 @Composable
+@Suppress("LongMethod")
 fun MapLibreView(
     input: MapLibreViewInput,
     modifier: Modifier = Modifier,
@@ -206,6 +217,7 @@ fun MapLibreView(
         accessibilityDescription = accessibilityDescription,
         store = remotePointerStore,
     )
+    GpxOverlay.Effect(input.gpxTrack, styleLoaded, styleGeneration, mapLibreMap)
 
     MapViewHost.Content(
         mapView = mapView,
@@ -354,10 +366,11 @@ private object MapStyleInitializer {
         styleUrl: String,
         callbacks: MapStyleCallbacks,
     ) {
-        LaunchedEffect(Unit) {
+        LaunchedEffect(styleUrl) {
             mapView.getMapAsync { map ->
                 callbacks.onMapAvailable(map)
                 map.setStyle(styleUrl) { style ->
+                    addGpxTrackLayer(style)
                     addMapMarkers(style, context)
                     addMapMarkerLayers(style)
                     configureMapGestures(map)
@@ -366,6 +379,16 @@ private object MapStyleInitializer {
                 }
             }
         }
+    }
+
+    private fun addGpxTrackLayer(style: Style) {
+        style.addSource(GeoJsonSource(GPX_TRACK_SOURCE, FeatureCollection.fromFeatures(emptyList<Feature>())))
+        style.addLayer(
+            LineLayer(GPX_TRACK_LAYER, GPX_TRACK_SOURCE).withProperties(
+                lineColor("#D81B60"),
+                lineWidth(GPX_TRACK_LINE_WIDTH),
+            ),
+        )
     }
 
     private fun addMapMarkers(style: Style, context: Context) {
@@ -414,6 +437,30 @@ private object MapStyleInitializer {
         isRotateGesturesEnabled = false
         isTiltGesturesEnabled = false
     }
+}
+
+internal object GpxOverlay {
+    @Composable
+    fun Effect(track: GpxTrack?, styleLoaded: Boolean, styleGeneration: Long, map: MapLibreMap?) {
+        LaunchedEffect(track, styleLoaded, styleGeneration, map) {
+            if (!styleLoaded) return@LaunchedEffect
+            map?.style?.getSourceAs<GeoJsonSource>(GPX_TRACK_SOURCE)?.setGeoJson(
+                FeatureCollection.fromFeatures(featuresFor(track)),
+            )
+        }
+    }
+
+    internal fun featuresFor(track: GpxTrack?): List<Feature> = track?.lines.orEmpty().mapNotNull(::featureForLine)
+
+    private fun featureForLine(line: cat.itur.app.core.model.GpxLine): Feature? {
+        if (line.points.size < 2) return null
+        val stride = (line.points.size / MAX_DRAWN_POINTS_PER_LINE).coerceAtLeast(1)
+        val points = line.points.filterIndexed { index, _ -> index % stride == 0 }.toMutableList()
+        if (points.last() != line.points.last()) points += line.points.last()
+        return Feature.fromGeometry(LineString.fromLngLats(points.map { Point.fromLngLat(it.longitude, it.latitude) }))
+    }
+
+    private const val MAX_DRAWN_POINTS_PER_LINE = 5_000
 }
 
 private object MapMarkers {

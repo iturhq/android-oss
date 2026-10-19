@@ -10,6 +10,8 @@ import cat.itur.app.core.data.health.FirestoreBackendHealthCheck
 import cat.itur.app.core.data.repository.ActivityRepository
 import cat.itur.app.core.data.repository.FirebaseActivityRepository
 import cat.itur.app.core.data.repository.FirebaseLocationRepository
+import cat.itur.app.core.data.repository.GpxTrackRepository
+import cat.itur.app.core.data.repository.InMemoryGpxTrackRepository
 import cat.itur.app.core.data.repository.LocationRepository
 import cat.itur.app.core.data.repository.ParticipantSignalRepository
 import cat.itur.app.core.data.repository.UserRepository
@@ -69,4 +71,8 @@ object DataModule {
         firestore: FirebaseFirestore,
         userRepository: UserRepository,
     ): LocationRepository = FirebaseLocationRepository(firestore, userRepository)
+
+    @Provides
+    @Singleton
+    fun provideGpxTrackRepository(): GpxTrackRepository = InMemoryGpxTrackRepository()
 }
