@@ -7,6 +7,8 @@ package cat.itur.app.feature.map
 
 import cat.itur.app.core.data.health.BackendHealthCheck
 import cat.itur.app.core.data.repository.ActivityRepository
+import cat.itur.app.core.data.repository.FakeGpxTrackRepository
+import cat.itur.app.core.data.repository.GpxTrackRepository
 import cat.itur.app.core.data.repository.LocationRepository
 import cat.itur.app.core.data.repository.ParticipantSignalRepository
 import cat.itur.app.core.data.repository.UserRepository
@@ -70,4 +72,12 @@ object TestDataModule {
     fun provideLocationRepository(
         repository: ScenarioLocationRepository,
     ): LocationRepository = repository
+
+    @Provides
+    @Singleton
+    fun provideFakeGpxTrackRepository(): FakeGpxTrackRepository = FakeGpxTrackRepository()
+
+    @Provides
+    @Singleton
+    fun provideGpxTrackRepository(repository: FakeGpxTrackRepository): GpxTrackRepository = repository
 }
