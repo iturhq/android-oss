@@ -31,6 +31,7 @@ class GpxIntentFilterTest {
     @Test
     fun unrelatedFilesAreNotClaimed() {
         assertNull(resolve(viewIntent("content://example/documents/notes.pdf", "application/pdf")))
+        assertNull(resolve(viewIntent("content://example/documents/notes.bin", "application/octet-stream")))
     }
 
     private fun viewIntent(uri: String, mimeType: String?) = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
