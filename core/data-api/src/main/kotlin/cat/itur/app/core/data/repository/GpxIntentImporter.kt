@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+@file:Suppress("MatchingDeclarationName")
+
 package cat.itur.app.core.data.repository
 
 import android.content.ContentResolver
@@ -20,6 +22,10 @@ sealed interface GpxImportResult {
 /** Reads exactly the temporary URI permission supplied by Android's open/share intent. */
 suspend fun GpxTrackRepository.importFrom(intent: Intent, resolver: ContentResolver): GpxImportResult {
     val uri = intent.gpxUri() ?: return GpxImportResult.Ignored
+    return importUri(uri, resolver)
+}
+
+private suspend fun GpxTrackRepository.importUri(uri: Uri, resolver: ContentResolver): GpxImportResult {
     val parsed = runCatching { resolver.openInputStream(uri)?.use(GpxParser::parse) }.getOrNull()
         ?: return GpxImportResult.Rejected
     return when (parsed) {
