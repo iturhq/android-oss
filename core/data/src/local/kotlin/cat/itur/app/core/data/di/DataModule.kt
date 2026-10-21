@@ -12,9 +12,9 @@ import cat.itur.app.core.data.repository.ActivityRepository
 import cat.itur.app.core.data.repository.FirebaseActivityRepository
 import cat.itur.app.core.data.repository.FirebaseLocationRepository
 import cat.itur.app.core.data.repository.GpxTrackRepository
-import cat.itur.app.core.data.repository.PersistedGpxTrackRepository
 import cat.itur.app.core.data.repository.LocationRepository
 import cat.itur.app.core.data.repository.ParticipantSignalRepository
+import cat.itur.app.core.data.repository.PersistedGpxTrackRepository
 import cat.itur.app.core.data.repository.UserRepository
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.functions.FirebaseFunctions

@@ -1,5 +1,5 @@
 /*
- * Itur © 2026 by Max Noé <code@itur.cat>
+ * Itur © 2025 by Max Noé <code@itur.cat>
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -67,6 +67,5 @@ class GpxIntentImporterTest {
 
     private fun gpxFile(name: String, content: String): File = File(context.cacheDir, name).apply { writeText(content) }
 
-    private fun gpx(latitude: Double, longitude: Double) =
-        "<gpx xmlns=\"http://www.topografix.com/GPX/1/1\"><rte><rtept lat=\"$latitude\" lon=\"$longitude\"/></rte></gpx>"
+    private fun gpx(latitude: Double, longitude: Double) = "<gpx xmlns=\"http://www.topografix.com/GPX/1/1\"><rte><rtept lat=\"$latitude\" lon=\"$longitude\"/></rte></gpx>"
 }

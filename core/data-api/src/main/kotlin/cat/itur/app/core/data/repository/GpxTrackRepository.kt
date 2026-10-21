@@ -45,12 +45,16 @@ class PersistedGpxTrackRepository(context: Context) : GpxTrackRepository {
     }
 
     private fun String.toTrack(): GpxTrack? = runCatching {
-        GpxTrack(split(';').filter(String::isNotBlank).map { line ->
-            GpxLine(line.split('|').map { point ->
-                val (latitude, longitude) = point.split(',', limit = 2)
-                GpxPoint(latitude.toDouble(), longitude.toDouble())
-            })
-        })
+        GpxTrack(
+            split(';').filter(String::isNotBlank).map { line ->
+                GpxLine(
+                    line.split('|').map { point ->
+                        val (latitude, longitude) = point.split(',', limit = 2)
+                        GpxPoint(latitude.toDouble(), longitude.toDouble())
+                    },
+                )
+            },
+        )
     }.getOrNull()
 
     private companion object {
