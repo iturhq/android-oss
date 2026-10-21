@@ -59,10 +59,14 @@ class MainActivity : ComponentActivity() {
 
     private fun importGpx(intent: Intent) = lifecycleScope.launch {
         when (gpxTrackRepository.importFrom(intent, contentResolver)) {
-            GpxImportResult.Imported -> Toast.makeText(this@MainActivity, "GPX track loaded", Toast.LENGTH_SHORT).show()
-            GpxImportResult.Rejected -> Toast.makeText(this@MainActivity, "Couldn't load GPX track", Toast.LENGTH_SHORT).show()
+            GpxImportResult.Imported -> showGpxImportMessage("GPX track loaded")
+            GpxImportResult.Rejected -> showGpxImportMessage("Couldn't load GPX track")
             GpxImportResult.Ignored -> Unit
         }
+    }
+
+    private fun showGpxImportMessage(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 }
 
