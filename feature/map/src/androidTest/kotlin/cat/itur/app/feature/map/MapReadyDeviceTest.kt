@@ -7,6 +7,7 @@ package cat.itur.app.feature.map
 
 import android.Manifest
 import android.content.Context
+import android.graphics.RectF
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -32,6 +33,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.maplibre.android.MapLibre
 import org.maplibre.android.WellKnownTileServer
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.style.sources.GeoJsonSource
 import kotlin.time.Duration.Companion.seconds
@@ -190,22 +193,35 @@ class MapReadyDeviceTest {
         }
         composeRule.waitUntil(timeoutMillis = 30.seconds.inWholeMilliseconds) { readyMap != null }
         val map = requireNotNull(readyMap)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(41.385, 2.175), 12.0))
+        }
+        var overlayDiagnostic = "not queried"
 
         fun overlayIsReady(): Boolean {
             var ready = false
             InstrumentationRegistry.getInstrumentation().runOnMainSync {
                 val style = map.style
-                val trackFeatures = style?.getSourceAs<GeoJsonSource>(GPX_TRACK_SOURCE)
-                    ?.querySourceFeatures(null).orEmpty()
+                val point = map.projection.toScreenLocation(LatLng(41.385, 2.175))
+                val renderedTrackFeatures = map.queryRenderedFeatures(
+                    RectF(point.x - 12, point.y - 12, point.x + 12, point.y + 12),
+                    GPX_TRACK_LAYER,
+                )
                 val layers = style?.layers.orEmpty()
-                ready = trackFeatures.size == 1 &&
-                    layers.indexOfFirst { it.id == GPX_TRACK_LAYER } <
-                    layers.indexOfFirst { it.id == PARTICIPANT_LAYER }
+                val trackLayerIndex = layers.indexOfFirst { it.id == GPX_TRACK_LAYER }
+                val participantLayerIndex = layers.indexOfFirst { it.id == PARTICIPANT_LAYER }
+                overlayDiagnostic = "renderedFeatures=${renderedTrackFeatures.size}, trackLayer=$trackLayerIndex, " +
+                    "participantLayer=$participantLayerIndex"
+                ready = renderedTrackFeatures.size == 1 && trackLayerIndex < participantLayerIndex
             }
             return ready
         }
 
-        composeRule.waitUntil(timeoutMillis = 15.seconds.inWholeMilliseconds) { overlayIsReady() }
+        try {
+            composeRule.waitUntil(timeoutMillis = 15.seconds.inWholeMilliseconds) { overlayIsReady() }
+        } catch (error: androidx.compose.ui.test.ComposeTimeoutException) {
+            throw AssertionError("GPX overlay was not ready: $overlayDiagnostic", error)
+        }
         composeRule.runOnIdle { styleUrl = "https://demotiles.maplibre.org/style.json?reload=1" }
         composeRule.waitUntil(timeoutMillis = 30.seconds.inWholeMilliseconds) { overlayIsReady() }
     }

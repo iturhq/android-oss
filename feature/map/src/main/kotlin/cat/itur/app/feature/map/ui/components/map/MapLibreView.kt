@@ -195,6 +195,7 @@ fun MapLibreView(
         mapView = mapView,
         context = context,
         styleUrl = input.styleUrl,
+        gpxTrack = input.gpxTrack,
         callbacks = MapStyleCallbacks(
             onMapAvailable = { mapLibreMap = it },
             onStyleLoaded = {
@@ -364,13 +365,14 @@ private object MapStyleInitializer {
         mapView: MapView,
         context: Context,
         styleUrl: String,
+        gpxTrack: GpxTrack?,
         callbacks: MapStyleCallbacks,
     ) {
         LaunchedEffect(styleUrl) {
             mapView.getMapAsync { map ->
                 callbacks.onMapAvailable(map)
                 map.setStyle(styleUrl) { style ->
-                    addGpxTrackLayer(style)
+                    addGpxTrackLayer(style, gpxTrack)
                     addMapMarkers(style, context)
                     addMapMarkerLayers(style)
                     configureMapGestures(map)
@@ -381,8 +383,13 @@ private object MapStyleInitializer {
         }
     }
 
-    private fun addGpxTrackLayer(style: Style) {
-        style.addSource(GeoJsonSource(GPX_TRACK_SOURCE, FeatureCollection.fromFeatures(emptyList<Feature>())))
+    private fun addGpxTrackLayer(style: Style, track: GpxTrack?) {
+        style.addSource(
+            GeoJsonSource(
+                GPX_TRACK_SOURCE,
+                FeatureCollection.fromFeatures(GpxOverlay.featuresFor(track)),
+            ),
+        )
         style.addLayer(
             LineLayer(GPX_TRACK_LAYER, GPX_TRACK_SOURCE).withProperties(
                 lineColor("#D81B60"),
