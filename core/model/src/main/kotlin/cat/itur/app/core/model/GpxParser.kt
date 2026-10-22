@@ -105,13 +105,21 @@ private fun InputStream.readBounded(): ByteArray? {
 
 private fun DocumentBuilderFactory.secureBuilder() = apply {
     isNamespaceAware = true
-    setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
-    setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-    setFeature("http://xml.org/sax/features/external-general-entities", false)
-    setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-    setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "")
-    setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "")
+    setOptionalFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+    setOptionalFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+    setOptionalFeature("http://xml.org/sax/features/external-general-entities", false)
+    setOptionalFeature("http://xml.org/sax/features/external-parameter-entities", false)
+    setOptionalExternalAccess("http://javax.xml.XMLConstants/property/accessExternalDTD")
+    setOptionalExternalAccess("http://javax.xml.XMLConstants/property/accessExternalSchema")
 }.newDocumentBuilder()
+
+private fun DocumentBuilderFactory.setOptionalExternalAccess(name: String) {
+    runCatching { setAttribute(name, "") }
+}
+
+private fun DocumentBuilderFactory.setOptionalFeature(name: String, value: Boolean) {
+    runCatching { setFeature(name, value) }
+}
 
 private fun Element.children(name: String? = null): List<Element> = buildList {
     for (index in 0 until childNodes.length) {

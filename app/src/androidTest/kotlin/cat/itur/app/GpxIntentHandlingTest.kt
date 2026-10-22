@@ -10,6 +10,7 @@ import android.net.Uri
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Test
 import java.io.File
@@ -28,6 +29,10 @@ class GpxIntentHandlingTest {
         val running = gpxFile("running.gpx", 3.0, 4.0)
 
         ActivityScenario.launch<MainActivity>(viewIntent(coldStart).setClass(context, MainActivity::class.java)).use { scenario ->
+            scenario.onActivity {
+                assertEquals(Intent.ACTION_VIEW, it.intent.action)
+                assertEquals(Uri.fromFile(coldStart), it.intent.data)
+            }
             waitForTrack("1.0,2.0")
 
             lateinit var activity: MainActivity
