@@ -36,7 +36,7 @@ class PersistedGpxTrackRepository(context: Context) : GpxTrackRepository {
     override val track: StateFlow<GpxTrack?> = state.asStateFlow()
 
     override suspend fun setTrack(track: GpxTrack?) {
-        preferences.edit().putString(TRACK, track?.encode()).apply()
+        preferences.edit().putString(TRACK, track?.encode()).commit()
         state.value = track
     }
 
