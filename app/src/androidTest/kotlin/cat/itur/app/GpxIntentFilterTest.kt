@@ -29,6 +29,11 @@ class GpxIntentFilterTest {
     }
 
     @Test
+    fun viewGpxFileWithoutUsefulMimeTypeResolvesToItur() {
+        assertTrue(isClaimedByItur(viewIntent("file:///data/local/tmp/route.gpx", null)))
+    }
+
+    @Test
     fun unrelatedFilesAreNotClaimed() {
         assertFalse(isClaimedByItur(viewIntent("content://example/documents/notes.pdf", "application/pdf")))
         assertFalse(isClaimedByItur(viewIntent("content://example/documents/notes.bin", "application/octet-stream")))
