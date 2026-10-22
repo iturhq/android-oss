@@ -41,18 +41,17 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="content" android:mimeType="application/gpx+xml" />
-                <data android:scheme="content" android:mimeType="application/octet-stream" />
-                <data android:scheme="content" android:mimeType="application/xml" />
-                <data android:scheme="content" android:mimeType="text/xml" />
-                <data android:scheme="content" android:pathPattern=".*\\.gpx" />
+                <data android:scheme="content" android:host="*" android:pathPattern=".*\\.gpx" android:mimeType="application/gpx+xml" />
+                <data android:scheme="content" android:host="*" android:pathPattern=".*\\.gpx" android:mimeType="application/octet-stream" />
+                <data android:scheme="content" android:host="*" android:pathPattern=".*\\.gpx" android:mimeType="application/xml" />
+                <data android:scheme="content" android:host="*" android:pathPattern=".*\\.gpx" android:mimeType="text/xml" />
                 <data android:scheme="file" android:pathPattern=".*\\.gpx" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="content" android:pathPattern=".*\\.gpx" />
+                <data android:scheme="content" android:host="*" android:pathPattern=".*\\.gpx" />
                 <data android:scheme="file" android:pathPattern=".*\\.gpx" />
             </intent-filter>
             <!-- Shares have no data URI at resolution time, so keep their MIME claims separate. -->
