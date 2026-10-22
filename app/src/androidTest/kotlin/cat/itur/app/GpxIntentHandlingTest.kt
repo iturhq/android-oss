@@ -27,7 +27,7 @@ class GpxIntentHandlingTest {
         val coldStart = gpxFile("cold-start.gpx", 1.0, 2.0)
         val running = gpxFile("running.gpx", 3.0, 4.0)
 
-        ActivityScenario.launch<MainActivity>(viewIntent(coldStart)).use { scenario ->
+        ActivityScenario.launch<MainActivity>(viewIntent(coldStart).setClass(context, MainActivity::class.java)).use { scenario ->
             waitForTrack("1.0,2.0")
 
             lateinit var activity: MainActivity
