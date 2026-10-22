@@ -33,8 +33,12 @@ class GpxIntentHandlingTest {
             lateinit var activity: MainActivity
             scenario.onActivity {
                 activity = it
-                it.onNewIntent(viewIntent(running))
             }
+            context.startActivity(
+                viewIntent(running)
+                    .setClass(context, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
 
             waitForTrack("3.0,4.0")
             scenario.onActivity { assertSame(activity, it) }
