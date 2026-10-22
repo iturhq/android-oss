@@ -65,6 +65,5 @@ object DataModule {
 
     @Provides
     @Singleton
-    fun provideGpxTrackRepository(@ApplicationContext context: Context): GpxTrackRepository =
-        PersistedGpxTrackRepository(context)
+    fun provideGpxTrackRepository(@ApplicationContext context: Context): GpxTrackRepository = PersistedGpxTrackRepository(context)
 }
