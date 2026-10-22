@@ -12,6 +12,7 @@ import android.content.Intent
 import android.net.Uri
 import cat.itur.app.core.model.GpxParseResult
 import cat.itur.app.core.model.GpxParser
+import java.io.File
 
 sealed interface GpxImportResult {
     data object Imported : GpxImportResult
@@ -26,7 +27,7 @@ suspend fun GpxTrackRepository.importFrom(intent: Intent, resolver: ContentResol
 }
 
 private suspend fun GpxTrackRepository.importUri(uri: Uri, resolver: ContentResolver): GpxImportResult {
-    val parsed = runCatching { resolver.openInputStream(uri)?.use(GpxParser::parse) }.getOrNull()
+    val parsed = runCatching { uri.openInputStream(resolver)?.use(GpxParser::parse) }.getOrNull()
         ?: return GpxImportResult.Rejected
     return when (parsed) {
         is GpxParseResult.Success -> {
@@ -35,6 +36,11 @@ private suspend fun GpxTrackRepository.importUri(uri: Uri, resolver: ContentReso
         }
         is GpxParseResult.Failure -> GpxImportResult.Rejected
     }
+}
+
+private fun Uri.openInputStream(resolver: ContentResolver) = when (scheme) {
+    ContentResolver.SCHEME_FILE -> path?.let(::File)?.inputStream()
+    else -> resolver.openInputStream(this)
 }
 
 private fun Intent.gpxUri(): Uri? = when (action) {
