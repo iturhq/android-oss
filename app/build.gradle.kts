@@ -95,6 +95,7 @@ dependencies {
     implementation(projects.core.domain)
     implementation(projects.core.model)
     implementation(projects.core.data)
+    implementation(projects.core.dataApi)
     implementation(projects.core.ui)
     implementation(projects.feature.map)
 //    implementation(projects.feature.join)
