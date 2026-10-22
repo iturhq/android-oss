@@ -27,4 +27,5 @@ dependencies {
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.junit.junit)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
 }
