@@ -20,6 +20,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.functions.FirebaseFunctions
 import dagger.Module
 import dagger.Provides
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
@@ -64,5 +65,6 @@ object DataModule {
 
     @Provides
     @Singleton
-    fun provideGpxTrackRepository(context: Context): GpxTrackRepository = PersistedGpxTrackRepository(context)
+    fun provideGpxTrackRepository(@ApplicationContext context: Context): GpxTrackRepository =
+        PersistedGpxTrackRepository(context)
 }
