@@ -7,16 +7,15 @@ package cat.itur.app
 
 import android.content.Intent
 import android.net.Uri
-import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertSame
 import org.junit.Test
 import java.io.File
 
 class GpxIntentHandlingTest {
-    private val context = InstrumentationRegistry.getInstrumentation().targetContext
+    private val instrumentation = InstrumentationRegistry.getInstrumentation()
+    private val context = instrumentation.targetContext
 
     @After
     fun clearImportedTrack() {
@@ -28,17 +27,19 @@ class GpxIntentHandlingTest {
         val coldStart = gpxFile("cold-start.gpx", 1.0, 2.0)
         val running = gpxFile("running.gpx", 3.0, 4.0)
 
-        ActivityScenario.launch<MainActivity>(viewIntent(coldStart).setClass(context, MainActivity::class.java)).use { scenario ->
-            scenario.onActivity {
-                assertEquals(Intent.ACTION_VIEW, it.intent.action)
-                assertEquals(Uri.fromFile(coldStart), it.intent.data)
+        val activity = instrumentation.startActivitySync(
+            viewIntent(coldStart)
+                .setClass(context, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as MainActivity
+
+        try {
+            instrumentation.runOnMainSync {
+                assertEquals(Intent.ACTION_VIEW, activity.intent.action)
+                assertEquals(Uri.fromFile(coldStart), activity.intent.data)
             }
             waitForTrack("1.0,2.0")
 
-            lateinit var activity: MainActivity
-            scenario.onActivity {
-                activity = it
-            }
             context.startActivity(
                 viewIntent(running)
                     .setClass(context, MainActivity::class.java)
@@ -46,7 +47,12 @@ class GpxIntentHandlingTest {
             )
 
             waitForTrack("3.0,4.0")
-            scenario.onActivity { assertSame(activity, it) }
+            instrumentation.runOnMainSync {
+                assertEquals(Uri.fromFile(running), activity.intent.data)
+            }
+        } finally {
+            instrumentation.runOnMainSync { activity.finishAndRemoveTask() }
+            instrumentation.waitForIdleSync()
         }
     }
 
