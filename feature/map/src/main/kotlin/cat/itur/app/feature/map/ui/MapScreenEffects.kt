@@ -43,6 +43,7 @@ internal fun MapScreenEffects(
     LocationPermissionEffect(viewModel, environment, interaction)
     RecentLocationHistoryEffect(presentation, interaction)
     InitialCenteringEffect(presentation, interaction)
+    GpxCameraFitEffect(presentation, interaction)
     ContinuousCameraTrackingEffect(presentation, interaction)
     NotificationPermissionEffect(environment.context, interaction.locationPermissionGranted)
     ActivityStateEffects(
@@ -52,6 +53,30 @@ internal fun MapScreenEffects(
         interaction,
         LocalBroadcastPollIntervalMillis.current,
     )
+}
+
+@Composable
+private fun GpxCameraFitEffect(
+    presentation: MapPresentation,
+    interaction: MapInteractionState,
+) {
+    val density = LocalDensity.current
+    val horizontalFallback = with(density) { 88.dp.roundToPx() }
+    val verticalPadding = with(density) { 32.dp.roundToPx() }
+    LaunchedEffect(presentation.gpxTrack, presentation.ongoingActivityId, interaction.mapLibreMap) {
+        zoomOnGpxTrack(
+            map = interaction.mapLibreMap ?: return@LaunchedEffect,
+            track = presentation.gpxTrack,
+            isActivityOngoing = presentation.ongoingActivityId != null,
+            insets = cameraFitInsets(
+                mapBounds = interaction.mapBounds,
+                leftControlBounds = interaction.leftControlBounds,
+                rightControlBounds = interaction.rightControlBounds,
+                horizontalFallback = horizontalFallback,
+                verticalPadding = verticalPadding,
+            ),
+        )
+    }
 }
 
 @Composable
@@ -220,6 +245,8 @@ private fun InitialCenteringEffect(
     LaunchedEffect(
         interaction.mapLibreMap,
         presentation.lastLocation,
+        presentation.gpxTrack,
+        presentation.ongoingActivityId,
         interaction.centeredOnInitialLocation,
         interaction.hasManualZoomOverride,
     ) {
@@ -228,7 +255,9 @@ private fun InitialCenteringEffect(
             location = presentation.lastLocation,
             alreadyCentered = interaction.centeredOnInitialLocation,
             center = { map, location ->
-                if (!interaction.hasManualZoomOverride) {
+                val importedTrackOwnsInitialCamera =
+                    presentation.gpxTrack != null && presentation.ongoingActivityId == null
+                if (!interaction.hasManualZoomOverride && !importedTrackOwnsInitialCamera) {
                     zoomOnUser(
                         map = map,
                         location = location,

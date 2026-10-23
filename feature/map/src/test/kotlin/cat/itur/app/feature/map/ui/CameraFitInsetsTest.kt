@@ -8,6 +8,9 @@ package cat.itur.app.feature.map.ui
 import android.location.Location
 import androidx.compose.ui.geometry.Rect
 import cat.itur.app.core.data.TestFixtures
+import cat.itur.app.core.model.GpxLine
+import cat.itur.app.core.model.GpxPoint
+import cat.itur.app.core.model.GpxTrack
 import io.mockk.mockk
 import io.mockk.verify
 import org.junit.Test
@@ -92,6 +95,53 @@ class CameraFitInsetsTest {
             insets = CameraFitInsets(0, 0, 0, 0),
             fitBounds = { _, _, _ -> error("map unavailable") },
         )
+    }
+
+    @Test
+    fun `GPX fit includes every track point when no activity is ongoing`() {
+        val track = GpxTrack(
+            listOf(
+                GpxLine(listOf(GpxPoint(41.0, 2.0), GpxPoint(42.0, 3.0))),
+                GpxLine(listOf(GpxPoint(43.0, 4.0))),
+            ),
+        )
+        val expectedInsets = CameraFitInsets(24, 32, 40, 48)
+        var capturedBounds: LatLngBounds? = null
+        var capturedInsets: CameraFitInsets? = null
+
+        zoomOnGpxTrack(
+            map = mockk(),
+            track = track,
+            isActivityOngoing = false,
+            insets = expectedInsets,
+            fitBounds = { _, bounds, insets ->
+                capturedBounds = bounds
+                capturedInsets = insets
+            },
+        )
+
+        assertEquals(expectedInsets, capturedInsets)
+        track.lines.flatMap(GpxLine::points).forEach { point ->
+            assertTrue(
+                capturedBounds!!.contains(
+                    org.maplibre.android.geometry.LatLng(point.latitude, point.longitude),
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `GPX import does not move the camera during an ongoing activity`() {
+        var fitCalls = 0
+        zoomOnGpxTrack(
+            map = mockk(),
+            track = GpxTrack(listOf(GpxLine(listOf(GpxPoint(41.0, 2.0), GpxPoint(42.0, 3.0))))),
+            isActivityOngoing = true,
+            insets = CameraFitInsets(0, 0, 0, 0),
+            fitBounds = { _, _, _ -> fitCalls++ },
+        )
+
+        assertEquals(0, fitCalls)
     }
 
     @Test

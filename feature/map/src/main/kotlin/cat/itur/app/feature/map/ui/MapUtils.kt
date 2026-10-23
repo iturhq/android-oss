@@ -7,6 +7,7 @@ package cat.itur.app.feature.map.ui
 
 import android.location.Location
 import android.util.Log
+import cat.itur.app.core.model.GpxTrack
 import cat.itur.app.core.model.ParticipantLocation
 import cat.itur.app.feature.map.ui.components.map.DIRECTION_OF_TRAVEL_POINTER_FRACTION
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -188,6 +189,27 @@ internal fun zoomOnGroup(
         } catch (e: Exception) {
             Log.e("MapScreen", "Zoom on group failed", e)
         }
+    }
+}
+
+/** Fits a newly loaded local track only while the map is not serving an active activity. */
+internal fun zoomOnGpxTrack(
+    map: MapLibreMap,
+    track: GpxTrack?,
+    isActivityOngoing: Boolean,
+    insets: CameraFitInsets,
+    fitBounds: (MapLibreMap, LatLngBounds, CameraFitInsets) -> Unit = ::animateToBounds,
+) {
+    if (track == null || isActivityOngoing) return
+    val points = track.lines.flatMap { line ->
+        line.points.map { point -> LatLng(point.latitude, point.longitude) }
+    }
+    when {
+        points.isEmpty() -> Unit
+        points.size == 1 -> map.animateCamera(
+            CameraUpdateFactory.newLatLngZoom(points.single(), SINGLE_LOCATION_ZOOM),
+        )
+        else -> fitBounds(map, LatLngBounds.Builder().includes(points).build(), insets)
     }
 }
 
