@@ -5,5 +5,9 @@
   -->
 <resources>
     <string name="app_name">Itur</string>
+    <string name="clear_gpx_track">Borrar recorrido GPX</string>
+    <string name="clear_gpx_track_confirmation_title">¿Borrar el recorrido GPX?</string>
+    <string name="clear_gpx_track_confirmation_message">El recorrido GPX cargado se eliminará de este dispositivo.</string>
+    <string name="clear_gpx_track_confirm">Borrar recorrido</string>
     <string name="open_source_licenses">Licencias de código abierto</string>
 </resources>

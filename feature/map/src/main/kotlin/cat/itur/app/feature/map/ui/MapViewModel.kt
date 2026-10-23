@@ -62,6 +62,8 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.retryWhen
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Date
 import javax.inject.Inject
@@ -73,7 +75,7 @@ constructor(
     participantSignalRepository: ParticipantSignalRepository,
     private val userRepository: UserRepository,
     private val locationsRepository: LocationRepository,
-    gpxTrackRepository: GpxTrackRepository = InMemoryGpxTrackRepository(),
+    private val gpxTrackRepository: GpxTrackRepository = InMemoryGpxTrackRepository(),
     private val locationClient: LocationClient,
     private val broadcastNotifier: BroadcastNotifier,
     val mapStyleConfig: MapStyleConfig,
@@ -106,6 +108,9 @@ constructor(
     private val _participantLocations = MutableStateFlow<List<ParticipantLocation>>(emptyList())
     val participantLocations = _participantLocations.asStateFlow()
     val gpxTrack = gpxTrackRepository.track
+    val hasGpxTrack = gpxTrack
+        .map { it != null }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, gpxTrack.value != null)
 
     // The last know location, as collected by the location service.
     private val _lastLocation = MutableLiveData<Location?>()
@@ -152,6 +157,10 @@ constructor(
     fun reportMapStyleLoadFailed() = mapStyleRendererHealthReporter.styleLoadFailed()
 
     fun reportMapStyleLoadSucceeded() = mapStyleRendererHealthReporter.styleLoadSucceeded()
+
+    fun clearGpxTrack() = viewModelScope.launch {
+        gpxTrackRepository.setTrack(null)
+    }
 
     // The most recent operator broadcast (UC-ACTIVITY-007), for an in-app banner alongside
     // the system notification posted by [broadcastNotifier]. Polling itself is driven by the UI

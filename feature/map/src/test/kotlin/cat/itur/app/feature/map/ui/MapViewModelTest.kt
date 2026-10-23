@@ -21,6 +21,8 @@ import cat.itur.app.core.data.repository.LocationReportMeasurement
 import cat.itur.app.core.data.repository.LocationReportOutcome
 import cat.itur.app.core.data.repository.LocationReportStage
 import cat.itur.app.core.data.repository.LocationRepository
+import cat.itur.app.core.data.repository.GpxTrackRepository
+import cat.itur.app.core.data.repository.InMemoryGpxTrackRepository
 import cat.itur.app.core.data.repository.ParticipantSignalRepository
 import cat.itur.app.core.data.repository.SignInFailureReason
 import cat.itur.app.core.data.repository.SignInResult
@@ -30,6 +32,7 @@ import cat.itur.app.core.domain.id.UserId
 import cat.itur.app.core.domain.model.User
 import cat.itur.app.core.location.LocationClient
 import cat.itur.app.core.model.Broadcast
+import cat.itur.app.core.model.GpxTrack
 import cat.itur.app.core.model.IturActivity
 import cat.itur.app.core.model.IturActivityStatus
 import cat.itur.app.core.model.Location
@@ -138,6 +141,7 @@ class MapViewModelTest {
         userRepo: UserRepository = userRepo(),
         healthChecks: Set<BackendHealthCheck> = emptySet(),
         locationRepo: LocationRepository = locationRepo(activityRepo),
+        gpxTrackRepository: GpxTrackRepository = InMemoryGpxTrackRepository(),
         participantSignalRepo: ParticipantSignalRepository =
             (activityRepo as? FakeActivityRepository)?.participantSignalRepository
                 ?: mockk(relaxed = true),
@@ -146,12 +150,30 @@ class MapViewModelTest {
         participantSignalRepository = participantSignalRepo,
         userRepository = userRepo,
         locationsRepository = locationRepo,
+        gpxTrackRepository = gpxTrackRepository,
         locationClient = locationClient,
         broadcastNotifier = broadcastNotifier,
         mapStyleConfig = MapStyleConfig(styleUrl = "https://example.invalid/style.json"),
         locationUpdateConfig = LocationUpdateConfig(updateIntervalMillis = 2_000L),
         backendHealthChecks = healthChecks,
     )
+
+    @Test
+    fun gpxClearActionStateFollowsTheStoredTrack() = runTest {
+        val repository = InMemoryGpxTrackRepository()
+        val viewModel = viewModel(gpxTrackRepository = repository)
+
+        assertFalse(viewModel.hasGpxTrack.value)
+
+        repository.setTrack(GpxTrack(emptyList()))
+        runCurrent()
+        assertTrue(viewModel.hasGpxTrack.value)
+
+        viewModel.clearGpxTrack()
+        runCurrent()
+        assertFalse(viewModel.hasGpxTrack.value)
+        assertNull(repository.track.value)
+    }
 
     /** Asserts the state is [MapUiState.Ongoing], showing the error message on failure. */
     private fun assertOngoing(vm: MapViewModel) {

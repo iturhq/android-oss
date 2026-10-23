@@ -5,5 +5,9 @@
   -->
 <resources>
     <string name="app_name">Itur</string>
+    <string name="clear_gpx_track">Clear GPX track</string>
+    <string name="clear_gpx_track_confirmation_title">Clear GPX track?</string>
+    <string name="clear_gpx_track_confirmation_message">The loaded GPX track will be removed from this device.</string>
+    <string name="clear_gpx_track_confirm">Clear track</string>
     <string name="open_source_licenses">Open source licenses</string>
 </resources>

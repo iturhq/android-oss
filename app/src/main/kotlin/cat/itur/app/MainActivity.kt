@@ -44,7 +44,7 @@ class MainActivity : ComponentActivity() {
             val appState = rememberIturAppState()
             CompositionLocalProvider {
                 IturTheme {
-                    IturApp(appState)
+                    IturApp(appState, gpxTrackRepository)
                 }
             }
         }
