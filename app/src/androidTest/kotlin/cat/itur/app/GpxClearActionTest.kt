@@ -12,11 +12,15 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.activity.ComponentActivity
 import androidx.test.platform.app.InstrumentationRegistry
 import cat.itur.app.core.data.repository.PersistedGpxTrackRepository
 import cat.itur.app.core.model.GpxLine
 import cat.itur.app.core.model.GpxPoint
 import cat.itur.app.core.model.GpxTrack
+import cat.itur.app.core.ui.theme.IturTheme
+import cat.itur.app.ui.IturApp
+import cat.itur.app.ui.rememberIturAppState
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertNotNull
@@ -27,12 +31,21 @@ import org.junit.Test
 
 class GpxClearActionTest {
     @get:Rule
-    val composeRule = createAndroidComposeRule<MainActivity>()
+    val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
+    private lateinit var repository: PersistedGpxTrackRepository
 
     @Before
-    fun clearStoredTrack() = setTrack(null)
+    fun clearStoredTrack() {
+        repository = PersistedGpxTrackRepository(context)
+        runBlocking { repository.setTrack(null) }
+        composeRule.setContent {
+            IturTheme {
+                IturApp(rememberIturAppState(), repository)
+            }
+        }
+    }
 
     @After
     fun cleanUpStoredTrack() = setTrack(null)
@@ -60,9 +73,7 @@ class GpxClearActionTest {
     }
 
     private fun setTrack(track: GpxTrack?) {
-        composeRule.runOnUiThread {
-            runBlocking { composeRule.activity.gpxTrackRepository.setTrack(track) }
-        }
+        runBlocking { repository.setTrack(track) }
         composeRule.waitForIdle()
     }
 
