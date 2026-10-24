@@ -9,6 +9,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
@@ -45,11 +46,11 @@ class GpxClearActionTest {
     fun cancellingClearKeepsTheLoadedTrack() {
         setTrack(track())
 
-        composeRule.onAllNodesWithTag("clear_gpx_track_button").onFirst().assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("clear_gpx_track_button").assertIsDisplayed().performClick()
         composeRule.onNodeWithText("Clear GPX track?").assertIsDisplayed()
         composeRule.onNodeWithText("Cancel").performClick()
 
-        composeRule.onAllNodesWithTag("clear_gpx_track_button").onFirst().assertIsDisplayed()
+        composeRule.onNodeWithTag("clear_gpx_track_button").assertIsDisplayed()
         assertNotNull(PersistedGpxTrackRepository(context).track.value)
     }
 
@@ -57,7 +58,7 @@ class GpxClearActionTest {
     fun confirmingClearRemovesTheTrackAndPersistsAcrossRestart() {
         setTrack(track())
 
-        composeRule.onAllNodesWithTag("clear_gpx_track_button").onFirst().assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("clear_gpx_track_button").assertIsDisplayed().performClick()
         composeRule.onNodeWithText("Clear track").performClick()
 
         composeRule.waitUntil(5_000) {
