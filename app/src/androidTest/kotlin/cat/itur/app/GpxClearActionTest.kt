@@ -5,22 +5,22 @@
 
 package cat.itur.app
 
-import androidx.compose.ui.test.assertIsDisplayed
+import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.activity.ComponentActivity
 import androidx.test.platform.app.InstrumentationRegistry
 import cat.itur.app.core.data.repository.PersistedGpxTrackRepository
 import cat.itur.app.core.model.GpxLine
 import cat.itur.app.core.model.GpxPoint
 import cat.itur.app.core.model.GpxTrack
 import cat.itur.app.core.ui.theme.IturTheme
-import cat.itur.app.ui.IturApp
-import cat.itur.app.ui.rememberIturAppState
+import cat.itur.app.ui.ClearGpxTrackAction
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertNotNull
@@ -42,7 +42,7 @@ class GpxClearActionTest {
         runBlocking { repository.setTrack(null) }
         composeRule.setContent {
             IturTheme {
-                IturApp(rememberIturAppState(), repository)
+                Box { ClearGpxTrackAction(repository) }
             }
         }
     }

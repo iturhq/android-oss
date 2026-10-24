@@ -7,6 +7,7 @@ package cat.itur.app.ui
 
 import android.content.Intent
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -73,9 +74,6 @@ internal fun IturApp(
     snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier,
 ) {
-    val gpxTrack by gpxTrackRepository.track.collectAsState()
-    var showClearGpxTrackConfirmation by remember { mutableStateOf(false) }
-    val coroutineScope = rememberCoroutineScope()
     Scaffold(
         modifier =
         modifier
@@ -127,40 +125,48 @@ internal fun IturApp(
                 ) {
                     Icon(IturIcons.Info, contentDescription = stringResource(R.string.open_source_licenses))
                 }
-                if (gpxTrack != null) {
-                    IconButton(
-                        onClick = { showClearGpxTrackConfirmation = true },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .testTag("clear_gpx_track_button"),
-                    ) {
-                        Icon(
-                            IturIcons.Stop,
-                            contentDescription = stringResource(R.string.clear_gpx_track),
-                        )
-                    }
-                }
-                if (showClearGpxTrackConfirmation) {
-                    AlertDialog(
-                        onDismissRequest = { showClearGpxTrackConfirmation = false },
-                        title = { Text(stringResource(R.string.clear_gpx_track_confirmation_title)) },
-                        text = { Text(stringResource(R.string.clear_gpx_track_confirmation_message)) },
-                        confirmButton = {
-                            TextButton(
-                                onClick = {
-                                    showClearGpxTrackConfirmation = false
-                                    coroutineScope.launch { gpxTrackRepository.setTrack(null) }
-                                },
-                            ) { Text(stringResource(R.string.clear_gpx_track_confirm)) }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showClearGpxTrackConfirmation = false }) {
-                                Text(stringResource(android.R.string.cancel))
-                            }
-                        },
-                    )
-                }
+                ClearGpxTrackAction(gpxTrackRepository)
             }
         }
+    }
+}
+
+@Composable
+internal fun BoxScope.ClearGpxTrackAction(gpxTrackRepository: GpxTrackRepository) {
+    val gpxTrack by gpxTrackRepository.track.collectAsState()
+    var showClearGpxTrackConfirmation by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+    if (gpxTrack != null) {
+        IconButton(
+            onClick = { showClearGpxTrackConfirmation = true },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .testTag("clear_gpx_track_button"),
+        ) {
+            Icon(
+                IturIcons.Stop,
+                contentDescription = stringResource(R.string.clear_gpx_track),
+            )
+        }
+    }
+    if (showClearGpxTrackConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showClearGpxTrackConfirmation = false },
+            title = { Text(stringResource(R.string.clear_gpx_track_confirmation_title)) },
+            text = { Text(stringResource(R.string.clear_gpx_track_confirmation_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearGpxTrackConfirmation = false
+                        coroutineScope.launch { gpxTrackRepository.setTrack(null) }
+                    },
+                ) { Text(stringResource(R.string.clear_gpx_track_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearGpxTrackConfirmation = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
     }
 }
