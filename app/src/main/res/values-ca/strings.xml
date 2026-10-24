@@ -7,7 +7,7 @@
     <string name="app_name">Itur</string>
     <string name="clear_gpx_track">Esborra el recorregut GPX</string>
     <string name="clear_gpx_track_confirmation_title">Vols esborrar el recorregut GPX?</string>
-    <string name="clear_gpx_track_confirmation_message">El recorregut GPX carregat se suprimirà d'aquest dispositiu.</string>
+    <string name="clear_gpx_track_confirmation_message">El recorregut GPX carregat se suprimirà d\'aquest dispositiu.</string>
     <string name="clear_gpx_track_confirm">Esborra el recorregut</string>
     <string name="open_source_licenses">Llicències de codi obert</string>
 </resources>
