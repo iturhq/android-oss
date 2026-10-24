@@ -5,10 +5,10 @@
 
 package cat.itur.app
 
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
@@ -38,18 +38,18 @@ class GpxClearActionTest {
 
     @Test
     fun clearActionIsAbsentWithoutATrack() {
-        composeRule.onNodeWithTag("clear_gpx_track_button").assertDoesNotExist()
+        composeRule.onAllNodesWithTag("clear_gpx_track_button").assertCountEquals(0)
     }
 
     @Test
     fun cancellingClearKeepsTheLoadedTrack() {
         setTrack(track())
 
-        composeRule.onNodeWithTag("clear_gpx_track_button").assertIsDisplayed().performClick()
+        composeRule.onAllNodesWithTag("clear_gpx_track_button").onFirst().assertIsDisplayed().performClick()
         composeRule.onNodeWithText("Clear GPX track?").assertIsDisplayed()
         composeRule.onNodeWithText("Cancel").performClick()
 
-        composeRule.onNodeWithTag("clear_gpx_track_button").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("clear_gpx_track_button").onFirst().assertIsDisplayed()
         assertNotNull(PersistedGpxTrackRepository(context).track.value)
     }
 
@@ -57,13 +57,13 @@ class GpxClearActionTest {
     fun confirmingClearRemovesTheTrackAndPersistsAcrossRestart() {
         setTrack(track())
 
-        composeRule.onNodeWithTag("clear_gpx_track_button").assertIsDisplayed().performClick()
+        composeRule.onAllNodesWithTag("clear_gpx_track_button").onFirst().assertIsDisplayed().performClick()
         composeRule.onNodeWithText("Clear track").performClick()
 
         composeRule.waitUntil(5_000) {
             PersistedGpxTrackRepository(context).track.value == null
         }
-        composeRule.onNodeWithTag("clear_gpx_track_button").assertDoesNotExist()
+        composeRule.onAllNodesWithTag("clear_gpx_track_button").assertCountEquals(0)
         assertNull(PersistedGpxTrackRepository(context).track.value)
     }
 
