@@ -38,12 +38,8 @@ class GpxClearActionTest {
     fun cleanUpStoredTrack() = setTrack(null)
 
     @Test
-    fun clearActionIsAbsentWithoutATrack() {
+    fun clearActionTracksStoredGpxAndConfirmation() {
         composeRule.onAllNodesWithTag("clear_gpx_track_button").assertCountEquals(0)
-    }
-
-    @Test
-    fun cancellingClearKeepsTheLoadedTrack() {
         setTrack(track())
 
         composeRule.onNodeWithTag("clear_gpx_track_button").assertIsDisplayed().performClick()
@@ -52,11 +48,6 @@ class GpxClearActionTest {
 
         composeRule.onNodeWithTag("clear_gpx_track_button").assertIsDisplayed()
         assertNotNull(PersistedGpxTrackRepository(context).track.value)
-    }
-
-    @Test
-    fun confirmingClearRemovesTheTrackAndPersistsAcrossRestart() {
-        setTrack(track())
 
         composeRule.onNodeWithTag("clear_gpx_track_button").assertIsDisplayed().performClick()
         composeRule.onNodeWithText("Clear track").performClick()
