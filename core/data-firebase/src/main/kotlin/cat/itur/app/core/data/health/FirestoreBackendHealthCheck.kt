@@ -5,7 +5,7 @@
 
 package cat.itur.app.core.data.health
 
-import cat.itur.app.core.data.repository.FirestoreCollections
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Source
@@ -16,6 +16,7 @@ import javax.inject.Inject
  * Performs one server-only, one-document read. It never creates, updates, or deletes data.
  */
 class FirestoreBackendHealthCheck @Inject constructor(
+    private val auth: FirebaseAuth,
     private val firestore: FirebaseFirestore,
 ) : BackendHealthCheck {
     private companion object {
@@ -31,8 +32,10 @@ class FirestoreBackendHealthCheck @Inject constructor(
     override val successDetail = "Bounded server read completed"
 
     override suspend fun probe() {
-        firestore.collection(FirestoreCollections.ACTIVITIES)
-            .limit(1)
+        val user = requireNotNull(auth.currentUser) { "Firestore requires an authenticated user" }
+        user.getIdToken(true).await()
+        firestore.collection("users")
+            .document(user.uid)
             .get(Source.SERVER)
             .await()
     }

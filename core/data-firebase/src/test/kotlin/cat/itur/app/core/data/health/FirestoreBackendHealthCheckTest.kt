@@ -5,13 +5,15 @@
 
 package cat.itur.app.core.data.health
 
-import cat.itur.app.core.data.repository.FirestoreCollections
 import cat.itur.app.core.data.repository.failedTask
 import cat.itur.app.core.data.repository.successfulTask
-import com.google.firebase.firestore.CollectionReference
+import com.google.android.gms.tasks.Tasks
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.GetTokenResult
+import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
-import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.Source
 import io.mockk.every
 import io.mockk.mockk
@@ -23,16 +25,18 @@ import kotlin.test.assertTrue
 
 class FirestoreBackendHealthCheckTest {
 
+    private val auth = mockk<FirebaseAuth>()
+
     @Test
     fun `Firestore probe declares Firebase Auth as its only prerequisite`() {
-        val check = FirestoreBackendHealthCheck(mockk())
+        val check = FirestoreBackendHealthCheck(auth, mockk())
 
         assertEquals(setOf(BackendServiceIds.FIREBASE_AUTH), check.prerequisiteServiceIds)
     }
 
     @Test
     fun `Firestore probe describes its bounded server diagnostic`() {
-        val check = FirestoreBackendHealthCheck(mockk())
+        val check = FirestoreBackendHealthCheck(auth, mockk())
 
         assertEquals(BackendServiceIds.FIREBASE_FIRESTORE, check.service.id)
         assertEquals("Cloud Firestore", check.service.displayName)
@@ -41,20 +45,22 @@ class FirestoreBackendHealthCheckTest {
     }
 
     @Test
-    fun `Firestore probe performs one server-only bounded read`() = runBlocking {
-        val collection = mockk<CollectionReference>()
-        val query = mockk<Query>()
+    fun `Firestore probe refreshes the caller token then reads only that user document from the server`() = runBlocking {
+        val user = mockk<FirebaseUser>()
+        val reference = mockk<DocumentReference>()
         val firestore = mockk<FirebaseFirestore>()
-        every { firestore.collection(FirestoreCollections.ACTIVITIES) } returns collection
-        every { collection.limit(1) } returns query
-        every { query.get(Source.SERVER) } returns successfulTask(mockk())
+        every { auth.currentUser } returns user
+        every { user.uid } returns "caller-id"
+        every { user.getIdToken(true) } returns Tasks.forResult(mockk<GetTokenResult>())
+        every { firestore.collection("users").document("caller-id") } returns reference
+        every { reference.get(Source.SERVER) } returns successfulTask(mockk())
 
-        FirestoreBackendHealthCheck(firestore).probe()
+        FirestoreBackendHealthCheck(auth, firestore).probe()
     }
 
     @Test
     fun `Firestore recognition accepts nested Firestore failures only`() {
-        val check = FirestoreBackendHealthCheck(mockk())
+        val check = FirestoreBackendHealthCheck(auth, mockk())
         val firestoreFailure = FirebaseFirestoreException("denied", FirebaseFirestoreException.Code.PERMISSION_DENIED)
 
         assertTrue(check.recognizes(IllegalStateException("wrapped", firestoreFailure)))
@@ -63,15 +69,17 @@ class FirestoreBackendHealthCheckTest {
 
     @Test
     fun `Firestore probe propagates failures to the shared health circuit`() = runBlocking {
-        val collection = mockk<CollectionReference>()
-        val query = mockk<Query>()
+        val user = mockk<FirebaseUser>()
+        val reference = mockk<DocumentReference>()
         val firestore = mockk<FirebaseFirestore>()
         val failure = FirebaseFirestoreException("unavailable", FirebaseFirestoreException.Code.UNAVAILABLE)
-        every { firestore.collection(FirestoreCollections.ACTIVITIES) } returns collection
-        every { collection.limit(1) } returns query
-        every { query.get(Source.SERVER) } returns failedTask(failure)
+        every { auth.currentUser } returns user
+        every { user.uid } returns "caller-id"
+        every { user.getIdToken(true) } returns Tasks.forResult(mockk<GetTokenResult>())
+        every { firestore.collection("users").document("caller-id") } returns reference
+        every { reference.get(Source.SERVER) } returns failedTask(failure)
 
-        val propagated = runCatching { FirestoreBackendHealthCheck(firestore).probe() }.exceptionOrNull()
+        val propagated = runCatching { FirestoreBackendHealthCheck(auth, firestore).probe() }.exceptionOrNull()
 
         assertEquals(failure, propagated)
     }

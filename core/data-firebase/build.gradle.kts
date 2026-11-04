@@ -42,6 +42,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     // Firestore
     implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore.ktx)
     implementation(libs.firebase.functions)
 
