@@ -8,6 +8,7 @@ package cat.itur.app.core.data.repository
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import cat.itur.app.core.data.health.FirestoreBackendHealthCheck
 import cat.itur.app.core.domain.id.UserId
 import cat.itur.app.core.model.IturActivity
 import com.google.firebase.FirebaseApp
@@ -67,6 +68,22 @@ class FirebaseActivityRepositoryEmulatorContractTest {
         )
     }
 
+    @Test
+    fun callerScopedFirestoreHealthProbeCompletesUnderShippedRules() = runBlocking {
+        val arguments = InstrumentationRegistry.getArguments()
+        assumeTrue(arguments.getString(ENABLED_ARGUMENT) == "true")
+        val host = arguments.getString(HOST_ARGUMENT) ?: DEFAULT_HOST
+        val fixture = adapter(
+            "health",
+            host,
+            arguments.intArgument(AUTH_PORT_ARGUMENT, DEFAULT_AUTH_PORT),
+            arguments.intArgument(FIRESTORE_PORT_ARGUMENT, DEFAULT_FIRESTORE_PORT),
+            arguments.intArgument(FUNCTIONS_PORT_ARGUMENT, DEFAULT_FUNCTIONS_PORT),
+        )
+
+        FirestoreBackendHealthCheck(fixture.auth, fixture.firestore).probe()
+    }
+
     private suspend fun adapter(
         label: String,
         host: String,
@@ -95,6 +112,7 @@ class FirebaseActivityRepositoryEmulatorContractTest {
         val functions = FirebaseFunctions.getInstance(app).also { it.useEmulator(host, functionsPort) }
         return AdapterFixture(
             userId = UserId(user.uid),
+            auth = auth,
             firestore = firestore,
             repository = FirebaseActivityRepository(firestore, functions),
         )
@@ -110,6 +128,7 @@ class FirebaseActivityRepositoryEmulatorContractTest {
 
     private data class AdapterFixture(
         val userId: UserId,
+        val auth: FirebaseAuth,
         val firestore: FirebaseFirestore,
         val repository: FirebaseActivityRepository,
     )
