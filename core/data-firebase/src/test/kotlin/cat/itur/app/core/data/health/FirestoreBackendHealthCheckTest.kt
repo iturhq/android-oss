@@ -45,7 +45,7 @@ class FirestoreBackendHealthCheckTest {
     }
 
     @Test
-    fun `Firestore probe refreshes the caller token then reads only that user document from the server`() = runBlocking {
+    fun `Firestore probe reads only the authenticated caller document`() = runBlocking {
         val user = mockk<FirebaseUser>()
         val reference = mockk<DocumentReference>()
         val firestore = mockk<FirebaseFirestore>()
