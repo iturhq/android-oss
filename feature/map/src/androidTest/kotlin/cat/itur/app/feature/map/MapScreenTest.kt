@@ -7,6 +7,7 @@ package cat.itur.app.feature.map
 
 import android.Manifest
 import android.content.Context
+import android.os.SystemClock
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
@@ -41,6 +42,7 @@ import org.junit.Test
 import org.maplibre.android.MapLibre
 import org.maplibre.android.WellKnownTileServer
 import javax.inject.Inject
+import android.graphics.Color as AndroidColor
 
 /**
  * Instrumented tests for [MapScreen], using [FakeLocationClient] (via [TestLocationModule])
@@ -290,9 +292,20 @@ class MapScreenTest {
     @Test
     fun helpButtonIsAvailableInIdleState() {
         // Before signing in or starting anything -- help must not require an ongoing activity.
+        composeRule.waitForIdle()
+        SystemClock.sleep(250)
+        val mapLuma = averageCenterLuma()
         composeRule.onNodeWithTag("help_fab").assertIsDisplayed().performClick()
 
         composeRule.onNodeWithTag("help_overlay").assertIsDisplayed()
+        composeRule.waitForIdle()
+        SystemClock.sleep(250)
+        val overlayLuma = averageCenterLuma()
+        assertTrue(
+            "Help overlay must visibly darken the rendered map pixels; " +
+                "map luma=$mapLuma, overlay luma=$overlayLuma",
+            mapLuma >= 40.0 && overlayLuma <= mapLuma * 0.55,
+        )
         composeRule.onNodeWithTag("help_overlay_hint", useUnmergedTree = true)
             .assertTextContains("Tap a label for more information", substring = true)
         composeRule.onNodeWithText("Join an activity by scanning its QR code").assertIsDisplayed()
@@ -311,6 +324,31 @@ class MapScreenTest {
         // Not signed in yet, so "sign in" is visible but "sign out" isn't -- the overlay must
         // describe only what's actually on screen.
         composeRule.onNodeWithText("Sign in to start or manage an activity").assertIsDisplayed()
+    }
+
+    private fun averageCenterLuma(): Double {
+        val screenshot = checkNotNull(
+            InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot(),
+        )
+        return try {
+            var total = 0.0
+            var samples = 0
+            for (xStep in 3..7) {
+                for (yStep in 3..7) {
+                    val pixel = screenshot.getPixel(
+                        screenshot.width * xStep / 10,
+                        screenshot.height * yStep / 10,
+                    )
+                    total += 0.2126 * AndroidColor.red(pixel) +
+                        0.7152 * AndroidColor.green(pixel) +
+                        0.0722 * AndroidColor.blue(pixel)
+                    samples++
+                }
+            }
+            total / samples
+        } finally {
+            screenshot.recycle()
+        }
     }
 
     @Test

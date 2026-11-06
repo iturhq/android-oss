@@ -139,8 +139,8 @@ internal fun MapScreenCoordinator(
 
     MapScreenEffects(viewModel, environment, presentation, interaction, snackbarHostState)
     CompositionLocalProvider(LocalHelpAnchorRegistry provides helpAnchorRegistry) {
-        MapTransientSurfaces(viewModel, environment, presentation, interaction, qrCustomization)
         MapScaffold(viewModel, environment, presentation, interaction, snackbarHostState)
+        MapTransientSurfaces(viewModel, environment, presentation, interaction, qrCustomization)
     }
 }
 
