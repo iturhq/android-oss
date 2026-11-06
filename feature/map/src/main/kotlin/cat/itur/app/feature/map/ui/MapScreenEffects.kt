@@ -17,8 +17,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -53,40 +51,6 @@ internal fun MapScreenEffects(
         interaction,
         LocalBroadcastPollIntervalMillis.current,
     )
-}
-
-@Composable
-private fun GpxCameraFitEffect(
-    presentation: MapPresentation,
-    interaction: MapInteractionState,
-) {
-    val density = LocalDensity.current
-    val horizontalFallback = with(density) { 88.dp.roundToPx() }
-    val verticalPadding = with(density) { 32.dp.roundToPx() }
-    LaunchedEffect(presentation.gpxTrack, presentation.ongoingActivityId, interaction.mapLibreMap) {
-        zoomOnGpxTrack(
-            map = interaction.mapLibreMap ?: return@LaunchedEffect,
-            track = presentation.gpxTrack,
-            isActivityOngoing = presentation.ongoingActivityId != null,
-            insets = cameraFitInsets(
-                mapBounds = interaction.mapBounds,
-                leftControlBounds = interaction.leftControlBounds,
-                rightControlBounds = interaction.rightControlBounds,
-                horizontalFallback = horizontalFallback,
-                verticalPadding = verticalPadding,
-            ),
-        )
-    }
-}
-
-@Composable
-private fun RecentLocationHistoryEffect(
-    presentation: MapPresentation,
-    interaction: MapInteractionState,
-) {
-    LaunchedEffect(presentation.lastLocation) {
-        presentation.lastLocation?.let(interaction::recordLocation)
-    }
 }
 
 @Composable
@@ -233,88 +197,6 @@ private fun LocationPermissionEffect(
             } else {
                 launcher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
             }
-        }
-    }
-}
-
-@Composable
-private fun InitialCenteringEffect(
-    presentation: MapPresentation,
-    interaction: MapInteractionState,
-) {
-    LaunchedEffect(
-        interaction.mapLibreMap,
-        presentation.lastLocation,
-        presentation.gpxTrack,
-        presentation.ongoingActivityId,
-        interaction.centeredOnInitialLocation,
-        interaction.hasManualZoomOverride,
-    ) {
-        interaction.centeredOnInitialLocation = centerOnInitialLocationIfReady(
-            map = interaction.mapLibreMap,
-            location = presentation.lastLocation,
-            alreadyCentered = interaction.centeredOnInitialLocation,
-            center = { map, location ->
-                val importedTrackOwnsInitialCamera =
-                    presentation.gpxTrack != null && presentation.ongoingActivityId == null
-                if (!interaction.hasManualZoomOverride && !importedTrackOwnsInitialCamera) {
-                    zoomOnUser(
-                        map = map,
-                        location = location,
-                        recentLocations = interaction.recentLocations,
-                        viewportHeightPixels = interaction.mapViewportHeightPixels,
-                        isDirectionOfTravel = interaction.isDirectionOfTravel,
-                    )
-                }
-            },
-        )
-    }
-}
-
-@Composable
-private fun ContinuousCameraTrackingEffect(
-    presentation: MapPresentation,
-    interaction: MapInteractionState,
-) {
-    val density = LocalDensity.current
-    val horizontalFallback = with(density) { 88.dp.roundToPx() }
-    val verticalPadding = with(density) { 32.dp.roundToPx() }
-    LaunchedEffect(
-        interaction.cameraTrackingMode,
-        interaction.mapLibreMap,
-        presentation.lastLocation,
-        presentation.participantLocations,
-        interaction.recentLocations,
-        interaction.mapViewportHeightPixels,
-        interaction.isDirectionOfTravel,
-        interaction.mapBounds,
-        interaction.leftControlBounds,
-        interaction.rightControlBounds,
-    ) {
-        val map = interaction.mapLibreMap ?: return@LaunchedEffect
-        when (interaction.cameraTrackingMode) {
-            CameraTrackingMode.NONE -> Unit
-            CameraTrackingMode.USER -> presentation.lastLocation?.let { location ->
-                zoomOnUser(
-                    map = map,
-                    location = location,
-                    recentLocations = interaction.recentLocations,
-                    viewportHeightPixels = interaction.mapViewportHeightPixels,
-                    isDirectionOfTravel = interaction.isDirectionOfTravel,
-                )
-            }
-            CameraTrackingMode.GROUP -> zoomOnGroup(
-                map = map,
-                participantLocations = presentation.participantLocations,
-                currentLocation = presentation.lastLocation,
-                insets = cameraFitInsets(
-                    mapBounds = interaction.mapBounds,
-                    leftControlBounds = interaction.leftControlBounds,
-                    rightControlBounds = interaction.rightControlBounds,
-                    horizontalFallback = horizontalFallback,
-                    verticalPadding = verticalPadding,
-                ),
-            )
         }
     }
 }

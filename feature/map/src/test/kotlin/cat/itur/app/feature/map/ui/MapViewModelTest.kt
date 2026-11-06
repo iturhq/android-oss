@@ -141,7 +141,6 @@ class MapViewModelTest {
         userRepo: UserRepository = userRepo(),
         healthChecks: Set<BackendHealthCheck> = emptySet(),
         locationRepo: LocationRepository = locationRepo(activityRepo),
-        gpxTrackRepository: GpxTrackRepository = InMemoryGpxTrackRepository(),
         participantSignalRepo: ParticipantSignalRepository =
             (activityRepo as? FakeActivityRepository)?.participantSignalRepository
                 ?: mockk(relaxed = true),
@@ -150,7 +149,7 @@ class MapViewModelTest {
         participantSignalRepository = participantSignalRepo,
         userRepository = userRepo,
         locationsRepository = locationRepo,
-        gpxTrackRepository = gpxTrackRepository,
+        gpxTrackRepository = InMemoryGpxTrackRepository(),
         locationClient = locationClient,
         broadcastNotifier = broadcastNotifier,
         mapStyleConfig = MapStyleConfig(styleUrl = "https://example.invalid/style.json"),
@@ -158,10 +157,27 @@ class MapViewModelTest {
         backendHealthChecks = healthChecks,
     )
 
+    private fun viewModelWithGpxTrack(gpxTrackRepository: GpxTrackRepository): MapViewModel {
+        val activityRepo = activityRepo()
+        val participantSignalRepo = activityRepo.participantSignalRepository
+        return MapViewModel(
+            activityRepository = activityRepo,
+            participantSignalRepository = participantSignalRepo,
+            userRepository = userRepo(),
+            locationsRepository = locationRepo(activityRepo),
+            gpxTrackRepository = gpxTrackRepository,
+            locationClient = locationClient,
+            broadcastNotifier = broadcastNotifier,
+            mapStyleConfig = MapStyleConfig(styleUrl = "https://example.invalid/style.json"),
+            locationUpdateConfig = LocationUpdateConfig(updateIntervalMillis = 2_000L),
+            backendHealthChecks = emptySet(),
+        )
+    }
+
     @Test
     fun gpxClearActionStateFollowsTheStoredTrack() = runTest {
         val repository = InMemoryGpxTrackRepository()
-        val viewModel = viewModel(gpxTrackRepository = repository)
+        val viewModel = viewModelWithGpxTrack(repository)
 
         assertFalse(viewModel.hasGpxTrack.value)
 

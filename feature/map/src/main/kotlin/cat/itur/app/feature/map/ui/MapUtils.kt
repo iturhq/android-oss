@@ -7,7 +7,6 @@ package cat.itur.app.feature.map.ui
 
 import android.location.Location
 import android.util.Log
-import cat.itur.app.core.model.GpxTrack
 import cat.itur.app.core.model.ParticipantLocation
 import cat.itur.app.feature.map.ui.components.map.DIRECTION_OF_TRAVEL_POINTER_FRACTION
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -31,7 +30,7 @@ private const val EARTH_RADIUS_METERS = 6_371_000.0
 private const val DEGREES_PER_HALF_TURN = 180.0
 private const val HALF_TURN = 2.0
 private const val MILLIS_PER_SECOND_DOUBLE = 1_000.0
-private const val SINGLE_LOCATION_ZOOM = 15.0
+internal const val SINGLE_LOCATION_ZOOM = 15.0
 
 internal data class RecentLocation(
     val latitude: Double,
@@ -189,27 +188,6 @@ internal fun zoomOnGroup(
         } catch (e: Exception) {
             Log.e("MapScreen", "Zoom on group failed", e)
         }
-    }
-}
-
-/** Fits a newly loaded local track only while the map is not serving an active activity. */
-internal fun zoomOnGpxTrack(
-    map: MapLibreMap,
-    track: GpxTrack?,
-    isActivityOngoing: Boolean,
-    insets: CameraFitInsets,
-    fitBounds: (MapLibreMap, LatLngBounds, CameraFitInsets) -> Unit = ::animateToBounds,
-) {
-    if (track == null || isActivityOngoing) return
-    val points = track.lines.flatMap { line ->
-        line.points.map { point -> LatLng(point.latitude, point.longitude) }
-    }
-    when {
-        points.isEmpty() -> Unit
-        points.size == 1 -> map.animateCamera(
-            CameraUpdateFactory.newLatLngZoom(points.single(), SINGLE_LOCATION_ZOOM),
-        )
-        else -> fitBounds(map, LatLngBounds.Builder().includes(points).build(), insets)
     }
 }
 
