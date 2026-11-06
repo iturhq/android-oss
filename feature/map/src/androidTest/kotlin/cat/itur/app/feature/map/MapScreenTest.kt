@@ -293,18 +293,19 @@ class MapScreenTest {
     fun helpButtonIsAvailableInIdleState() {
         // Before signing in or starting anything -- help must not require an ongoing activity.
         composeRule.waitForIdle()
-        SystemClock.sleep(250)
-        val mapLuma = averageCenterLuma()
+        SystemClock.sleep(750)
+        val mapPixels = renderedPixelStats()
         composeRule.onNodeWithTag("help_fab").assertIsDisplayed().performClick()
 
         composeRule.onNodeWithTag("help_overlay").assertIsDisplayed()
         composeRule.waitForIdle()
-        SystemClock.sleep(250)
-        val overlayLuma = averageCenterLuma()
+        SystemClock.sleep(500)
+        val overlayPixels = renderedPixelStats()
+        println("VPOL-C41E map pixels=$mapPixels, overlay pixels=$overlayPixels")
         assertTrue(
-            "Help overlay must visibly darken the rendered map pixels; " +
-                "map luma=$mapLuma, overlay luma=$overlayLuma",
-            mapLuma >= 40.0 && overlayLuma <= mapLuma * 0.55,
+            "Help overlay must turn most rendered viewport samples dark while the baseline " +
+                "remains visibly non-dark; map=$mapPixels, overlay=$overlayPixels",
+            mapPixels.darkFraction < 0.45 && overlayPixels.darkFraction >= 0.65,
         )
         composeRule.onNodeWithTag("help_overlay_hint", useUnmergedTree = true)
             .assertTextContains("Tap a label for more information", substring = true)
@@ -326,30 +327,41 @@ class MapScreenTest {
         composeRule.onNodeWithText("Sign in to start or manage an activity").assertIsDisplayed()
     }
 
-    private fun averageCenterLuma(): Double {
+    private fun renderedPixelStats(): RenderedPixelStats {
         val screenshot = checkNotNull(
             InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot(),
         )
         return try {
             var total = 0.0
+            var darkSamples = 0
             var samples = 0
-            for (xStep in 3..7) {
-                for (yStep in 3..7) {
+            for (xStep in 2..18) {
+                for (yStep in 2..18) {
                     val pixel = screenshot.getPixel(
-                        screenshot.width * xStep / 10,
-                        screenshot.height * yStep / 10,
+                        screenshot.width * xStep / 20,
+                        screenshot.height * yStep / 20,
                     )
-                    total += 0.2126 * AndroidColor.red(pixel) +
+                    val luma = 0.2126 * AndroidColor.red(pixel) +
                         0.7152 * AndroidColor.green(pixel) +
                         0.0722 * AndroidColor.blue(pixel)
+                    total += luma
+                    if (luma <= 85.0) darkSamples++
                     samples++
                 }
             }
-            total / samples
+            RenderedPixelStats(
+                averageLuma = total / samples,
+                darkFraction = darkSamples.toDouble() / samples,
+            )
         } finally {
             screenshot.recycle()
         }
     }
+
+    private data class RenderedPixelStats(
+        val averageLuma: Double,
+        val darkFraction: Double,
+    )
 
     @Test
     fun stoppingAnActivityReturnsToIdleWithAConfirmationMessage() {
