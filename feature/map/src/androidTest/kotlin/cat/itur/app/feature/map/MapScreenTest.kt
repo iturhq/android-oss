@@ -403,10 +403,12 @@ class MapScreenTest {
         )
         return try {
             val luminances = buildList {
-                for (x in bounds.left.toInt().coerceAtLeast(0) until
+                for (
+                    x in bounds.left.toInt().coerceAtLeast(0) until
                     bounds.right.toInt().coerceAtMost(screenshot.width)
                 ) {
-                    for (y in bounds.top.toInt().coerceAtLeast(0) until
+                    for (
+                        y in bounds.top.toInt().coerceAtLeast(0) until
                         bounds.bottom.toInt().coerceAtMost(screenshot.height)
                     ) {
                         add(relativeLuminance(screenshot.getPixel(x, y)))
@@ -486,8 +488,7 @@ class MapScreenTest {
             .assertIsDisplayed()
     }
 
-    private fun boundsOf(tag: String, useUnmergedTree: Boolean = false) =
-        composeRule.onNodeWithTag(tag, useUnmergedTree = useUnmergedTree)
+    private fun boundsOf(tag: String, useUnmergedTree: Boolean = false) = composeRule.onNodeWithTag(tag, useUnmergedTree = useUnmergedTree)
         .fetchSemanticsNode().boundsInRoot
 
     private fun assertContains(
