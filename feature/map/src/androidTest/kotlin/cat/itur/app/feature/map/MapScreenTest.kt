@@ -404,11 +404,11 @@ class MapScreenTest {
         return try {
             val luminances = buildList {
                 for (
-                    x in bounds.left.toInt().coerceAtLeast(0) until
+                x in bounds.left.toInt().coerceAtLeast(0) until
                     bounds.right.toInt().coerceAtMost(screenshot.width)
                 ) {
                     for (
-                        y in bounds.top.toInt().coerceAtLeast(0) until
+                    y in bounds.top.toInt().coerceAtLeast(0) until
                         bounds.bottom.toInt().coerceAtMost(screenshot.height)
                     ) {
                         add(relativeLuminance(screenshot.getPixel(x, y)))
