@@ -42,6 +42,7 @@ import org.junit.Test
 import org.maplibre.android.MapLibre
 import org.maplibre.android.WellKnownTileServer
 import javax.inject.Inject
+import kotlin.math.pow
 import android.graphics.Color as AndroidColor
 
 /**
@@ -310,6 +311,12 @@ class MapScreenTest {
         composeRule.onNodeWithTag("help_overlay_hint", useUnmergedTree = true)
             .assertTextContains("Tap a label for more information", substring = true)
         composeRule.onNodeWithText("Join an activity by scanning its QR code").assertIsDisplayed()
+        assertHelpOverlaySafeAndReadable(
+            labelTags = listOf(
+                "help_label_text_join_activity_fab",
+                "help_label_text_sign_in_fab",
+            ),
+        )
         composeRule.onNodeWithTag("help_label_join_activity_fab", useUnmergedTree = true)
             .performSemanticsAction(SemanticsActions.OnClick)
         composeRule.onNodeWithTag("help_overlay").assertIsDisplayed()
@@ -363,6 +370,73 @@ class MapScreenTest {
         val darkFraction: Double,
     )
 
+    private fun assertHelpOverlaySafeAndReadable(labelTags: List<String>) {
+        val root = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        val safeInsets = requireNotNull(
+            ViewCompat.getRootWindowInsets(composeRule.activity.window.decorView),
+        ).getInsets(
+            WindowInsetsCompat.Type.systemBars() or
+                WindowInsetsCompat.Type.displayCutout(),
+        )
+        val hint = boundsOf("help_overlay_hint", useUnmergedTree = true)
+        assertTrue(
+            "Help hint $hint overlaps safe drawing bounds $safeInsets inside root $root",
+            hint.top >= root.top + safeInsets.top &&
+                hint.left >= root.left + safeInsets.left &&
+                hint.right <= root.right - safeInsets.right,
+        )
+
+        labelTags.forEach { tag ->
+            val contrast = renderedContrastRatio(tag)
+            println("VPOL-53A5 $tag rendered contrast=$contrast")
+            assertTrue(
+                "Rendered Help label $tag contrast $contrast is below 4.5:1",
+                contrast >= 4.5,
+            )
+        }
+    }
+
+    private fun renderedContrastRatio(tag: String): Double {
+        val bounds = boundsOf(tag, useUnmergedTree = true)
+        val screenshot = checkNotNull(
+            InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot(),
+        )
+        return try {
+            val luminances = buildList {
+                for (x in bounds.left.toInt().coerceAtLeast(0) until
+                    bounds.right.toInt().coerceAtMost(screenshot.width)
+                ) {
+                    for (y in bounds.top.toInt().coerceAtLeast(0) until
+                        bounds.bottom.toInt().coerceAtMost(screenshot.height)
+                    ) {
+                        add(relativeLuminance(screenshot.getPixel(x, y)))
+                    }
+                }
+            }.sorted()
+            check(luminances.isNotEmpty()) { "No rendered pixels inside $tag bounds $bounds" }
+            val background = luminances[luminances.size / 2]
+            val foreground = luminances[(luminances.lastIndex * 99) / 100]
+            val brightFraction = luminances.count { it >= 0.75 }.toDouble() / luminances.size
+            assertTrue(
+                "Rendered Help label $tag has no stable bright glyph pixels: $brightFraction",
+                brightFraction >= 0.005,
+            )
+            (foreground + 0.05) / (background + 0.05)
+        } finally {
+            screenshot.recycle()
+        }
+    }
+
+    private fun relativeLuminance(pixel: Int): Double {
+        fun linear(channel: Int): Double {
+            val value = channel / 255.0
+            return if (value <= 0.04045) value / 12.92 else ((value + 0.055) / 1.055).pow(2.4)
+        }
+        return 0.2126 * linear(AndroidColor.red(pixel)) +
+            0.7152 * linear(AndroidColor.green(pixel)) +
+            0.0722 * linear(AndroidColor.blue(pixel))
+    }
+
     @Test
     fun stoppingAnActivityReturnsToIdleWithAConfirmationMessage() {
         startAsOrganizer()
@@ -412,7 +486,8 @@ class MapScreenTest {
             .assertIsDisplayed()
     }
 
-    private fun boundsOf(tag: String) = composeRule.onNodeWithTag(tag)
+    private fun boundsOf(tag: String, useUnmergedTree: Boolean = false) =
+        composeRule.onNodeWithTag(tag, useUnmergedTree = useUnmergedTree)
         .fetchSemanticsNode().boundsInRoot
 
     private fun assertContains(

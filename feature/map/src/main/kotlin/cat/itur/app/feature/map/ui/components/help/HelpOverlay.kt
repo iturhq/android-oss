@@ -11,11 +11,17 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -82,6 +88,11 @@ internal fun HelpOverlay(
             color = Color.White,
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier
+                .windowInsetsPadding(
+                    WindowInsets.safeDrawing.only(
+                        WindowInsetsSides.Top + WindowInsetsSides.Horizontal,
+                    ),
+                )
                 .padding(16.dp)
                 .testTag("help_overlay_hint"),
         )
@@ -149,6 +160,7 @@ private fun HelpLabel(
     OutlinedButton(
         onClick = onClick,
         shape = MaterialTheme.shapes.medium,
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         modifier = Modifier
             .offset {
@@ -164,7 +176,9 @@ private fun HelpLabel(
     ) {
         Text(
             text = anchor.description,
+            color = Color.White,
             style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.testTag("help_label_text_$key"),
         )
     }
 }
