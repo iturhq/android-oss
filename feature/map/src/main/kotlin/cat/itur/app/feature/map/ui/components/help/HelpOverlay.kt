@@ -93,7 +93,10 @@ internal fun HelpOverlay(
                         WindowInsetsSides.Top + WindowInsetsSides.Horizontal,
                     ),
                 )
-                .padding(16.dp)
+                .padding(
+                    horizontal = HelpOverlayChromeClearance,
+                    vertical = HelpOverlayEdgePadding,
+                )
                 .testTag("help_overlay_hint"),
         )
 
@@ -184,6 +187,11 @@ private fun HelpLabel(
 }
 
 private val HelpOverlayScrimColor = Color.Black.copy(alpha = 0.72f)
+
+// The host app keeps 48dp controls 16dp from each horizontal safe edge. Reserve that lane plus
+// an 8dp visual gap so the shared Help hint cannot render under either persistent control.
+private val HelpOverlayChromeClearance = 72.dp
+private val HelpOverlayEdgePadding = 16.dp
 private val HelpLabelGap = 12.dp
 private val HelpLabelMaxWidth = 220.dp
 

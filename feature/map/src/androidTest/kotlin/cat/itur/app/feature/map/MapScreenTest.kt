@@ -379,11 +379,20 @@ class MapScreenTest {
                 WindowInsetsCompat.Type.displayCutout(),
         )
         val hint = boundsOf("help_overlay_hint", useUnmergedTree = true)
+        val chromeClearance = with(composeRule.activity.resources.displayMetrics) {
+            72f * density
+        }
         assertTrue(
             "Help hint $hint overlaps safe drawing bounds $safeInsets inside root $root",
             hint.top >= root.top + safeInsets.top &&
                 hint.left >= root.left + safeInsets.left &&
                 hint.right <= root.right - safeInsets.right,
+        )
+        assertTrue(
+            "Help hint $hint overlaps the persistent 48dp top app chrome inside its " +
+                "16dp edge lane plus 8dp gap; root=$root, safeInsets=$safeInsets",
+            hint.left >= root.left + safeInsets.left + chromeClearance &&
+                hint.right <= root.right - safeInsets.right - chromeClearance,
         )
 
         labelTags.forEach { tag ->
