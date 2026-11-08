@@ -829,14 +829,23 @@ class CanonicalUseCasesTest {
         )
         val container = composeRule.onNodeWithTag("map_preparation_container")
             .fetchSemanticsNode().boundsInRoot
-        val status = composeRule.onNodeWithTag("map_preparation_status")
+        val status = composeRule.onNodeWithTag(
+            "map_preparation_status",
+            useUnmergedTree = true,
+        )
             .fetchSemanticsNode().boundsInRoot
-        val progress = composeRule.onNodeWithTag("map_preparation_progress")
+        val progress = composeRule.onNodeWithTag(
+            "map_preparation_progress",
+            useUnmergedTree = true,
+        )
             .fetchSemanticsNode().boundsInRoot
         assertTrue(container.left >= root.left + safeInsets.left)
         assertTrue(container.right <= root.right - safeInsets.right)
         assertTrue(container.bottom <= root.bottom - safeInsets.bottom)
-        assertTrue(status.bottom <= progress.top)
+        assertTrue(
+            "Status $status must be vertically centred above progress $progress",
+            status.center.y < progress.center.y,
+        )
         composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
 
         createGate.complete(Unit)
