@@ -30,7 +30,7 @@ private object StatusSurfaceColors {
 
 @Composable
 internal fun BoxScope.SafetyStatusSurface(presentation: OngoingState) {
-    val status = safetyStatusPresentation(presentation) ?: return
+    val status = statusPresentation(presentation) ?: return
     Surface(
         modifier = Modifier
             .align(Alignment.TopCenter)
@@ -53,12 +53,10 @@ internal fun BoxScope.SafetyStatusSurface(presentation: OngoingState) {
 }
 
 @Composable
-private fun safetyStatusPresentation(presentation: OngoingState): SafetyStatusPresentation? {
-    return if (presentation.isOrganizer) {
-        organizerSafetyStatus(presentation.participantSignals)
-    } else {
-        participantSafetyStatus(presentation.selfSignal)
-    }
+private fun statusPresentation(presentation: OngoingState): SafetyStatusPresentation? = if (presentation.isOrganizer) {
+    organizerSafetyStatus(presentation.participantSignals)
+} else {
+    participantSafetyStatus(presentation.selfSignal)
 }
 
 @Composable
