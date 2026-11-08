@@ -12,6 +12,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -230,8 +231,10 @@ class ServiceAwareControlsTest {
 
         composeRule.onNodeWithTag("participant_signal_confirmation")
             .assertIsDisplayed()
-            .assertTextContains("Help request shared")
-            .assertTextContains("red alert")
+            .assertTextEquals(
+                "Help request shared",
+                "The organiser and group can see your red alert.",
+            )
     }
 
     @Test
@@ -248,9 +251,12 @@ class ServiceAwareControlsTest {
 
         composeRule.onNodeWithTag("organizer_signal_alert")
             .assertIsDisplayed()
-            .assertTextContains("Participant needs help")
-            .assertTextContains("Needs help: Aina")
-            .assertTextContains("Delayed: Biel")
+            .assertTextEquals(
+                "Participant needs help",
+                "Needs help: Aina",
+                "Participant delayed",
+                "Delayed: Biel",
+            )
     }
 
     @Test
