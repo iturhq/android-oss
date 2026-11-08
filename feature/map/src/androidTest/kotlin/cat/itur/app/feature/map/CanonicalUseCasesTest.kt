@@ -28,8 +28,11 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.window.Dialog
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
@@ -305,11 +308,17 @@ class CanonicalUseCasesTest {
         activities.replaceActivities(emptyList())
         launch()
         signIn()
+        val createGate = CompletableDeferred<Unit>()
+        activities.createGate = createGate
         activities.createFailure = "Activity creation failed"
 
         composeRule.onNodeWithTag("start_activity_fab").performClick()
+        waitForTag("map_preparation_container")
+        composeRule.onNodeWithTag("map_preparation_progress").assertIsDisplayed()
+        createGate.complete(Unit)
 
         composeRule.onNodeWithText("Activity creation failed").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_preparation_container").assertDoesNotExist()
         composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
         composeRule.onNodeWithTag("start_activity_fab").assertIsDisplayed()
         composeRule.onNodeWithTag("show_qr_fab").assertDoesNotExist()
@@ -805,12 +814,29 @@ class CanonicalUseCasesTest {
         val createGate = CompletableDeferred<Unit>()
         activities.createGate = createGate
         composeRule.onNodeWithTag("start_activity_fab").performClick()
-        waitForText("Preparing activity...")
+        waitForText(composeRule.activity.getString(R.string.feature_map_preparing_activity))
         composeRule.onNodeWithTag("map_preparation_container").assertIsDisplayed()
         composeRule.onNodeWithTag("map_preparation_status").assertIsDisplayed()
         composeRule.onNodeWithTag("map_preparation_progress").assert(
             SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo),
         )
+        val root = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        val safeInsets = requireNotNull(
+            ViewCompat.getRootWindowInsets(composeRule.activity.window.decorView),
+        ).getInsets(
+            WindowInsetsCompat.Type.systemBars() or
+                WindowInsetsCompat.Type.displayCutout(),
+        )
+        val container = composeRule.onNodeWithTag("map_preparation_container")
+            .fetchSemanticsNode().boundsInRoot
+        val status = composeRule.onNodeWithTag("map_preparation_status")
+            .fetchSemanticsNode().boundsInRoot
+        val progress = composeRule.onNodeWithTag("map_preparation_progress")
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(container.left >= root.left + safeInsets.left)
+        assertTrue(container.right <= root.right - safeInsets.right)
+        assertTrue(container.bottom <= root.bottom - safeInsets.bottom)
+        assertTrue(status.bottom <= progress.top)
         composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
 
         createGate.complete(Unit)
