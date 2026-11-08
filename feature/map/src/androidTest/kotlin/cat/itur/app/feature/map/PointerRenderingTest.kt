@@ -49,17 +49,24 @@ class PointerRenderingTest {
     }
 
     private fun isBlue(pixel: Int): Boolean = Color.alpha(pixel) > 100 &&
-        Color.blue(pixel) > 140 && Color.blue(pixel) > Color.red(pixel) * 1.3 &&
+        Color.blue(pixel) > 140 &&
+        Color.blue(pixel) > Color.red(pixel) * 1.3 &&
         Color.blue(pixel) > Color.green(pixel) * 1.1
 
     private fun isOrange(pixel: Int): Boolean = Color.alpha(pixel) > 100 &&
-        Color.red(pixel) > 180 && Color.green(pixel) in 70..180 && Color.blue(pixel) < 80
+        Color.red(pixel) > 180 &&
+        Color.green(pixel) in 70..180 &&
+        Color.blue(pixel) < 80
 
     private fun isRed(pixel: Int): Boolean = Color.alpha(pixel) > 100 &&
-        Color.red(pixel) > 140 && Color.green(pixel) < 100 && Color.blue(pixel) < 100
+        Color.red(pixel) > 140 &&
+        Color.green(pixel) < 100 &&
+        Color.blue(pixel) < 100
 
     private fun isWhite(pixel: Int): Boolean = Color.alpha(pixel) > 200 &&
-        Color.red(pixel) > 220 && Color.green(pixel) > 220 && Color.blue(pixel) > 220
+        Color.red(pixel) > 220 &&
+        Color.green(pixel) > 220 &&
+        Color.blue(pixel) > 220
 
     private companion object {
         const val RENDER_SIZE = 56
