@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import cat.itur.app.core.domain.model.User
+import cat.itur.app.feature.map.R
 import cat.itur.app.feature.map.ui.components.map.ErrorState
 import cat.itur.app.feature.map.ui.components.map.IdleState
 import cat.itur.app.feature.map.ui.components.map.MapLibreView
