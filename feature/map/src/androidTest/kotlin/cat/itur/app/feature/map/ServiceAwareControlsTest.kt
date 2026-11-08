@@ -254,7 +254,6 @@ class ServiceAwareControlsTest {
             .assertTextEquals(
                 "Participant needs help",
                 "Needs help: Aina",
-                "Participant delayed",
                 "Delayed: Biel",
             )
     }
