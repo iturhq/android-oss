@@ -9,6 +9,7 @@ import android.Manifest
 import android.content.Context
 import android.graphics.RectF
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.core.app.ApplicationProvider
@@ -25,10 +26,14 @@ import cat.itur.app.core.ui.theme.IturTheme
 import cat.itur.app.feature.map.ui.components.map.MapLibreView
 import cat.itur.app.feature.map.ui.components.map.MapLibreViewCallbacks
 import cat.itur.app.feature.map.ui.components.map.MapLibreViewInput
+import cat.itur.app.feature.map.ui.components.map.LocationRecencyThresholds
+import cat.itur.app.feature.map.ui.components.map.RemotePointerInput
+import cat.itur.app.feature.map.ui.components.map.RemotePointerStore
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Rule
 import org.junit.Test
 import org.maplibre.android.MapLibre
@@ -215,6 +220,115 @@ class MapReadyDeviceTest {
         composeRule.waitUntil(timeoutMillis = 30.seconds.inWholeMilliseconds) {
             readyGeneration >= 2 && sourceCounts() == (1 to 18)
         }
+    }
+
+    @Test
+    fun preReadySnapshotPopulatesBothSourcesAtStyleReadiness() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            MapLibre.getInstance(
+                ApplicationProvider.getApplicationContext<Context>(),
+                "",
+                WellKnownTileServer.MapLibre,
+            )
+        }
+        val locations = participants(20)
+        val currentUserId = locations.last().userId
+        val boundaryUpdate = RemotePointerStore().update(
+            RemotePointerInput(
+                activityId = activityId,
+                currentUserId = currentUserId,
+                organizerId = organizerId,
+                locations = locations,
+                signals = emptyMap(),
+                styleGeneration = 1L,
+                nowMillis = 0L,
+                recencyThresholds = LocationRecencyThresholds(),
+            ),
+        )
+        assertEquals(1, boundaryUpdate.organizerFeatures?.size)
+        assertEquals(18, boundaryUpdate.participantFeatures?.size)
+
+        var deliveredLocations by mutableStateOf(emptyList<ParticipantLocation>())
+        var styleUrl by mutableStateOf(mapStyleUrl())
+        var readyMap: MapLibreMap? = null
+        var readyGeneration = 0
+        var fullyRendered = false
+        var preReadyCounts: Pair<Int, Int>? = null
+        val fixedCamera = LatLng(41.381, 2.171)
+
+        composeRule.setContent {
+            IturTheme {
+                MapLibreView(
+                    input = MapLibreViewInput(
+                        styleUrl = styleUrl,
+                        isActivityOngoing = true,
+                        activityId = activityId,
+                        locationPermissionGranted = true,
+                        currentUserId = currentUserId,
+                        organizerId = organizerId,
+                        participantLocations = deliveredLocations,
+                    ),
+                    callbacks = MapLibreViewCallbacks(
+                        onMapReady = { map ->
+                            assertSame(readyMap ?: map, map)
+                            readyMap = map
+                            readyGeneration++
+                            if (readyGeneration == 2) {
+                                val style = map.style
+                                preReadyCounts =
+                                    (style?.getSourceAs<GeoJsonSource>(ORGANIZER_SOURCE)
+                                        ?.querySourceFeatures(null)?.size ?: -1) to
+                                    (style?.getSourceAs<GeoJsonSource>(PARTICIPANT_SOURCE)
+                                        ?.querySourceFeatures(null)?.size ?: -1)
+                            }
+                        },
+                        onStyleLoadSucceeded = { fullyRendered = true },
+                    ),
+                )
+            }
+        }
+
+        composeRule.waitUntil(timeoutMillis = 30.seconds.inWholeMilliseconds) {
+            readyGeneration == 1 && fullyRendered
+        }
+        val map = requireNotNull(readyMap)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            map.moveCamera(CameraUpdateFactory.newLatLngZoom(fixedCamera, 14.0))
+        }
+
+        fun sourceCounts(): Pair<Int, Int> {
+            var counts = -1 to -1
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                val style = map.style
+                counts = (style?.getSourceAs<GeoJsonSource>(ORGANIZER_SOURCE)
+                    ?.querySourceFeatures(null)?.size ?: -1) to
+                    (style?.getSourceAs<GeoJsonSource>(PARTICIPANT_SOURCE)
+                        ?.querySourceFeatures(null)?.size ?: -1)
+            }
+            return counts
+        }
+
+        composeRule.runOnIdle { deliveredLocations = locations }
+        composeRule.waitUntil(timeoutMillis = 15.seconds.inWholeMilliseconds) {
+            sourceCounts() == (1 to 18)
+        }
+        composeRule.runOnIdle { deliveredLocations = emptyList() }
+        composeRule.waitUntil(timeoutMillis = 15.seconds.inWholeMilliseconds) {
+            sourceCounts() == (0 to 0)
+        }
+
+        composeRule.runOnIdle {
+            fullyRendered = false
+            deliveredLocations = locations
+            styleUrl = "${mapStyleUrl()}?psig-a17c-pre-ready=1"
+        }
+        composeRule.waitUntil(timeoutMillis = 30.seconds.inWholeMilliseconds) {
+            readyGeneration == 2 && preReadyCounts != null && fullyRendered
+        }
+        assertSame(map, readyMap)
+        assertEquals(fixedCamera, map.cameraPosition.target)
+        assertEquals(14.0, map.cameraPosition.zoom, 0.0)
+        assertEquals(1 to 18, preReadyCounts)
     }
 
     @Test
