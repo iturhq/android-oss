@@ -53,12 +53,11 @@ internal fun BoxScope.SafetyStatusSurface(presentation: OngoingState) {
 }
 
 @Composable
-private fun safetyStatusPresentation(presentation: OngoingState): SafetyStatusPresentation? =
-    if (presentation.isOrganizer) {
-        organizerSafetyStatus(presentation.participantSignals)
-    } else {
-        participantSafetyStatus(presentation.selfSignal)
-    }
+private fun safetyStatusPresentation(presentation: OngoingState): SafetyStatusPresentation? = if (presentation.isOrganizer) {
+    organizerSafetyStatus(presentation.participantSignals)
+} else {
+    participantSafetyStatus(presentation.selfSignal)
+}
 
 @Composable
 private fun participantSafetyStatus(signal: ParticipantSignal?): SafetyStatusPresentation? = when (signal) {
