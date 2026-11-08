@@ -7,18 +7,22 @@ package cat.itur.app.feature.map.ui
 
 import android.util.Log
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
@@ -32,9 +36,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import cat.itur.app.core.domain.model.User
-import cat.itur.app.core.ui.components.IturProgressIndicator
 import cat.itur.app.feature.map.ui.components.map.ErrorState
 import cat.itur.app.feature.map.ui.components.map.IdleState
 import cat.itur.app.feature.map.ui.components.map.MapLibreView
@@ -186,13 +190,13 @@ private fun MapStateControls(
     interaction: MapInteractionState,
 ) {
     when {
-        presentation.currentUser == null -> IturProgressIndicator(
-            label = "Preparing map...",
+        presentation.currentUser == null -> MapPreparationIndicator(
+            label = stringResource(R.string.feature_map_preparing_map),
             modifier = environment.modifier.testTag("map_state_loading"),
         )
         presentation.uiState is MapUiState.Loading ->
-            IturProgressIndicator(
-                label = "Preparing activity...",
+            MapPreparationIndicator(
+                label = stringResource(R.string.feature_map_preparing_activity),
                 modifier = environment.modifier.testTag("map_state_loading"),
             )
         presentation.uiState is MapUiState.Ongoing ->
@@ -214,6 +218,42 @@ private fun MapStateControls(
                 "map_state_recoverable_error",
             )
         else -> IdleControls(viewModel, presentation, interaction, environment, "map_state_idle")
+    }
+}
+
+@Composable
+private fun MapPreparationIndicator(
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier.fillMaxSize(),
+    ) {
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+                .testTag("map_preparation_container"),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            shape = MaterialTheme.shapes.medium,
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+            ) {
+                Text(
+                    text = label,
+                    modifier = Modifier.testTag("map_preparation_status"),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("map_preparation_progress"),
+                )
+            }
+        }
     }
 }
 

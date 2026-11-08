@@ -15,6 +15,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -803,11 +807,17 @@ class CanonicalUseCasesTest {
         activities.createGate = createGate
         composeRule.onNodeWithTag("start_activity_fab").performClick()
         waitForText("Preparing activity...")
+        composeRule.onNodeWithTag("map_preparation_container").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_preparation_status").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_preparation_progress").assert(
+            SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo),
+        )
         composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
 
         createGate.complete(Unit)
         waitForTag("show_qr_fab")
         composeRule.onNodeWithTag("map_surface").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_preparation_container").assertDoesNotExist()
 
         composeRule.onNodeWithTag("stop_activity_fab").performClick()
         composeRule.onNodeWithTag("confirm_stop_activity").performClick()
