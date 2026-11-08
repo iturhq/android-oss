@@ -161,6 +161,63 @@ class MapReadyDeviceTest {
     }
 
     @Test
+    fun activeJourneyReplaysBothPointerSourcesAfterStyleRecreation() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            MapLibre.getInstance(
+                ApplicationProvider.getApplicationContext<Context>(),
+                "",
+                WellKnownTileServer.MapLibre,
+            )
+        }
+        val locations = participants(20)
+        val currentUserId = locations.last().userId
+        var styleUrl by androidx.compose.runtime.mutableStateOf(mapStyleUrl())
+        var readyMap: MapLibreMap? = null
+        var readyGeneration by androidx.compose.runtime.mutableIntStateOf(0)
+        composeRule.setContent {
+            IturTheme {
+                MapLibreView(
+                    input = MapLibreViewInput(
+                        styleUrl = styleUrl,
+                        isActivityOngoing = true,
+                        activityId = activityId,
+                        locationPermissionGranted = true,
+                        currentUserId = currentUserId,
+                        organizerId = organizerId,
+                        participantLocations = locations,
+                    ),
+                    callbacks = MapLibreViewCallbacks(
+                        onMapReady = {
+                            readyMap = it
+                            readyGeneration++
+                        },
+                    ),
+                )
+            }
+        }
+
+        fun sourceCounts(): Pair<Int, Int> {
+            var counts = -1 to -1
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                val style = readyMap?.style
+                counts = (style?.getSourceAs<GeoJsonSource>(ORGANIZER_SOURCE)
+                    ?.querySourceFeatures(null)?.size ?: -1) to
+                    (style?.getSourceAs<GeoJsonSource>(PARTICIPANT_SOURCE)
+                        ?.querySourceFeatures(null)?.size ?: -1)
+            }
+            return counts
+        }
+
+        composeRule.waitUntil(timeoutMillis = 30.seconds.inWholeMilliseconds) {
+            readyGeneration >= 1 && sourceCounts() == (1 to 18)
+        }
+        composeRule.runOnIdle { styleUrl = "${mapStyleUrl()}?psig-a17c-reload=1" }
+        composeRule.waitUntil(timeoutMillis = 30.seconds.inWholeMilliseconds) {
+            readyGeneration >= 2 && sourceCounts() == (1 to 18)
+        }
+    }
+
+    @Test
     fun gpxOverlaySurvivesStyleReloadAndStaysBelowParticipantMarkers() {
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             MapLibre.getInstance(
