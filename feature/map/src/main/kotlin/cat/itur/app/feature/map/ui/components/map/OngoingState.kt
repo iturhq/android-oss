@@ -35,12 +35,18 @@ import cat.itur.app.feature.map.ui.components.help.helpAnchor
 internal data class OngoingState(
     val isOrganizer: Boolean,
     val selfSignal: ParticipantSignal? = null,
+    val participantSignals: List<ParticipantSignalStatus> = emptyList(),
     val participantSignalUpdateInFlight: Boolean = false,
     val selfLocationAvailable: Boolean = true,
     val activityActionsEnabled: Boolean = true,
     val isDirectionOfTravel: Boolean = false,
     val isUserTracking: Boolean = false,
     val isGroupTracking: Boolean = false,
+)
+
+internal data class ParticipantSignalStatus(
+    val participantName: String,
+    val signal: ParticipantSignal,
 )
 
 private object SafetySignalColors {
@@ -71,6 +77,7 @@ internal fun OngoingState(
         ) {
             HelpFABs(onHelpRequested = actions.onHelpRequested)
         }
+        SafetyStatusSurface(presentation)
         OngoingTrackingLane(actions, presentation, onLeftControlBoundsChanged)
         OngoingActivityLane(actions, presentation, onRightControlBoundsChanged)
     }

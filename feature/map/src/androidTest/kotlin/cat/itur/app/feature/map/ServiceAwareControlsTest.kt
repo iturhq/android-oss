@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -20,6 +21,7 @@ import cat.itur.app.core.ui.theme.IturTheme
 import cat.itur.app.feature.map.ui.components.map.IdleState
 import cat.itur.app.feature.map.ui.components.map.OngoingState
 import cat.itur.app.feature.map.ui.components.map.OngoingStateActions
+import cat.itur.app.feature.map.ui.components.map.ParticipantSignalStatus
 import cat.itur.app.feature.map.ui.components.map.UserFABs
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -217,6 +219,38 @@ class ServiceAwareControlsTest {
         composeRule.onNodeWithTag("safety_delayed_fab").assertIsEnabled()
         composeRule.onNodeWithTag("hail_organiser_fab").assertIsEnabled()
         composeRule.onNodeWithTag("safety_ok_fab").assertDoesNotExist()
+        composeRule.onNodeWithTag("participant_signal_confirmation").assertDoesNotExist()
+    }
+
+    @Test
+    fun participantSignalRemainsVisiblyConfirmedAfterMutation() {
+        setOngoingParticipantContent(
+            OngoingState(isOrganizer = false, selfSignal = ParticipantSignal.NEEDS_HELP),
+        )
+
+        composeRule.onNodeWithTag("participant_signal_confirmation")
+            .assertIsDisplayed()
+            .assertTextContains("Help request shared")
+            .assertTextContains("red alert")
+    }
+
+    @Test
+    fun organizerSeesPersistentNamedStatusSummary() {
+        setOngoingParticipantContent(
+            OngoingState(
+                isOrganizer = true,
+                participantSignals = listOf(
+                    ParticipantSignalStatus("Aina", ParticipantSignal.NEEDS_HELP),
+                    ParticipantSignalStatus("Biel", ParticipantSignal.DELAYED),
+                ),
+            ),
+        )
+
+        composeRule.onNodeWithTag("organizer_signal_alert")
+            .assertIsDisplayed()
+            .assertTextContains("Participant needs help")
+            .assertTextContains("Needs help: Aina")
+            .assertTextContains("Delayed: Biel")
     }
 
     @Test

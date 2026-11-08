@@ -48,6 +48,7 @@ import cat.itur.app.feature.map.ui.components.map.MapLibreViewInput
 import cat.itur.app.feature.map.ui.components.map.NoMapView
 import cat.itur.app.feature.map.ui.components.map.OngoingState
 import cat.itur.app.feature.map.ui.components.map.OngoingStateActions
+import cat.itur.app.feature.map.ui.components.map.ParticipantSignalStatus
 
 @Composable
 internal fun MapScaffold(
@@ -289,6 +290,15 @@ private fun OngoingControls(
 ) {
     val ongoingUiState = presentation.uiState as MapUiState.Ongoing
     val isOrganizer = ongoingUiState.organizer.id == presentation.currentUser?.id
+    val participantNames = presentation.participantLocations.associate { it.userId to it.userName }
+    val visibleParticipantSignals = ongoingUiState.participantIds.mapIndexedNotNull { index, userId ->
+        presentation.participantSignals[userId]?.let { signal ->
+            ParticipantSignalStatus(
+                participantName = participantNames[userId] ?: "Participant ${index + 1}",
+                signal = signal,
+            )
+        }
+    }
     OngoingState(
         actions = OngoingStateActions(
             onStopRequested = {
@@ -314,6 +324,7 @@ private fun OngoingControls(
         presentation = OngoingState(
             isOrganizer = isOrganizer,
             selfSignal = presentation.participantSignalState.confirmed,
+            participantSignals = visibleParticipantSignals,
             participantSignalUpdateInFlight = presentation.participantSignalState.inFlight != null,
             selfLocationAvailable = interaction.locationPermissionGranted,
             activityActionsEnabled = presentation.activityActionsEnabled,
