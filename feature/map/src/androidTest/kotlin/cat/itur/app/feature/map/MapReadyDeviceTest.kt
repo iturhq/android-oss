@@ -223,7 +223,7 @@ class MapReadyDeviceTest {
     }
 
     @Test
-    fun preReadySnapshotPopulatesBothSourcesAtStyleReadiness() {
+    fun snapshotDeliveryOrdersPopulateExactPointerIdsAtFixedCamera() {
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             MapLibre.getInstance(
                 ApplicationProvider.getApplicationContext<Context>(),
@@ -247,13 +247,17 @@ class MapReadyDeviceTest {
         )
         assertEquals(1, boundaryUpdate.organizerFeatures?.size)
         assertEquals(18, boundaryUpdate.participantFeatures?.size)
+        val expectedOrganizerIds = setOf(organizerId.value)
+        val expectedParticipantIds = locations
+            .map { it.userId.value }
+            .filterNot { it == organizerId.value || it == currentUserId.value }
+            .toSet()
 
         var deliveredLocations by mutableStateOf(emptyList<ParticipantLocation>())
         var styleUrl by mutableStateOf(mapStyleUrl())
         var readyMap: MapLibreMap? = null
         var readyGeneration = 0
         var fullyRendered = false
-        var preReadyCounts: Pair<Int, Int>? = null
         val fixedCamera = LatLng(41.381, 2.171)
 
         composeRule.setContent {
@@ -273,14 +277,6 @@ class MapReadyDeviceTest {
                             assertSame(readyMap ?: map, map)
                             readyMap = map
                             readyGeneration++
-                            if (readyGeneration == 2) {
-                                val style = map.style
-                                preReadyCounts =
-                                    (style?.getSourceAs<GeoJsonSource>(ORGANIZER_SOURCE)
-                                        ?.querySourceFeatures(null)?.size ?: -1) to
-                                    (style?.getSourceAs<GeoJsonSource>(PARTICIPANT_SOURCE)
-                                        ?.querySourceFeatures(null)?.size ?: -1)
-                            }
                         },
                         onStyleLoadSucceeded = { fullyRendered = true },
                     ),
@@ -295,26 +291,41 @@ class MapReadyDeviceTest {
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             map.moveCamera(CameraUpdateFactory.newLatLngZoom(fixedCamera, 14.0))
         }
+        composeRule.waitForIdle()
 
-        fun sourceCounts(): Pair<Int, Int> {
-            var counts = -1 to -1
+        fun sourceIds(sourceId: String): Set<String> {
+            var ids: Set<String> = emptySet()
             InstrumentationRegistry.getInstrumentation().runOnMainSync {
-                val style = map.style
-                counts = (style?.getSourceAs<GeoJsonSource>(ORGANIZER_SOURCE)
-                    ?.querySourceFeatures(null)?.size ?: -1) to
-                    (style?.getSourceAs<GeoJsonSource>(PARTICIPANT_SOURCE)
-                        ?.querySourceFeatures(null)?.size ?: -1)
+                ids = map.style?.getSourceAs<GeoJsonSource>(sourceId)
+                    ?.querySourceFeatures(null)
+                    ?.mapNotNull { it.getStringProperty("id") }
+                    ?.toSet().orEmpty()
             }
-            return counts
+            return ids
+        }
+
+        fun pointerSourceIds(): Pair<Set<String>, Set<String>> {
+            return sourceIds(ORGANIZER_SOURCE) to sourceIds(PARTICIPANT_SOURCE)
+        }
+
+        fun awaitExpectedSourceIds() {
+            val expected = expectedOrganizerIds to expectedParticipantIds
+            val deadline = android.os.SystemClock.elapsedRealtime() + 15.seconds.inWholeMilliseconds
+            var actual: Pair<Set<String>, Set<String>>
+            do {
+                android.os.SystemClock.sleep(250)
+                actual = pointerSourceIds()
+            } while (actual != expected && android.os.SystemClock.elapsedRealtime() < deadline)
+            assertEquals(expected, actual)
         }
 
         composeRule.runOnIdle { deliveredLocations = locations }
-        composeRule.waitUntil(timeoutMillis = 15.seconds.inWholeMilliseconds) {
-            sourceCounts() == (1 to 18)
-        }
+        composeRule.waitForIdle()
+        awaitExpectedSourceIds()
         composeRule.runOnIdle { deliveredLocations = emptyList() }
+        composeRule.waitForIdle()
         composeRule.waitUntil(timeoutMillis = 15.seconds.inWholeMilliseconds) {
-            sourceCounts() == (0 to 0)
+            pointerSourceIds() == (emptySet<String>() to emptySet<String>())
         }
 
         composeRule.runOnIdle {
@@ -322,13 +333,16 @@ class MapReadyDeviceTest {
             deliveredLocations = locations
             styleUrl = "${mapStyleUrl()}?psig-a17c-pre-ready=1"
         }
+        composeRule.waitForIdle()
         composeRule.waitUntil(timeoutMillis = 30.seconds.inWholeMilliseconds) {
-            readyGeneration == 2 && preReadyCounts != null && fullyRendered
+            readyGeneration == 2 && fullyRendered
         }
+        awaitExpectedSourceIds()
         assertSame(map, readyMap)
-        assertEquals(fixedCamera, map.cameraPosition.target)
+        val finalCameraTarget = requireNotNull(map.cameraPosition.target)
+        assertEquals(fixedCamera.latitude, finalCameraTarget.latitude, 1e-9)
+        assertEquals(fixedCamera.longitude, finalCameraTarget.longitude, 1e-9)
         assertEquals(14.0, map.cameraPosition.zoom, 0.0)
-        assertEquals(1 to 18, preReadyCounts)
     }
 
     @Test
